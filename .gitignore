@@ -1,0 +1,6 @@
+/api/.env
+/api/app/core/__pycache__
+/api/app/__pycache__
+/api/app/authentication/__pycache__
+/api/app/authentication/users/__pycache__
+/api/app/core/security/__pycache__
