@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.authentication.users.models import Users
+from .models import Users
 from app.core import PasswordService, JwtManager
 
 class UserServices:
