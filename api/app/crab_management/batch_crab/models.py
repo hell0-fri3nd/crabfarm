@@ -1,14 +1,18 @@
-from sqlalchemy import (
-    Column, 
-    Integer, 
-    TIMESTAMP, 
-    func
-)
-from app.core import Base
+from datetime import datetime
+from uuid import UUID
 
-class BatchCrabs(Base):
+from sqlmodel import Field, SQLModel, func
+
+
+class BatchCrabs(SQLModel, table=True):
     __tablename__ = "batch_crabs"
+    __table_args__ = {"schema": "crab_management"}
 
-    id         = Column(Integer, primary_key=True, index=True)
-    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
-    user_id    = Column(Integer, nullable=False, index=True)
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: UUID  = Field(foreign_key="auth.users.id", index=True)
+
+    created_at: datetime | None = Field(
+        default=None,
+        nullable=False,
+        sa_column_kwargs={"server_default": func.now()},
+    )

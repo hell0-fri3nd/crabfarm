@@ -1,23 +1,10 @@
-from sqlalchemy import (
-    Column, 
-    Integer, 
-    String, 
-    TIMESTAMP, 
-    Numeric,
-    Enum, 
-    Index, 
-    func
-)
-from app.core import Base
+from sqlmodel import Field, SQLModel
 
 
-class Crabs(Base):
+class Crabs(SQLModel, table=True):
     __tablename__ = "crabs"
+    __table_args__ = {"schema": "crab_management"}
 
-    id       = Column(Integer, primary_key=True, index=True)
-    name     = Column(String(50), unique=True, nullable=False)
-    group_by = Column(String(10), nullable=False)
-    
-    
-
-
+    id: int | None = Field(default=None, primary_key=True)
+    name: str      = Field(max_length=50, unique=True)
+    group_by: str  = Field(max_length=10)

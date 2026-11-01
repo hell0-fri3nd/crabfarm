@@ -1,20 +1,22 @@
 from typing import Optional
-from pydantic import BaseModel, Field
+from uuid import UUID
+
+from sqlmodel import Field, SQLModel
 
 
-class CrabResponse(BaseModel):
+class CrabResponse(SQLModel):
     id: int
     name: str
     group_by: str
 
 
-class BatchResponse(BaseModel):
+class BatchResponse(SQLModel):
     id: int
-    user_id: int
+    user_id: UUID
     description: str
 
 
-class CrabLogCreate(BaseModel):
+class CrabLogCreate(SQLModel):
     crab_id: int
     type: str
     width: float = Field(gt=0)
@@ -22,7 +24,7 @@ class CrabLogCreate(BaseModel):
     batch_id: Optional[int] = None
 
 
-class CrabLogResponse(BaseModel):
+class CrabLogResponse(SQLModel):
     log_id: int
     crab_id: int
     type: str
