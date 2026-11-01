@@ -1,6 +1,11 @@
-/api/.env
 /api/app/core/__pycache__
 /api/app/__pycache__
 /api/app/authentication/__pycache__
 /api/app/authentication/users/__pycache__
 /api/app/core/security/__pycache__
+/.env
+/api/app/crab_management/crab/__pycache__
+/api/migrations/versions/__pycache__
+/api/app/crab_management/batch_crab/__pycache__
+/api/app/crab_management/prediction/__pycache__
+/api/migrations/__pycache__

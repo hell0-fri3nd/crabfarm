@@ -1,5 +1,10 @@
 
-from pydantic import BaseModel, EmailStr , ConfigDict, Field
+from pydantic import (
+    BaseModel, 
+    EmailStr , 
+    ConfigDict, 
+    Field
+)
 
 
 class SignInRequest(BaseModel):

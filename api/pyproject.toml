@@ -1,6 +1,7 @@
 [project]
 name = "api"
 version = "2.0.0"
+
 description = "backend api for crabfarm made from fastAPI"
 authors = [
     {name = "Art Lisboa",email = "lisboamillen30@gmail.com"}
@@ -14,12 +15,15 @@ dependencies = [
     "uvicorn (>=0.54.0,<0.55.0)",
     "pydantic (>=2.13.5,<3.0.0)",
     "pydantic-settings (>=2.15.0,<3.0.0)",
-    "pymysql (>=1.2.3,<2.0.0)",
     "pwdlib[argon2] (>=0.3.1,<0.4.0)",
     "email-validator (>=2.3.0,<3.0.0)",
-    "pyjwt (>=2.15.0,<3.0.0)"
+    "pyjwt (>=2.15.0,<3.0.0)",
+    "sqlmodel (>=0.0.48,<0.0.49)",
+    "psycopg[binary] (>=3.3.6,<4.0.0)"
 ]
 
+[tool.poetry]
+package-mode = false
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

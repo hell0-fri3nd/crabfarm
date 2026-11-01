@@ -1,5 +1,5 @@
 from .config import settings
-from .database import Base, get_db
+from .database import Base, engine, get_db, engine
 from .security import PasswordService, JwtManager
 
 __all__ = [
@@ -7,5 +7,6 @@ __all__ = [
     "Base", 
     "PasswordService", 
     "JwtManager", 
-    "get_db"
+    "get_db",
+    "engine"
 ]

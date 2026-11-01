@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlmodel import Session
 from .models import Users
 from app.core import PasswordService, JwtManager
 

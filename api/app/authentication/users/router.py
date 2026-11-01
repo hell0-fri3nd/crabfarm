@@ -4,7 +4,7 @@ from fastapi import (
     HTTPException, 
     status
 )
-from sqlalchemy.orm import Session
+from sqlmodel import Session
 
 from app.core import (
     get_db,
