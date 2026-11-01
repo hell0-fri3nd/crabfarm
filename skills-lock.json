@@ -5,7 +5,7 @@
       "source": "hell0-fri3nd/agent-workflow",
       "sourceType": "github",
       "skillPath": ".agents/skills/commit/SKILL.md",
-      "computedHash": "f4a56cbe35b758b8123f75b0f785470a4dc6ee11f371527a563b1e0a8a137a32"
+      "computedHash": "5af06973391dad6ed5c51777719f0e68684264e8d2b4e870e45db949134de0cf"
     },
     "system-version": {
       "source": "hell0-fri3nd/agent-workflow",
