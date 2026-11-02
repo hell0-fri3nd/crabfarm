@@ -2,10 +2,12 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     status
 )
 from sqlmodel import Session
 
+from app.core.exceptions import AUDIT_ACTION_KEY
 from app.core import (
     get_db,
     JwtManager,
@@ -31,6 +33,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
     "/sign-in",
     response_model=AuthResponse,
     status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "auth.sign_in"},
     responses={
         status.HTTP_404_NOT_FOUND: {
             "model": ValidationErrorResponse,
@@ -52,6 +55,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 )
 async def sign_in(
     request: SignInRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
 ):
     
@@ -67,6 +71,7 @@ async def sign_in(
         email=request.email,
         password=request.password,
         remember_me=request.remember_me,
+        request=http_request,
     )
 
     if result.code == "EMAIL_NOT_FOUND":
@@ -75,6 +80,7 @@ async def sign_in(
             field="email",
             message=result.message,
             type="email_not_found",
+            action="auth.sign_in",
         )
 
     if result.code == "INCORRECT_PASSWORD":
@@ -83,6 +89,7 @@ async def sign_in(
             field="password",
             message=result.message,
             type="incorrect_password",
+            action="auth.sign_in",
         )
 
     if result.code == "SIGN_IN_FAILED":
@@ -98,6 +105,7 @@ async def sign_in(
     "/sign-in/pin",
     response_model=AuthResponse,
     status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "auth.sign_in.pin"},
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "model": ValidationErrorResponse,
@@ -115,6 +123,7 @@ async def sign_in(
 )
 async def pin(
     request: PinRequest,
+    http_request: Request,
     user: Users = Depends(get_refresh_user),
     db: Session = Depends(get_db),
 )-> AuthResponse:
@@ -129,6 +138,7 @@ async def pin(
     result = await auth_service.pin(
         user=user,
         pin=request.pin,
+        request=http_request,
     )
 
     if result.code == "INVALID_PIN":
@@ -137,6 +147,7 @@ async def pin(
             field="pin",
             message=result.message,
             type="invalid_pin",
+            action="auth.sign_in.pin",
         )
 
     if result.code == "PIN_VERIFICATION_FAILED":

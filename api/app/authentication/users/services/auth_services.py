@@ -1,8 +1,12 @@
 import logging
+from datetime import datetime, timezone
 
+
+from fastapi import Request
 from sqlmodel import Session, select
 
 from app.core import JwtManager
+from .audit_services import AuditServices
 from .password_services import PasswordServices
 from ..models import Users
 from ..schemas import AuthResponse
@@ -16,16 +20,19 @@ class AuthServices:
         db: Session,
         password_services: PasswordServices,
         jwt_manager: JwtManager,
+        audit: AuditServices | None = None,
     ):
         self.db = db
         self.password_services = password_services
         self.jwt_manager = jwt_manager
+        self.audit = audit or AuditServices()
 
     async def sign_in(
         self,
         email: str,
         password: str,
         remember_me: bool = False,
+        request: Request | None = None,
     ) -> AuthResponse:
         try:
             user = self.db.exec(
@@ -33,6 +40,7 @@ class AuthServices:
             ).first()
 
             if not user:
+                self.audit.sign_in(request, "EMAIL_NOT_FOUND", email=email)
                 return AuthResponse(
                     success=False,
                     message="Email not found",
@@ -41,6 +49,7 @@ class AuthServices:
                 )
 
             if not self.password_services.verify_password(password, user.password):
+                self.audit.sign_in(request, "INCORRECT_PASSWORD", email=email)
                 return AuthResponse(
                     success=False,
                     message="Incorrect password",
@@ -63,6 +72,13 @@ class AuthServices:
                 }
             )
 
+            self.audit.sign_in(
+                request,
+                "LOGIN_SUCCESS",
+                email=email,
+                user=user,
+                access_token=access_token,
+            )
             return AuthResponse(
                 success=True,
                 message="Login successful",
@@ -77,6 +93,7 @@ class AuthServices:
             )
 
         except Exception:
+            self.audit.sign_in(request, "SIGN_IN_FAILED", email=email)
             return AuthResponse(
                 success=False,
                 message="Unable to sign in right now",
@@ -88,9 +105,11 @@ class AuthServices:
         self,
         user: Users,
         pin: str,
+        request: Request | None = None,
     ) -> AuthResponse:
         try:
             if not self.password_services.verify_password(pin, user.pin):
+                self.audit.pin(request, "INVALID_PIN", user=user)
                 return AuthResponse(
                     success=False,
                     message="Invalid pin",
@@ -105,6 +124,23 @@ class AuthServices:
                 }
             )
 
+            # Re-authentication issues a new access token; record its lifetime, never the token
+            expires_at = datetime.fromtimestamp(
+                self.jwt_manager.decode_token(access_token)["exp"], tz=timezone.utc
+            )
+            self.audit.pin(
+                request,
+                "PIN_VERIFIED",
+                user=user,
+                access_token=access_token,
+                changes={
+                    "issued": {
+                        "token_type": "access",
+                        "issued_at": datetime.now(timezone.utc).isoformat(),
+                        "expires_at": expires_at.isoformat(),
+                    }
+                },
+            )
             return AuthResponse(
                 success=True,
                 message="Pin verified successfully",
@@ -119,6 +155,7 @@ class AuthServices:
 
         except Exception:
             logger.exception("Pin verification failed for user %s", user.id)
+            self.audit.pin(request, "PIN_VERIFICATION_FAILED", user=user)
             return AuthResponse(
                 success=False,
                 message="Unable to verify pin right now",
