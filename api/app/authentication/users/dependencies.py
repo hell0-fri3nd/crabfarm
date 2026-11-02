@@ -1,15 +1,17 @@
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
 from sqlmodel import Session
 
 from app.core import get_db, JwtManager, Permission, has_permission
 from .models import Users
+from .services import AuditServices
 
 
 bearer = HTTPBearer(auto_error=False)
+audit = AuditServices()
 
 
 class TokenAuth:
@@ -18,8 +20,21 @@ class TokenAuth:
     def __init__(self, token_type: str):
         self.token_type = token_type
 
-    @staticmethod
-    def _unauthorized(detail: str) -> HTTPException:
+    def _reject(
+        self,
+        request: Request,
+        credentials: HTTPAuthorizationCredentials | None,
+        detail: str,
+        reason: str,
+    ) -> HTTPException:
+        # session_hash is only ever an access token; a rejected refresh token is not hashed
+        audit.token_rejected(
+            request,
+            self.token_type,
+            reason,
+            message=detail,
+            access_token=credentials.credentials if credentials and self.token_type == "access" else None,
+        )
         return HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=detail,
@@ -28,31 +43,37 @@ class TokenAuth:
 
     def __call__(
         self,
+        request: Request,
         credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
         db: Session = Depends(get_db),
     ) -> Users:
         if credentials is None:
-            raise self._unauthorized("Not authenticated")
+            raise self._reject(request, credentials, "Not authenticated", "NOT_AUTHENTICATED")
 
         try:
             payload = JwtManager().decode_token(credentials.credentials)
         except ExpiredSignatureError:
-            raise self._unauthorized("Token expired")
+            raise self._reject(request, credentials, "Token expired", "TOKEN_EXPIRED")
         except InvalidTokenError:
-            raise self._unauthorized("Invalid token")
+            raise self._reject(request, credentials, "Invalid token", "INVALID_TOKEN")
 
         if payload.get("type") != self.token_type:
-            raise self._unauthorized("Invalid token type")
+            raise self._reject(request, credentials, "Invalid token type", "INVALID_TOKEN_TYPE")
 
         try:
             user_id = UUID(payload.get("sub", ""))
         except ValueError:
-            raise self._unauthorized("Invalid token subject")
+            raise self._reject(request, credentials, "Invalid token subject", "INVALID_TOKEN_SUBJECT")
 
         # Role is read from the DB, not the token, so role changes apply immediately
         user = db.get(Users, user_id)
         if not user:
-            raise self._unauthorized("User not found")
+            raise self._reject(request, credentials, "User not found", "USER_NOT_FOUND")
+
+        # Later audit events in this request (e.g. a 422 on the body) use these as the actor
+        request.state.user = user
+        if self.token_type == "access":
+            request.state.access_token = credentials.credentials
 
         return user
 
@@ -67,9 +88,15 @@ class RequirePermissions:
     def __init__(self, *permissions: Permission):
         self.permissions = permissions
 
-    def __call__(self, user: Users = Depends(get_current_user)) -> Users:
+    def __call__(self, request: Request, user: Users = Depends(get_current_user)) -> Users:
         missing = [p.value for p in self.permissions if not has_permission(user.role, p)]
         if missing:
+            audit.permission_denied(
+                request,
+                user,
+                missing,
+                access_token=getattr(request.state, "access_token", None),
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Missing permission(s): {', '.join(missing)}",
