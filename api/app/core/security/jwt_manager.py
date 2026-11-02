@@ -14,6 +14,9 @@ class JwtManager:
         self.refresh_token_expire_days = (
             settings.jwt_refresh_token_expire_days
         )
+        self.refresh_token_remember_me_days = (
+            settings.jwt_refresh_token_remember_me_days
+        )
 
     def create_access_token(self, data: dict) -> str:
         expire = datetime.now(timezone.utc) + timedelta(
@@ -32,10 +35,13 @@ class JwtManager:
             algorithm=self.algorithm,
         )
 
-    def create_refresh_token(self, data: dict) -> str:
-        expire = datetime.now(timezone.utc) + timedelta(
-            days=self.refresh_token_expire_days
+    def create_refresh_token(self, data: dict, remember_me: bool = False) -> str:
+        days = (
+            self.refresh_token_remember_me_days
+            if remember_me
+            else self.refresh_token_expire_days
         )
+        expire = datetime.now(timezone.utc) + timedelta(days=days)
 
         payload = {
             **data,

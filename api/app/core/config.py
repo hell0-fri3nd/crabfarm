@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     
     jwt_secret_key: str
     jwt_algorithm: str
-    jwt_token_location: str
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 1
+    jwt_refresh_token_remember_me_days: int = 7
     
     model_config = SettingsConfigDict(
         env_file=ROOT_DIR / ".env",

@@ -1,7 +1,6 @@
 from pwdlib import PasswordHash
 
-
-class PasswordService:
+class PasswordServices:
     def __init__(self):
         self._hasher = PasswordHash.recommended()
 

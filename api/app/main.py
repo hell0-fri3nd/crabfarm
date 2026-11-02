@@ -3,8 +3,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core import settings
+from app.core import settings, register_exception_handlers
 from app.authentication import ROUTERS as AUTH_ROUTERS
+# from app.crab_management import ROUTERS as CRAB_ROUTERS
 
 def create_app(settings) -> FastAPI:
     app = FastAPI(
@@ -37,10 +38,12 @@ This API provides endpoints for interacting with the Crabfarm backend.
         expose_headers=["X-Correlation-ID"],
         max_age=3600
     )
-    
-    
+
+    register_exception_handlers(app)
+
     for router in (
         *AUTH_ROUTERS,
+        # *CRAB_ROUTERS,
     ):
         app.include_router(router, prefix=settings.api_prefix)
 

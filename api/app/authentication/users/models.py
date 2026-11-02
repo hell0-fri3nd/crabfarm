@@ -1,13 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 from sqlmodel import Field, func, SQLModel
-
-from enum import Enum
-
-class Role(str, Enum):
-    ADMIN   = "DEVELOPER"
-    USER    = "USER"
-    STAFF   = "STAFF"
+from app.core.security import Role
 
 class Users(SQLModel, table=True):
     __tablename__ = "users"
