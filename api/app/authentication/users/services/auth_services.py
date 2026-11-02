@@ -154,11 +154,76 @@ class AuthServices:
             )
 
         except Exception:
-            logger.exception("Pin verification failed for user %s", user.id)
             self.audit.pin(request, "PIN_VERIFICATION_FAILED", user=user)
             return AuthResponse(
                 success=False,
                 message="Unable to verify pin right now",
                 code="PIN_VERIFICATION_FAILED",
                 details=None,
+            )
+
+    async def change_password(
+        self,
+        user: Users,
+        current_password: str,
+        new_password: str,
+        request: Request | None = None,
+        access_token: str | None = None,
+    ) -> AuthResponse:
+        try:
+            user = self.db.exec(
+                select(Users).where(Users.email == user.email)
+            ).first()
+
+            if not self.password_services.verify_password(current_password, user.password):
+                self.audit.change_password(
+                    request, 
+                    "INCORRECT_CURRENT_PASSWORD", 
+                    user=user,
+                    access_token=access_token
+                )
+                return AuthResponse(
+                    success=False,
+                    message="Incorrect current password",
+                    code="INCORRECT_CURRENT_PASSWORD",
+                    details=None
+                )
+
+            if self.password_services.verify_password(new_password, user.password):
+                self.audit.change_password(request, "SAME_PASSWORD", user=user, access_token=access_token)
+                return AuthResponse(
+                    success=False,
+                    message="New password must be different from current password",
+                    code="SAME_PASSWORD",
+                    details=None
+                )
+
+            user.password = self.password_services.hash_password(new_password)
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+
+            self.audit.change_password(
+                request,
+                "PASSWORD_CHANGED",
+                user=user,
+                access_token=access_token,
+            )
+
+            return AuthResponse(
+                success=True,
+                message="Password changed successfully",
+                code="PASSWORD_CHANGED",
+                details=None
+            )
+
+        except Exception:
+            self.db.rollback()
+            logger.exception("Password change failed for user %s", user.id)
+            self.audit.change_password(request, "CHANGE_PASSWORD_FAILED", user=user, access_token=access_token)
+            return AuthResponse(
+                success=False,
+                message="Unable to change password right now",
+                code="CHANGE_PASSWORD_FAILED",
+                details=None
             )

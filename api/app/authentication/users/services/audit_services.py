@@ -17,13 +17,23 @@ PIN_OUTCOMES = {
     "PIN_VERIFICATION_FAILED": (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
 }
 
+CHANGE_PASSWORD_OUTCOMES = {
+    "PASSWORD_CHANGED":        (Outcome.SUCCESS, status.HTTP_200_OK),
+    "INCORRECT_CURRENT_PASSWORD": (Outcome.FAILURE, status.HTTP_400_BAD_REQUEST),
+    "SAME_PASSWORD":           (Outcome.FAILURE, status.HTTP_409_CONFLICT),
+    "CHANGE_PASSWORD_FAILED":  (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
+}
+
 # failure code -> (field, message) as the client sees it; "server" marks errors not tied to an input
 ERRORS = {
     "EMAIL_NOT_FOUND":         ("email",    "Email not found"),
     "INCORRECT_PASSWORD":      ("password", "Incorrect password"),
+    "INCORRECT_CURRENT_PASSWORD": ("current_password", "Incorrect current password"),
     "SIGN_IN_FAILED":          ("server",   "Unable to sign in right now"),
     "INVALID_PIN":             ("pin",      "Invalid pin"),
     "PIN_VERIFICATION_FAILED": ("server",   "Unable to verify pin right now"),
+    "SAME_PASSWORD":           ("new_password", "New password must be different from current password"),
+    "CHANGE_PASSWORD_FAILED":  ("server",   "Unable to change password right now"),
 }
 
 
@@ -80,11 +90,29 @@ class AuditServices:
             outcome=outcome,
             request=request,
             actor=user,
-            # The access token the PIN sign-in issued; None on failure, since none was issued
             session_token=access_token,
             http_status=http_status,
             reason=None if outcome == Outcome.SUCCESS else code,
             changes=changes or _code_errors(code),
+        )
+
+    def change_password(
+        self,
+        request: Request | None,
+        code: str,
+        user: Users | None = None,
+        access_token: str | None = None,
+    ) -> None:
+        outcome, http_status = CHANGE_PASSWORD_OUTCOMES[code]
+        self.audit.record(
+            action="auth.change_password",
+            outcome=outcome,
+            request=request,
+            actor=user,
+            session_token=access_token,
+            http_status=http_status,
+            reason=None if outcome == Outcome.SUCCESS else code,
+            changes=_code_errors(code),
         )
 
     def token_rejected(

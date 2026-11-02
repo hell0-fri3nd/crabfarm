@@ -41,6 +41,20 @@ class PinRequest(BaseModel):
         if not (len(value) == 4 and value.isdigit()):
             raise ValueError("Pin must be exactly 4 digits")
         return value
+    
+class ChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "current_password": "current_password",
+                "new_password": "new_password"
+            }
+        }
+    )
+    current_password: str = Field(min_length=8, max_length=128, description="Current password must be between 8 and 128 characters long.")
+    new_password: str = Field(min_length=8, max_length=128, description="New password must be between 8 and 128 characters long.")
+
 
 class UserResponse(BaseModel):
     name: str
