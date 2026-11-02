@@ -6,9 +6,8 @@ from app.core import engine
 # before target_metadata is read below. Add new model modules here.
 from app.authentication.users.models import Users
 from app.core.audit.models import AuditEvents
-from app.crab_management.crab.models import Crabs
-from app.crab_management.prediction.models import CrabLogs
-from app.crab_management.batch_crab.models import BatchCrabs
+# from app.crab_management.crab.models import Crabs, Batches
+# from app.crab_management.prediction.models import CrabLogs
 
 from alembic import context
 
@@ -44,7 +43,6 @@ def include_object(obj, name, type_, reflected, compare_to):
     if table is None:
         return True
     return f"{table.schema}.{table.name}" in ONLY_TABLES or table.name in ONLY_TABLES
-
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

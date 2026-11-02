@@ -3,9 +3,8 @@ from uuid import UUID
 
 from sqlmodel import Field, SQLModel, func
 
-
-class BatchCrabs(SQLModel, table=True):
-    __tablename__ = "batch_crabs"
+class Batches(SQLModel, table=True):
+    __tablename__ = "batches"
     __table_args__ = {"schema": "crab_management"}
 
     id: int | None = Field(default=None, primary_key=True)

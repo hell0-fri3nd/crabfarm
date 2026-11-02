@@ -12,22 +12,22 @@ class Type(str, Enum):
     ACTUAL     = "actual"
 
 
-class CrabLogs(SQLModel, table=True):
-    __tablename__ = "crab_logs"
+class Logs(SQLModel, table=True):
+    __tablename__ = "logs"
     __table_args__ = {"schema": "crab_management"}
 
     id: int | None       = Field(default=None, primary_key=True)
-    batch_id: int | None = Field(default=None, foreign_key="crab_management.batch_crabs.id", index=True)
+    batch_id: int | None = Field(default=None, foreign_key="crab_management.batches.id", index=True)
     crab_id: int         = Field(foreign_key="crab_management.crabs.id", index=True)
     user_id: UUID        = Field(nullable=False, index=True)
-    type: Type    = Field(
-        index=True,
-        sa_type=SAEnum(
-            Type,
-            name="crab_logs_enum",
-            values_callable=lambda e: [m.value for m in e],
-        ),
-    )
+    type: Type           = Field(
+                            index=True,
+                            sa_type=SAEnum(
+                                Type,
+                                name="logs_enum",
+                                values_callable=lambda e: [m.value for m in e],
+                            ),
+                        )
     width: Decimal | None  = Field(default=None, max_digits=10, decimal_places=2)
     weight: Decimal | None = Field(default=None, max_digits=10, decimal_places=2)
 
