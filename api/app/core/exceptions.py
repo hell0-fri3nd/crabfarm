@@ -4,6 +4,21 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from .audit import AuditService, Outcome, Severity
+
+
+audit = AuditService()
+
+# Routes name their audit action with openapi_extra={AUDIT_ACTION_KEY: "auth.sign_in"}
+AUDIT_ACTION_KEY = "x-audit-action"
+DEFAULT_VALIDATION_ACTION = "request.validation_failed"
+
+
+def _audit_action(request: Request) -> str:
+    route = request.scope.get("route")
+    extra = getattr(route, "openapi_extra", None) or {}
+    return extra.get(AUDIT_ACTION_KEY, DEFAULT_VALIDATION_ACTION)
+
 
 class FieldError(BaseModel):
     field: str
@@ -17,8 +32,6 @@ class ValidationErrorResponse(BaseModel):
 
 
 class FieldException(Exception):
-    """A business-rule error tied to one input field (e.g. wrong password), rendered
-    in the same shape as request validation errors."""
 
     def __init__(
         self,
@@ -27,14 +40,15 @@ class FieldException(Exception):
         message: str,
         type: str,
         detail: str = "Authentication failed",
+        action: str | None = None,
     ):
         self.status_code = status_code
         self.detail = detail
         self.error = FieldError(field=field, message=message, type=type)
+        self.action = action
 
 
 def _field_name(loc: tuple) -> str:
-    # loc is e.g. ("body", "email") or ("body", "address", 0, "city"); drop the "body"/"query" prefix
     parts = [str(p) for p in loc[1:]] if len(loc) > 1 else [str(p) for p in loc]
     return ".".join(parts) or "body"
 
@@ -44,13 +58,26 @@ async def validation_exception_handler(
 ) -> JSONResponse:
     errors = [
         FieldError(
-            # json_invalid locs point at a character offset, not a field
             field="body" if err["type"] == "json_invalid" else _field_name(err["loc"]),
             message=err["msg"].removeprefix("Value error, "),
             type=err["type"],
         )
         for err in exc.errors()
     ]
+
+    # Set by TokenAuth when the route's token was valid, so a 422 still names the user;
+    # access_token is only set for access tokens (session_hash never hashes a refresh token)
+    audit.record(
+        action=_audit_action(request),
+        outcome=Outcome.FAILURE,
+        severity=Severity.INFO,
+        request=request,
+        actor=getattr(request.state, "user", None),
+        session_token=getattr(request.state, "access_token", None),
+        http_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        reason=f"VALIDATION_FAILED: {', '.join(sorted({e.field for e in errors}))}",
+        changes={"errors": [e.model_dump() for e in errors]},
+    )
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
