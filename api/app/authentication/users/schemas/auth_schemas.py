@@ -8,6 +8,7 @@ from pydantic import (
 )
 
 
+
 class SignInRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -48,9 +49,10 @@ class UserResponse(BaseModel):
     access_token: str
     refresh_token: str
 
-class SignInResponse(BaseModel):
+class AuthResponse(BaseModel):
     success: bool
     message: str
+    code: str | None
     details: dict | None
     
 class ErrorResponse(BaseModel):

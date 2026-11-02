@@ -1,7 +1,7 @@
 from fastapi import (
-    APIRouter, 
+    APIRouter,
     Depends,
-    HTTPException, 
+    HTTPException,
     status
 )
 from sqlmodel import Session
@@ -18,16 +18,18 @@ from ..models import Users
 from ..schemas.auth_schemas import (
     PinRequest,
     SignInRequest,
-    SignInResponse,
+    AuthResponse,
     ErrorResponse
 )
 from ..services import AuthServices, PasswordServices
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
 @router.post(
-    "/sign-in", 
-    response_model=SignInResponse,
+    "/sign-in",
+    response_model=AuthResponse,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_404_NOT_FOUND: {
@@ -52,9 +54,9 @@ async def sign_in(
     request: SignInRequest,
     db: Session = Depends(get_db),
 ):
+    
     password_services = PasswordServices()
     jwt_manager = JwtManager()
-
     auth_service = AuthServices(
         db=db,
         password_services=password_services,
@@ -66,35 +68,35 @@ async def sign_in(
         password=request.password,
         remember_me=request.remember_me,
     )
-    
-    if result["code"] == "EMAIL_NOT_FOUND":
+
+    if result.code == "EMAIL_NOT_FOUND":
         raise FieldException(
             status_code=status.HTTP_404_NOT_FOUND,
             field="email",
-            message=result["message"],
+            message=result.message,
             type="email_not_found",
         )
 
-    if result["code"] == "INCORRECT_PASSWORD":
+    if result.code == "INCORRECT_PASSWORD":
         raise FieldException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             field="password",
-            message=result["message"],
+            message=result.message,
             type="incorrect_password",
         )
 
-    if result["code"] == "SIGN_IN_FAILED":
+    if result.code == "SIGN_IN_FAILED":
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result["message"],
+            detail=result.message,
         )
 
     return result
 
 
 @router.post(
-    "/sign-in/pin", 
-    response_model=SignInResponse,
+    "/sign-in/pin",
+    response_model=AuthResponse,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_401_UNAUTHORIZED: {
@@ -115,7 +117,7 @@ async def pin(
     request: PinRequest,
     user: Users = Depends(get_refresh_user),
     db: Session = Depends(get_db),
-):
+)-> AuthResponse:
     password_services = PasswordServices()
     jwt_manager = JwtManager()
     auth_service = AuthServices(
@@ -124,20 +126,23 @@ async def pin(
         jwt_manager=jwt_manager
     )
 
-    result = await auth_service.pin(user=user, pin=request.pin)
+    result = await auth_service.pin(
+        user=user,
+        pin=request.pin,
+    )
 
-    if result["code"] == "INVALID_PIN":
+    if result.code == "INVALID_PIN":
         raise FieldException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             field="pin",
-            message=result["message"],
+            message=result.message,
             type="invalid_pin",
         )
 
-    if result["code"] == "PIN_VERIFICATION_FAILED":
+    if result.code == "PIN_VERIFICATION_FAILED":
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result["message"],
+            detail=result.message,
         )
 
     return result
