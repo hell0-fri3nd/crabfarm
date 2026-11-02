@@ -5,6 +5,7 @@ from app.core import engine
 # Import every model module so its table registers on SQLModel.metadata
 # before target_metadata is read below. Add new model modules here.
 from app.authentication.users.models import Users
+from app.core.audit.models import AuditEvents
 from app.crab_management.crab.models import Crabs
 from app.crab_management.prediction.models import CrabLogs
 from app.crab_management.batch_crab.models import BatchCrabs
@@ -27,6 +28,23 @@ def include_name(name, type_, parent_names):
     if type_ == "schema":
         return name in TARGET_SCHEMAS
     return True
+
+
+# Optional: limit autogenerate to specific tables, e.g.
+#   alembic -x tables=auth.users revision --autogenerate -m "..."
+ONLY_TABLES = {
+    t.strip() for t in context.get_x_argument(as_dictionary=True).get("tables", "").split(",") if t.strip()
+}
+
+
+def include_object(obj, name, type_, reflected, compare_to):
+    if not ONLY_TABLES:
+        return True
+    table = obj if type_ == "table" else getattr(obj, "table", None)
+    if table is None:
+        return True
+    return f"{table.schema}.{table.name}" in ONLY_TABLES or table.name in ONLY_TABLES
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -65,6 +83,7 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         include_schemas=True,
         include_name=include_name,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -85,6 +104,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             include_schemas=True,
             include_name=include_name,
+            include_object=include_object,
         )
 
         with context.begin_transaction():
