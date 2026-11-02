@@ -9,3 +9,11 @@
 /api/app/crab_management/batch_crab/__pycache__
 /api/app/crab_management/prediction/__pycache__
 /api/migrations/__pycache__
+/api/app/authentication/users/services/__pycache__
+/api/app/crab_management/crab/models/__pycache__
+/api/app/crab_management/logs/__pycache__
+/api/app/crab_management/crab/services/__pycache__
+/api/app/authentication/users/router/__pycache__
+/api/app/authentication/users/schemas/__pycache__
+/api/app/core/audit/__pycache__
+/api/app/crab_management/__pycache__
