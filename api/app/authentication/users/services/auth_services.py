@@ -227,3 +227,68 @@ class AuthServices:
                 code="CHANGE_PASSWORD_FAILED",
                 details=None
             )
+
+    async def change_pin(
+        self,
+        user: Users,
+        current_pin: str,
+        new_pin: str,
+        request: Request | None = None,
+        access_token: str | None = None,
+    ) -> AuthResponse:
+        try:
+            user = self.db.exec(
+                select(Users).where(Users.email == user.email)
+            ).first()
+
+            if not self.password_services.verify_password(current_pin, user.pin):
+                self.audit.change_pin(
+                    request, 
+                    "INCORRECT_CURRENT_PIN", 
+                    user=user,
+                    access_token=access_token
+                )
+                return AuthResponse(
+                    success=False,
+                    message="Incorrect current pin",
+                    code="INCORRECT_CURRENT_PIN",
+                    details=None
+                )
+
+            if self.password_services.verify_password(new_pin, user.pin):
+                self.audit.change_pin(request, "SAME_PIN", user=user, access_token=access_token)
+                return AuthResponse(
+                    success=False,
+                    message="New pin must be different from current pin",
+                    code="SAME_PIN",
+                    details=None
+                )
+
+            user.pin = self.password_services.hash_password(new_pin)
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+
+            self.audit.change_pin(
+                request,
+                "PIN_CHANGED",
+                user=user,
+                access_token=access_token,
+            )
+
+            return AuthResponse(
+                success=True,
+                message="Pin changed successfully",
+                code="PIN_CHANGED",
+                details=None
+            )
+
+        except Exception:
+            self.db.rollback()
+            self.audit.change_pin(request, "CHANGE_PIN_FAILED", user=user, access_token=access_token)
+            return AuthResponse(
+                success=False,
+                message="Unable to change pin right now",
+                code="CHANGE_PIN_FAILED",
+                details=None
+            )

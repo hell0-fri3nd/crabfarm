@@ -22,6 +22,7 @@ from ..schemas.auth_schemas import (
     PinRequest,
     SignInRequest,
     ChangePasswordRequest,
+    ChangePinRequest,
     AuthResponse,
     ErrorResponse
 )
@@ -230,3 +231,72 @@ async def change_password(
 
     return result
 
+
+@router.patch(
+    "/change-pin",
+    response_model=AuthResponse,
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "auth.change_pin"},
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "model": ValidationErrorResponse,
+            "description": "Incorrect current pin",
+        },
+        status.HTTP_409_CONFLICT: {
+            "model": ValidationErrorResponse,
+            "description": "New pin is the same as the current pin",
+        },
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "model": ErrorResponse,
+            "description": "Unexpected error during pin change",
+        },
+    },
+)
+async def change_pin(
+    request: ChangePinRequest,
+    http_request: Request,
+    user: Users = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    db: Session = Depends(get_db),
+)-> AuthResponse:
+    password_services = PasswordServices()
+    jwt_manager = JwtManager()
+    auth_service = AuthServices(
+        db=db,
+        password_services=password_services,
+        jwt_manager=jwt_manager
+    )
+
+    result = await auth_service.change_pin(
+        user=user,
+        current_pin=request.current_pin,
+        new_pin=request.new_pin,
+        request=http_request,
+        access_token=credentials.credentials,
+    )
+
+    if result.code == "INCORRECT_CURRENT_PIN":
+        raise FieldException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            field="current_pin",
+            message=result.message,
+            type="invalid_current_pin",
+            action="auth.change_pin",
+        )
+
+    if result.code == "SAME_PIN":
+        raise FieldException(
+            status_code=status.HTTP_409_CONFLICT,
+            field="new_pin",
+            message=result.message,
+            type="same_pin",
+            action="auth.change_pin",
+        )
+
+    if result.code == "CHANGE_PIN_FAILED":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.message,
+        )
+
+    return result

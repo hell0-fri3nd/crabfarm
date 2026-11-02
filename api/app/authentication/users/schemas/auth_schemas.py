@@ -42,6 +42,26 @@ class PinRequest(BaseModel):
             raise ValueError("Pin must be exactly 4 digits")
         return value
     
+class ChangePinRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "current_pin": "1234",
+                "new_pin": "5678"
+            }
+        }
+    )
+    current_pin: str = Field(description="Current pin must be exactly 4 digits.")
+    new_pin: str = Field(description="New pin must be exactly 4 digits.")
+
+    @field_validator("current_pin", "new_pin")
+    @classmethod
+    def pin_must_be_4_digits(cls, value: str) -> str:
+        if not (len(value) == 4 and value.isdigit()):
+            raise ValueError("Pin must be exactly 4 digits")
+        return value
+    
 class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
