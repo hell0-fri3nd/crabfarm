@@ -42,6 +42,7 @@ crabfarm/
 ├── AGENT.md / CLAUDE.md     # agent instructions (this file)
 ├── context/                 # project-wide context
 ├── docs/ui/components/      # UI design source (component library, plan, navigation)
+├── docs/ui/{desktop,tablet,phone}/  # page mockups per screen size
 ├── docker-compose.yml       # PostgreSQL 16 + RabbitMQ 4 (management)
 ├── api/                     # FastAPI backend + worker (Python ≥ 3.12, Poetry)
 │   ├── app/                 # domains: authentication, crab_management, (monitoring, vision, assistant planned)

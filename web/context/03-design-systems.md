@@ -2,7 +2,7 @@
 
 Follow this file whenever you design, build or review a page, a component or a `custom-` component.
 
-- **Source designs:** `docs/ui/components/` (*Plan · audit, tokens, component map*, *Component library*, *Navigation (shared component)*). If this file and the designs disagree, the designs win, so update this file.
+- **Source designs:** `docs/ui/components/` (*Plan · audit, tokens, component map*, *Component library*, *Navigation (shared component)*) and the page mockups in `docs/ui/desktop/`, `docs/ui/tablet/` and `docs/ui/phone/` (every screen, plus the navigation at 1440, 1280, 834 and 390 px). If this file and the designs disagree, the designs win, so update this file.
 - **Laws are heuristics, not specifications.** Use them to find likely problems and to explain decisions. Real user evidence and this design system win when they disagree with a heuristic.
 - **Breaking a law on purpose?** Say which law and why in the PR description, or in a one-line *why* comment (02 §8).
 
