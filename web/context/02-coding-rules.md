@@ -201,6 +201,7 @@ Prefer the right-hand column.
 | `enum Status {}` | `as const` objects or `z.enum([...])` |
 | `interface X {}` | `type X = {}` |
 | `any`, `as SomeType` casts | `unknown` + zod `parse`, `satisfies` for config objects |
+| hand-written validators (`isValid(x)`, regex checks in a component) | a zod schema in `types/`; live checklists (password rules) call each rule's `schema.safeParse(value).success` |
 | `x!` non-null assertion | narrow with a guard / early return |
 | nested `if`s / nested ternaries | guard clauses with early `return`, or a lookup object |
 | `switch` over a status → label/variant | a typed map: `const STATUS_VARIANT = { ... } as const satisfies Record<Status, Variant>` |
@@ -256,5 +257,6 @@ Don't be clever for its own sake. If a one-liner needs a second read, split it.
 - [ ] Names follow §3, files are kebab-case, and custom component files are `custom-<name>.tsx`.
 - [ ] `eslint .` and `tsc --noEmit` pass.
 - [ ] No `any`, no `!`, no `interface`, no `enum`. zod parses every input and every API read.
+- [ ] zod is the only validator: no hand-written checks. A UI that shows rule-by-rule status reuses the same zod rule schemas as the form.
 - [ ] Next.js primitives are used (§6). `'use client'` only where needed.
 - [ ] The code reads without comments.

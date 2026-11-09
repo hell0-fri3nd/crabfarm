@@ -121,9 +121,9 @@ In production, prefix both with `__Host-`. Tokens are written and read **only** 
 **Flows**
 
 1. **Sign in:** `(auth)/sign-in` form → `signIn` Server Action → zod validates → `POST /auth/sign-in` → sets both cookies → returns `{ name, role, needs_onboarding }` (never the tokens) → redirect to `team-onboarding` or the portal.
-2. **PIN unlock:** when the access token is missing or expired but a refresh token exists, the user is sent to `(auth)/pin`. That calls `POST /auth/sign-in/pin` with the refresh token and replaces the cookies.
+2. **PIN unlock:** when the access token is missing or expired but a refresh token exists, the user is sent to `(auth)/pin`. That calls `POST /auth/sign-in/pin` with the refresh token and replaces the cookies. The PIN only re-issues the access token; it is **not** a sign-in option, so `/sign-in` has no link to `/pin`.
 3. **Team onboarding:** on first sign-in, the user must change their password and set a PIN (`PATCH /auth/change-password`, `PATCH /auth/change-pin`) before `(portal)` is reachable. `(portal)/layout.tsx` redirects un-onboarded users. `team-onboarding/layout.tsx` redirects onboarded users away.
-   *Backend dependency:* the sign-in response must include an onboarding flag (e.g. `must_reset_credentials`). It doesn't exist yet in `api/`.
+   *Backend:* `POST /auth/sign-in`, `POST /auth/sign-in/pin` and `GET /auth/me` return `needs_onboarding`. It turns `false` only after both the password and the pin have been changed. An admin reset (`POST /users/{user_id}/reset-credentials`) sets it back to `true`.
 4. **Sign out:** global `actions/sign-out.ts` deletes both cookies → `/sign-in`.
 5. **401 from FastAPI** anywhere in the BFF → clear `access_token` and redirect to `/pin` if a refresh token exists, otherwise `/sign-in`.
 
@@ -170,7 +170,7 @@ Schemas live in the domain `types/` (or global `types/` once shared), and the ty
 |---|---|
 | Server data (anything from FastAPI) | TanStack Query cache **only** |
 | Access token + refresh token | **httpOnly cookies only**, set and read by the BFF (server). Never in zustand, `localStorage`, `sessionStorage` or JS-readable cookies. |
-| Signed-in user profile (`name`, `email`, `role`, `needs_onboarding`) | zustand `stores/auth-store.ts`, filled from the sign-in / `GET /users/me` result. Display only. |
+| Signed-in user profile (`name`, `email`, `role`, `needs_onboarding`) | zustand `stores/auth-store.ts`, filled from the sign-in / `GET /auth/me` result. Display only. |
 | URL-worthy UI state (filters, page, tab, date range) | URL search params |
 | Form state | `react-hook-form` |
 | Cross-component UI-only state (sidebar, assistant open, live-chart paused, current `thread_id`) | zustand store in `stores/` (or a domain store if it's used once) |
@@ -178,7 +178,7 @@ Schemas live in the domain `types/` (or global `types/` once shared), and the ty
 
 - **zustand is the only client store.** Redux / redux-persist are removed.
 - zustand never holds tokens, passwords, PINs or FastAPI list/detail data (that's TanStack Query's job).
-- Use `persist` only for harmless preferences (sidebar collapsed, theme). The auth profile store isn't persisted; it's re-filled from `/users/me` on load.
+- Use `persist` only for harmless preferences (sidebar collapsed, theme). The auth profile store isn't persisted; it's re-filled from `/auth/me` on load.
 
 ## 8. Rendering Rules
 
@@ -199,7 +199,7 @@ Schemas live in the domain `types/` (or global `types/` once shared), and the ty
 | `assistant` | `/assistant/chat` |
 | `users` | `/users` |
 | `activity` | audit endpoints |
-| `profile` | `/users/me`, `/auth/change-password`, `/auth/change-pin` |
+| `profile` | `/auth/me`, `/auth/change-password`, `/auth/change-pin` |
 
 ## 10. Checklist: Adding a Portal Domain
 

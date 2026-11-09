@@ -35,7 +35,7 @@ Follow this file whenever you design, build or review a page, a component or a `
 | **Hick's Law**: decision time grows with the number and complexity of choices | One primary action per view. Filters default to 24 h / 7 days / 30 days in a ToggleGroup, with advanced filters in a Popover. Onboarding and Scan are steps (`custom-stepper`), not one long form. |
 | **Miller's Law**: a few chunks fit in working memory | Treat 5–7 as the starting point for groups and visible options. The sidebar's 8 items sit in 4 divider-separated groups. The Dashboard shows 5 sensor tiles. Logs and Activity rows are grouped by day. |
 | **Tesler's Law**: complexity can only be moved | The QR scan fills batch, group and crab and **locks** them. The scale fills the weight. The forecast runs in the background. The assistant explains *why* a sensor dropped. Power users can still edit before saving. |
-| **Cognitive load** | Show only what the task needs. Metadata goes in a details view. Use smart defaults (today, current pond, last-used batch) and familiar patterns. |
+| **Cognitive load** | Show only what the task needs. Metadata goes in a details view. Use smart defaults (today, last-used batch) and familiar patterns. |
 
 ### Targeting and timing
 
@@ -73,11 +73,11 @@ Follow this file whenever you design, build or review a page, a component or a `
 | # | Heuristic | Crabfarm rule |
 |---|---|---|
 | 1 | Visibility of system status | Feeding status is always in the sidebar footer. Live tiles show "now" or the last-seen time. Every save shows pending → success or error. |
-| 2 | Match the real world | Use farm words: cage, batch, crab, feed, pond. No internal jargon (`logs_enum`, `prediction`). |
+| 2 | Match the real world | Use farm words: cage, batch, crab, feed. There are no ponds, so never say pond. No internal jargon (`logs_enum`, `prediction`). |
 | 3 | User control and freedom | Reversible actions offer **Undo**. Every flow has Cancel/Back. Wrong crab in Scan → **Rescan**. |
 | 4 | Consistency and standards | Same thing, same name, same look, same place (§3, §11, §17). |
 | 5 | Error prevention | QR locks IDs. Correct input types and bounds (weight > 0). AlertDialog before anything physical or anything that locks someone out (§15). |
-| 6 | Recognition over recall | Selects show names, not IDs. Recent batches come first. Context (pond, batch) stays visible in headers. |
+| 6 | Recognition over recall | Selects show names, not IDs. Recent batches come first. Context (batch, cage) stays visible in headers. |
 | 7 | Flexibility and efficiency | Bulk feed by group, saved filters in the URL, keyboard submit (Enter), CSV export. None of it clutters the default view. |
 | 8 | Aesthetic and minimalist design | Remove anything that doesn't serve the task (no Value column that always reads 0.00). |
 | 9 | Recover from errors | Plain cause + fix + action ("Couldn't reach dispenser C4 · Check its power and try again. Nothing was dispensed."). Raw codes go in details or logs only. |
@@ -87,7 +87,7 @@ Follow this file whenever you design, build or review a page, a component or a `
 
 **Navigation**
 - Primary nav has about 5–7 items. Past 7, group with dividers. The sidebar has 8 items in 4 groups (§14).
-- **Phone bottom tabs: 5** (Dashboard, Logs, **Scan** raised, Feeding, More). Everything else goes in the **More** sheet.
+- **Phone bottom tabs: 5** (Home, Feeding, **Scan** raised, Logs, More). Everything else goes in the **More** sheet.
 - In-page navigation uses Tabs for 3–5 views (Logs: Crab / Sensor).
 
 **Forms**
@@ -109,9 +109,11 @@ Follow this file whenever you design, build or review a page, a component or a `
 Use optimistic UI only when the action almost always succeeds **and** can be rolled back (toggle a schedule, save a log). On failure, revert and say so. **Never show "Saved" or "Fed" before the server confirms.** Feeding is never optimistic.
 
 **Data display**
-- Tables show **5–7 default columns**, with the rest available in column settings. The identifying column is on the left and row actions on the right. The primary row action is visible; the rest go in a keyboard-reachable overflow menu.
+- Tables show **5–7 default columns** and **7 rows per page** (Miller's), with the rest of the columns in column settings. The identifying column is on the left and row actions on the right. The primary row action is visible; the rest go in a keyboard-reachable overflow menu.
 - The Dashboard defaults to **6–8 widgets** grouped by theme (briefing, alerts, sensor tiles, growth).
-- On phones, tables become cards or scroll horizontally with the **first column frozen**.
+- Tables of 5+ columns show as **cards below 1024 px** (one column on phones, two beside the tablet rail) and as the table from `lg`. Only tables that must stay tabular (QR download history) scroll horizontally, with the **first column frozen**.
+- **No horizontal page scroll, ever.** Every grid declares its columns (`grid-cols-1` / `grid-cols-[minmax(0,1fr)]`, never a bare `grid`), flex children that hold long rows get `min-w-0`, rows that scroll sideways fade their right edge, and off-screen helpers (canvases) live in a `fixed` 1 px `overflow-hidden` box.
+- **Action hierarchy inside a list** (Hick's, Von Restorff): the group's action is the visible one (outline, card heading); per-row actions are quiet (ghost); an exception row (jammed, failed) gets a tinted band and its fix is an outline button. Every column of controls has a visible header (e.g. **Scheduled** above switches). An alert about a row offers **Go to <row>**, which scrolls to and focuses it.
 
 **Mobile**
 - Frequent actions sit within thumb reach (bottom bar, bottom sheets).
@@ -220,8 +222,9 @@ export default RootLayout;
 | Grouping (Proximity) | within a group 8–16, between groups 24–32 |
 | Control height | **36** compact (top bar, filters, table actions; hit area ≥ 24), **44** default (forms, primary, all touch-primary) |
 | Layout | panels pad **24**, grids gap **20**, sections **32** apart, gutters **32** (**16** on phones) |
-| Radius | **8** inputs-in-groups · **10** controls · **14** cards · **18** dialogs |
+| Radius | **8** inputs-in-groups · **10** controls · **14** cards · **18** dialogs. **Nested shapes are concentric:** inner radius = outer radius − inset, with an even inset on every side (e.g. composer `rounded-2xl` 18 → Send `rounded-xl` 14 at a 4 px inset; override shadcn's negative addon margins) |
 | Motion | **160–240 ms**, on `transform` / `opacity` only, `prefers-reduced-motion` respected |
+| Applied (responsive) | Top bars `h-16`, gutters `px-4 md:px-8`. Cards `py-5 px-4` on phones, `sm:py-6 sm:px-6`. Tiles and alerts `p-4`, `sm:p-5` / `sm:px-6`. Form fields `FieldGroup gap-6` (label→input 12 inside a field). Sidebar: header block (logo 24 → profile) and nav are separate regions, only the nav scrolls (thin scrollbar), groups 32 apart (`hr my-4`), items 4 apart. Card header controls drop under the title on phones. Primary buttons are full width on phones. |
 
 ## 9. Brand Logo: `custom-brand-logo`
 
@@ -248,7 +251,7 @@ export default RootLayout;
 
 | Component | Built from | Used on | States to design |
 |---|---|---|---|
-| Navigation | `Sidebar`, `Sheet` + `custom-tab-bar` | all app screens | desktop **256** · laptop **224** · tablet rail **88** with labels · phone 5 bottom tabs (raised Scan) + More sheet · active, hover, focus, alert count |
+| Navigation | `custom-app-sidebar`, `Sheet` + `custom-tab-bar` | all app screens | ≥ 1024 (laptop and desktop alike): **256** expanded or **72** icon rail (collapse, Ctrl+B, remembered) · 768–1023: **88** rail with labels under icons (wrap, never truncate) · < 768: 5 bottom tabs (raised Scan) + More sheet · active, hover, focus, alert count |
 | Button | `Button` | everywhere | default · secondary · ghost · destructive · outline-destructive · sm · loading (keeps width) · disabled · focus |
 | Card | `Card` | everywhere | default, header actions, alert border |
 | Form fields | `Form`, `Input`, `Label`, `Select`, `Textarea`, `Checkbox` | Auth, Onboarding, Feeding, Scan, Users, Profile | empty, focus, filled, error + message, disabled, read-only (locked from QR), long text |
@@ -264,7 +267,16 @@ export default RootLayout;
 | `custom-sensor-sparkline`, `custom-growth-chart` | Recharts | Dashboard | safe band, predicted dashed vs actual solid, tooltip per point, empty |
 | `custom-theme-toggle` | `Button` + `Sun` / `Moon` | top bar | round 36 px (hit area ≥ 24); icon shows the current mode; the label says the action |
 | `custom-ask-ai-button` | `Button` + `Bot` | top bar except Assistant | inverse pill, hover ring, focus ring |
-| `custom-bubbles` | CSS | every screen | behind content at 8–9% opacity; static with reduced motion; `aria-hidden` |
+| `custom-bubbles` | Web Animations API | every screen | behind content at 8–9% opacity; rise from the bottom with a random sway, speed and column, respawning at a new spot; a click on a bubble (not on a control) pops it (swell + fade + splash ring, ~0.4 s) and a new one rises; static (mockup layout) with reduced motion, where a pop is a plain fade out and back; `aria-hidden`, never blocks clicks on content |
+| `custom-footer` | plain `footer` | every screen | one line; `centered` (auth screens, default "CrabFarm v<major.minor> · Built by Art Lisboa" from `package.json`, or a page hint as children) or `split` (portal: version left, credit right, top border) |
+| `custom-page-header` | `h1` + status line + actions | every portal page | title (`text-3xl`), a status line that reports state (never a page description), actions; **column on phones** (actions full width), row from `sm` |
+| `custom-card-heading` | `CardHeader` + `CardTitle`/`CardDescription` | every card with a heading | title (`h2`, `text-lg`), description, actions; **column on phones**, row from `sm` (controls right). Never hand-roll a `CardHeader` with `CardAction` |
+| `custom-search-input` | `Input` + `Search` + sr-only `Label` | Logs, Activity, Users | 44 px, `type="search"`, trims, drives a URL param; one component for every search field |
+| `custom-password-input` | `Input` + `Lock` / `Eye` / `EyeOff` | Login, Onboarding (later Profile) | 44 px, optional lock icon, show/hide toggle with `aria-pressed` |
+| `custom-app-sidebar` | `aside` + `Avatar`, `Tooltip`, `Button` + `custom-feeding-status` | portal shell | three CSS modes via the `sidebar-full` / `sidebar-icons` variants (`globals.css`) and `data-sidebar-collapsed` from `custom-app-shell` (zustand `stores/ui-store.ts`, persisted): full (logo + wordmark, profile row, labels, count pill, feeding card), icon rail (48 px targets, count bubble on the icon, tooltips, feeding dot), tablet rail (labels under icons, no collapse) |
+| `custom-top-bar` | `custom-theme-toggle` + `custom-ask-ai-button` | portal shell | sticky; Live pill ("updated 12 s ago"), mark-only logo on phones |
+| `custom-tab-bar` | `Sheet` | portal shell, phones only | Home (alert dot), Feeding, raised Scan (rounded square), Logs, More; the More sheet has a handle, a 44 px close, QR stickers, Assistant, Users, Activity, My profile, then Sign out below a divider |
+| `custom-auth-shell` | `custom-bubbles` + `custom-brand-logo` | Login, PIN login, Onboarding | logo top-left, a `headerEnd` slot top-right (theme toggle), full-height column; the page renders its `main` and `custom-footer` |
 | `custom-stepper` | `Check` + connecting line | Onboarding, Scan | done, current (`aria-current="step"`), upcoming; "Step X of Y"; sub-text hidden on phones |
 | `custom-brand-logo` | `next/image` + SVG | sidebar, sign-in, stickers | see §9 |
 | `custom-empty-state` | icon + `Button` | Logs, Activity, Feeding, Users | no data yet, no results for filters (with **Clear filters**) |
@@ -314,8 +326,9 @@ A feature's own `custom-` components live in its domain `components/` until a se
 - **Bottom:** `custom-feeding-status` ("Feeding on · Next feed 6:00 AM"), always visible (Nielsen #1).
 - **Active item:** accent text + tinted background + `aria-current="page"`. Counts use a destructive badge with an accessible label ("1 alert").
 - **Sticky sidebar** with its own scroll area. Only the content column scrolls.
-- **Phone:** 5 bottom tabs (Dashboard, Logs, **Scan** raised center, Feeding, More). The More sheet holds QR stickers, Assistant, Users, Activity, My profile, Sign out.
+- **Phone:** 5 bottom tabs (Home, Feeding, **Scan** raised center, Logs, More). The More sheet holds QR stickers, Assistant, Users, Activity, My profile, Sign out.
 - The top bar shows the **page name**, not breadcrumbs (flat nav). The footer is one line (version + credit).
+- **App-screen pages** (Assistant; later Scan if needed) put `data-fullscreen` on their root: on phones the footer hides and the page reclaims the tab-bar padding, so only the inner list scrolls and the input sits just above the tabs. On wider screens the footer sits below the fold.
 
 ## 15. Feedback & Confirmation
 
@@ -332,6 +345,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | Apply an assistant suggestion | Depends | Preview card, then the **same** `AlertDialog` as the manual action | Toast + Activity entry tagged Assistant |
 
 **Toasts (Sonner)**
+- Fire toasts **only** through `notify` (`lib/notify.ts`): `notify.success | info | warning | error | undo(title, { description, onUndo })`. Importing `sonner` directly is a lint error. `custom-toaster` (root layout) renders them: muted surface, 14 px radius, border, status icon (`CircleCheck` primary · `Info` info · `TriangleAlert` warning · `CircleX` destructive), bold title, muted description.
 - Success and info close after **5 s**, warnings after **8 s**, and errors **stay until dismissed**.
 - At most **3 visible**, newest at the bottom. **Bottom-right** on desktop, **top** on phones.
 - Errors are announced assertively; everything else politely.
@@ -353,7 +367,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 |---|---|
 | Default / hover / focus / active | Visible focus ring (`--ring`, 3:1). Pressed state within 100 ms. |
 | Disabled | Faded, still visible, with the reason nearby ("Connect the scale to save"). Never hide an unavailable control. |
-| Loading | Skeletons keep the page's shape (Closure). Buttons keep their width and change the label ("Saving…"). Inline text for one part of a page ("Loading readings for Pond 2…"). |
+| Loading | Skeletons keep the page's shape (Closure). Buttons keep their width and change the label ("Saving…"). Inline text for one part of a page ("Loading the ammonia readings…"). |
 | Long work (> 3 s) | Determinate progress, estimate, cancel (sticker PDF, CSV export). |
 | Empty | `custom-empty-state`: icon, one-line title, a hint for how to fill it, one action. |
 | No results | Same component, with **Clear filters**. |
