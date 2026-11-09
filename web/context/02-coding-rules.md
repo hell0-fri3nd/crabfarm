@@ -229,7 +229,7 @@ Don't be clever for its own sake. If a one-liner needs a second read, split it.
 ## 7. Components
 
 - One component per file.
-- **Every custom component file is named `custom-<name>.tsx`** and exports `Custom<Name>`: `custom-severity-badge.tsx` → `const CustomSeverityBadge = () => {}`, used as `<CustomSeverityBadge level="high" />` (per `docs/components`).
+- **Every custom component file is named `custom-<name>.tsx`** and exports `Custom<Name>`: `custom-severity-badge.tsx` → `const CustomSeverityBadge = () => {}`, used as `<CustomSeverityBadge level="high" />` (per `docs/ui/components`).
 - Location: a domain's own custom components live in `<domain>/components/custom-<name>.tsx`. Shared ones (used by 2+ domains) live in **`components/custom/custom-<name>.tsx`**. shadcn primitives stay untouched in `components/ui/`.
 - A `custom-` component exists only where shadcn has nothing that fits, and it's built from shadcn parts (03 §2).
 - Next.js special files (`page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, `not-found.tsx`) keep their required names.
