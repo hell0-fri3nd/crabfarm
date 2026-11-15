@@ -115,10 +115,21 @@ type BatchServicesDep = Annotated[BatchServices, Depends(Provide(BatchServices))
 | Function / method / variable | `snake_case`, functions start with a verb | `verify_password`, `build_features` |
 | Constant | `UPPER_SNAKE` at module level | `AUDIT_ACTION_KEY`, `FORECAST_HORIZON_DAYS` |
 | Enum | `PascalCase` class, `UPPER_SNAKE` members, `(str, Enum)` | `Role.ADMIN`, `Permission.BATCH_CREATE` |
-| Private | leading underscore | `_hasher`, `_reject()` |
+| Private function / method | **double** leading underscore (§4.1) | `__reject()`, `__default_credentials()`, `__raise_for()` |
+| Private attribute | single leading underscore | `_hasher` |
 | Boolean | `is_` / `has_` / `can_` prefix | `is_active`, `has_permission` |
 | Dependency instance | `snake_case` noun or `get_` | `get_current_user`, `require_permissions` |
 | `Annotated` dependency alias | `PascalCase` + `Dep` or a plain noun | `DbSession`, `CurrentUser`, `BatchServicesDep` |
+
+### 4.1 Private functions use `__`
+
+Every private function or method starts with **two** underscores: `__default_credentials`, not `_default_credentials`.
+
+- **In a class:** `def __fail(self, ...)`, called as `self.__fail(...)` or `cls.__errors(...)`. Python name-mangles it (`_UserServices__fail`), so subclasses and callers outside the class can't reach it by accident.
+- **At module level:** `def __raise_for(...)` is fine **only when no class body or method calls it**, because a `__name` written inside a class is mangled to `_ClassName__name` and raises `NameError`. If a class needs the helper, make it a private `@staticmethod` / `@classmethod` of that class (as `AuditServices.__errors` is), or replace it with a public reusable type (as `NormalizedEmail` replaced `_lower_email`).
+- **Never** use a trailing `__` as well. `__name__` is a dunder and belongs to Python (§6).
+- Attributes keep a single underscore (`self._hasher`).
+- Applied migrations keep their old names (AGENT.md: never edit an applied migration).
 
 **Project class suffixes**
 
@@ -207,6 +218,35 @@ Don't overload arithmetic or comparison operators on things that aren't values (
 - Order: standard library → third-party → `app.*` → relative (`.` / `..`), with one blank line between groups.
 - Inside a resource, use relative imports (`from .models import Users`). Across resources or domains, import the package's public surface (`from app.crab_management.crab import CrabServices`). See 01 §6.
 - No wildcard imports. No imports inside functions, except to break a real cycle, and then fix the cycle.
+- **More than two names → one per line.** Up to two names stay on one line (`from uuid import UUID, uuid4`). Three or more go in parentheses, one name per line, with a trailing comma, so a diff shows exactly which name was added or removed:
+
+  ```python
+  # no
+  from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response as FastAPIResponse, status
+
+  # yes
+  from fastapi import (
+      APIRouter,
+      Depends,
+      HTTPException,
+      Query,
+      Request,
+      Response as FastAPIResponse,
+      status,
+  )
+  ```
+- **`__all__` follows the same rule.** More than two names → one per line with a trailing comma:
+
+  ```python
+  __all__ = [
+      "auth_router",
+      "users_router",
+      "get_current_user",
+      "require_permissions",
+      "UserServices",
+  ]
+  ```
+- Applied migrations aren't reformatted (AGENT.md: never edit an applied migration).
 
 ## 9. Errors & Logging
 

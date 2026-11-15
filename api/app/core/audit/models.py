@@ -1,10 +1,30 @@
-from datetime import date, datetime, time
+from datetime import (
+    date,
+    datetime,
+    time,
+)
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import CHAR, Column, Computed, Date, DateTime, Text, text
-from sqlalchemy.dialects.postgresql import INET, JSONB, TIME
-from sqlmodel import Field, SQLModel, func
+from sqlalchemy import (
+    CHAR,
+    Column,
+    Computed,
+    Date,
+    DateTime,
+    Text,
+    text,
+)
+from sqlalchemy.dialects.postgresql import (
+    INET,
+    JSONB,
+    TIME,
+)
+from sqlmodel import (
+    Field,
+    SQLModel,
+    func,
+)
 
 LOCAL_TZ = "Asia/Manila"
 

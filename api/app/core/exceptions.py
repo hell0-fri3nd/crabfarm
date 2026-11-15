@@ -1,10 +1,18 @@
-from fastapi import FastAPI, Request, status
+from fastapi import (
+    FastAPI,
+    Request,
+    status,
+)
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from .audit import AuditService, Outcome, Severity
+from .audit import (
+    AuditService,
+    Outcome,
+    Severity,
+)
 
 
 audit = AuditService()
@@ -14,7 +22,7 @@ AUDIT_ACTION_KEY = "x-audit-action"
 DEFAULT_VALIDATION_ACTION = "request.validation_failed"
 
 
-def _audit_action(request: Request) -> str:
+def __audit_action(request: Request) -> str:
     route = request.scope.get("route")
     extra = getattr(route, "openapi_extra", None) or {}
     return extra.get(AUDIT_ACTION_KEY, DEFAULT_VALIDATION_ACTION)
@@ -48,7 +56,7 @@ class FieldException(Exception):
         self.action = action
 
 
-def _field_name(loc: tuple) -> str:
+def __field_name(loc: tuple) -> str:
     parts = [str(p) for p in loc[1:]] if len(loc) > 1 else [str(p) for p in loc]
     return ".".join(parts) or "body"
 
@@ -58,7 +66,7 @@ async def validation_exception_handler(
 ) -> JSONResponse:
     errors = [
         FieldError(
-            field="body" if err["type"] == "json_invalid" else _field_name(err["loc"]),
+            field="body" if err["type"] == "json_invalid" else __field_name(err["loc"]),
             message=err["msg"].removeprefix("Value error, "),
             type=err["type"],
         )
@@ -68,7 +76,7 @@ async def validation_exception_handler(
     # Set by TokenAuth when the route's token was valid, so a 422 still names the user;
     # access_token is only set for access tokens (session_hash never hashes a refresh token)
     audit.record(
-        action=_audit_action(request),
+        action=__audit_action(request),
         outcome=Outcome.FAILURE,
         severity=Severity.INFO,
         request=request,

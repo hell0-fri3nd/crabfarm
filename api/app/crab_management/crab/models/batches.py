@@ -1,7 +1,11 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlmodel import Field, SQLModel, func
+from sqlmodel import (
+    Field,
+    SQLModel,
+    func,
+)
 
 class Batches(SQLModel, table=True):
     __tablename__ = "batches"

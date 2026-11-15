@@ -7,7 +7,11 @@ from fastapi import Request
 
 from ..database import SessionFactory
 from .models import AuditEvents
-from .schemas import ActorType, Outcome, Severity
+from .schemas import (
+    ActorType,
+    Outcome,
+    Severity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +55,10 @@ class AuditService:
         try:
             event = AuditEvents(
                 actor_id=getattr(actor, "id", None),
-                actor_type=(actor_type or self._actor_type(actor)).value,
-                actor_role=self._role(actor),
+                actor_type=(actor_type or self.__actor_type(actor)).value,
+                actor_role=self.__role(actor),
                 actor_email=getattr(actor, "email", None) or actor_email,
-                session_hash=self._hash(session_token),
+                session_hash=self.__hash(session_token),
                 service=self.service,
                 action=action,
                 target_type=target_type,
@@ -65,7 +69,7 @@ class AuditService:
                 http_status=http_status,
                 reason=reason,
                 changes=changes,
-                **self._request_fields(request),
+                **self.__request_fields(request),
             )
 
             with self.session_factory() as db:
@@ -79,26 +83,26 @@ class AuditService:
             return None
 
     @staticmethod
-    def _role(actor: Any) -> str | None:
+    def __role(actor: Any) -> str | None:
         role = getattr(actor, "role", None)
         return getattr(role, "value", role)
 
     @classmethod
-    def _actor_type(cls, actor: Any) -> ActorType:
+    def __actor_type(cls, actor: Any) -> ActorType:
         # Actor type follows the role value (e.g. Role.STAFF -> STAFF); unknown roles fall back to USER
         if actor is None:
             return ActorType.ANONYMOUS
         try:
-            return ActorType(cls._role(actor))
+            return ActorType(cls.__role(actor))
         except ValueError:
             return ActorType.USER
 
     @staticmethod
-    def _hash(token: str | None) -> str | None:
+    def __hash(token: str | None) -> str | None:
         return hashlib.sha256(token.encode()).hexdigest() if token else None
 
     @staticmethod
-    def _request_fields(request: Request | None) -> dict[str, Any]:
+    def __request_fields(request: Request | None) -> dict[str, Any]:
         if request is None:
             return {}
 

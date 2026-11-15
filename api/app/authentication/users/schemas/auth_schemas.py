@@ -1,10 +1,10 @@
 
 from pydantic import (
-    BaseModel, 
-    EmailStr , 
-    ConfigDict, 
+    BaseModel,
+    EmailStr,
+    ConfigDict,
     Field,
-    field_validator
+    field_validator,
 )
 
 

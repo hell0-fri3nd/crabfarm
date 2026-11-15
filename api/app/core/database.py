@@ -3,7 +3,11 @@ from collections.abc import Generator
 
 from sqlalchemy import MetaData
 from sqlalchemy.orm import sessionmaker
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import (
+    SQLModel,
+    Session,
+    create_engine,
+)
 from .config import settings
 
 

@@ -4,7 +4,11 @@ from enum import Enum
 from uuid import UUID
 
 from sqlalchemy import Enum as SAEnum
-from sqlmodel import Field, SQLModel, func
+from sqlmodel import (
+    Field,
+    SQLModel,
+    func,
+)
 
 
 class Type(str, Enum):

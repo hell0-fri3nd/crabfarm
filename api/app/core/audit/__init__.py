@@ -1,5 +1,9 @@
 from .models import AuditEvents
-from .schemas import ActorType, Outcome, Severity
+from .schemas import (
+    ActorType,
+    Outcome,
+    Severity,
+)
 from .services import AuditService
 
 __all__ = [
