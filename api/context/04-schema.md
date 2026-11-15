@@ -35,8 +35,10 @@ One PostgreSQL database, **one Postgres schema per module**, the same way the co
 | `name` | `varchar(150)` | no | | |
 | `email` | `varchar(254)` | no | | unique, lowercased by schema |
 | `password` | `varchar(255)` | no | | argon2 hash |
-| `pin` | `varchar(4)` | yes | | 4-digit pin |
+| `pin` | `varchar(255)` | no | | argon2 hash of the 4-digit pin |
 | `role` | enum `user_role` (`ADMIN`, `USER`, `STAFF`) | no | `USER` | stores enum **names** |
+| `is_active` | `boolean` | no | `true` | `false` = deactivated (`DELETE /users/{id}`); blocks sign-in and token use |
+| `has_default_credentials` | `boolean` | no | `false` (DB), `true` on create/reset (app) | `true` = still on the default password or pin; API field `needs_onboarding` |
 | `created_at` | `timestamptz` | no | `now()` | |
 | `updated_at` | `timestamptz` | no | `now()` | `onupdate=now()` |
 
@@ -177,7 +179,6 @@ Rules for every denormalized column:
 | 1 | Logs table name | `crab_management.logs`, enum `logs_enum` | `crab_management.crab_logs`, enum `crab_logs_enum` (never renamed) | Rename migration (table, sequence, PK/FK/index names, enum), as `e8cfd54d53fc` did for batches |
 | 2 | Crab models not in Alembic | — | `migrations/env.py` has the crab model imports commented out, so autogenerate ignores `crab_management` | Import `Crabs`, `Batches`, `Logs` in `env.py` |
 | 3 | Role enum | `auth.user_role`, native | type `role` in the default schema (renamed from `userrole`), values `ADMIN/USER/STAFF` | Migration to move/rename the type to `auth.user_role` |
-| 4 | `users.pin` | `varchar(4)`, nullable | `varchar(255)`, NOT NULL | Align. If the pin is hashed it needs `varchar(255)`, so update the model instead |
 | 5 | `batches.user_id` cross-module FK | `foreign_key="auth.users.id"` | `fk_batches_user_id_users` exists | Remove `foreign_key` from the model and add a migration that drops the constraint (keep the index). `logs.user_id` is already correct (no FK). |
 | 6 | Naming rules | `logs.type`, `crabs.group_by`, `width`/`weight` without units, `serial` ids | — | When the logs/crab endpoints are built: `log_type`, `group_code`, `width_mm`, `weight_g`; decide uuid vs int ids |
 | 7 | Empty revision | — | `d8ce1eff817c` has `pass` in both directions | Leave it (it's in the chain). Don't repeat. |

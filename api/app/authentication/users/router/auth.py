@@ -3,7 +3,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Request,
-    status
+    status,
 )
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlmodel import Session
@@ -13,23 +13,47 @@ from app.core import (
     get_db,
     JwtManager,
     FieldException,
-    ValidationErrorResponse
+    ValidationErrorResponse,
 )
 
-from ..dependencies import bearer, get_refresh_user, get_current_user
+from ..dependencies import (
+    AuthServicesDep,
+    CurrentUser,
+    bearer,
+    get_refresh_user,
+    get_current_user,
+)
 from ..models import Users
-from ..schemas.auth_schemas import (
+from ..schemas import (
     PinRequest,
     SignInRequest,
     ChangePasswordRequest,
     ChangePinRequest,
     AuthResponse,
-    ErrorResponse
+    ErrorResponse,
+    Response,
+    UserRead,
 )
 from ..services import AuthServices, PasswordServices
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.get(
+    "/me",
+    response_model=Response[UserRead],
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "auth.me"},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "model": ErrorResponse,
+            "description": "Missing, invalid or expired access token, or the user is deactivated",
+        },
+    },
+)
+def me(user: CurrentUser, services: AuthServicesDep):
+    return services.me(user)
 
 
 @router.post(
@@ -45,6 +69,10 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
         status.HTTP_401_UNAUTHORIZED: {
             "model": ValidationErrorResponse,
             "description": "Incorrect password",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "model": ValidationErrorResponse,
+            "description": "Account is deactivated",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "model": ValidationErrorResponse,
@@ -92,6 +120,15 @@ async def sign_in(
             field="password",
             message=result.message,
             type="incorrect_password",
+            action="auth.sign_in",
+        )
+
+    if result.code == "USER_INACTIVE":
+        raise FieldException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            field="email",
+            message=result.message,
+            type="user_inactive",
             action="auth.sign_in",
         )
 

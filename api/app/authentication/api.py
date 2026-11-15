@@ -1,5 +1,6 @@
-from .users import user_router
+from .users import auth_router, users_router
 
 ROUTERS = [
-    user_router
+    auth_router,
+    users_router,
 ]

@@ -124,7 +124,7 @@ To keep OpenAPI typed, make `Response` generic: `Response[BatchRead]`, `Response
 | Code | When | Example |
 |---|---|---|
 | `200 OK` | Read, update, delete or action succeeded | `GET /batches/{id}`, `PATCH /auth/change-password` |
-| `201 Created` | A new resource was created; also set a `Location` header | `POST /batches` |
+| `201 Created` | A new resource was created; the new resource is returned in `details` (no `Location` header) | `POST /batches` |
 | `202 Accepted` | Work was queued; the result arrives later through SSE or polling | `POST /devices/{id}/commands`, `POST /forecasts` |
 | `400 Bad Request` | Well-formed request rejected by a business rule | incorrect current password/pin, a log date before the batch's stocking date |
 | `401 Unauthorized` | Missing, invalid or expired token, or wrong sign-in credentials; include `WWW-Authenticate: Bearer` for token errors | `/auth/sign-in` wrong password |
@@ -171,7 +171,6 @@ Time-series reads (sensor readings) also accept `interval=1m|5m|1h|1d` for serve
 )
 def create_batch(                                   # plain def: sync Session (01 §7)
     payload: CreateBatchRequest,
-    response: FastAPIResponse,
     user: Users = Depends(require_permissions(Permission.BATCH_CREATE)),
     db: Session = Depends(get_db),
 ):
@@ -186,13 +185,12 @@ def create_batch(                                   # plain def: sync Session (0
     if result.code == "BATCH_CREATE_FAILED":
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.message)
 
-    response.headers["Location"] = f"{settings.api_prefix}/batches/{result.details.id}"
     return result
 ```
 
 Checklist for every endpoint:
 - `response_model`, `status_code`, `openapi_extra={AUDIT_ACTION_KEY: "<resource>.<action>"}` and `responses={...}` for **every** non-2xx status it can return.
-- An auth dependency (`get_current_user` or `require_permissions(...)`), unless the endpoint is public by design (`/auth/sign-in`, `/health`).
+- The router declares `dependencies=[Depends(get_current_user)]` and the endpoint declares `require_permissions(...)` (01 §13), unless the endpoint is public by design (`/auth/sign-in`, `/health`). Data-dependent access rules use `has_permission(...)` in the service, never a role comparison.
 - Every input (body, path, query, header, upload) is a typed Pydantic model or annotation (§5). Request schemas use `ConfigDict(extra="forbid", str_strip_whitespace=True)` and a `json_schema_extra` example (as in `CreateUserRequest`).
 - Response models never include secrets (password/pin hashes, tokens other than on auth endpoints).
 - Audit action names are `<resource>.<action>` in `lower_snake`: `batch.create`, `device.command`, `auth.sign_in`.
@@ -228,16 +226,21 @@ Status codes listed are in addition to the defaults every protected endpoint has
 
 | Method | Path | Success | Notable errors |
 |---|---|---|---|
-| POST | `/auth/sign-in` | 200 `LOGIN_SUCCESS` | 404 email, 401 password |
+| POST | `/auth/sign-in` | 200 `LOGIN_SUCCESS` (includes `needs_onboarding`) | 404 email, 401 password, 403 deactivated |
 | POST | `/auth/sign-in/pin` | 200 `PIN_VERIFIED` | 401 pin / refresh token |
 | PATCH | `/auth/change-password` | 200 | 400 wrong current, 409 same as current |
 | PATCH | `/auth/change-pin` | 200 | 400 wrong current, 409 same as current |
-| GET | `/users` | 200 | — |
-| POST | `/users` | 201 `USER_CREATED` | 409 email exists |
-| GET | `/users/me` | 200 | — |
-| GET | `/users/{user_id}` | 200 | 404 |
-| PATCH | `/users/{user_id}` | 200 | 404, 409 email exists |
-| DELETE | `/users/{user_id}` | 200 (soft) | 404, 409 deleting yourself |
+| GET | `/auth/me` (any role, access token) | 200 `USER_FOUND` (includes `needs_onboarding`) | 401 missing/expired/invalid token or deactivated user |
+| GET | `/users` (`?page=&size=&q=&role=&is_active=&sort=`) | 200 `USERS_LISTED` | 403 without `user:read` |
+| POST | `/users` (`{name, email, role}`, gets the default password and pin) | 201 `USER_CREATED` | 403 non-admin assigning `ADMIN`, 409 email exists |
+| GET | `/users/{user_id}` | 200 `USER_FOUND` | 404 |
+| PATCH | `/users/{user_id}` | 200 `USER_UPDATED` | 403 non-admin touching an admin, 404, 409 email exists |
+| DELETE | `/users/{user_id}` | 200 `USER_DEACTIVATED` (sets `is_active=false`, idempotent) | 403, 404, 409 deactivating yourself |
+| POST | `/users/{user_id}/reset-credentials` (no body: password **and** pin back to the defaults) | 200 `CREDENTIALS_RESET` | 403, 404, 409 your own account |
+
+User management (`user:read`, `user:create`, `user:update`, `user:deactivate`, `user:reset_credentials`) is granted to `ADMIN` and `USER`, not `STAFF`. Creating, editing, deactivating or resetting an `ADMIN` account also needs `user:manage_admins` (only `ADMIN` has it). Every role changes its own password and pin through `/auth/change-password` and `/auth/change-pin`. A deactivated user gets `403 USER_INACTIVE` at sign-in and `401` on any token.
+
+**Onboarding.** New and reset users get `settings.default_user_password` / `settings.default_user_pin` and `has_default_credentials = true`, exposed as `needs_onboarding` on sign-in, PIN sign-in and every `UserRead`. It clears only when the user has changed **both** through `/auth/change-password` and `/auth/change-pin` (each checks whether the other is still the default). The change endpoints never set it back to `true`.
 
 ### crab_management
 

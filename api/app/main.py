@@ -33,7 +33,7 @@ This API provides endpoints for interacting with the Crabfarm backend.
         CORSMiddleware,
         allow_origins=["*"],
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],
         expose_headers=["X-Correlation-ID"],
         max_age=3600

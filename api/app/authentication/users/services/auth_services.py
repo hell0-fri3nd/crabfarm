@@ -5,11 +5,15 @@ from datetime import datetime, timezone
 from fastapi import Request
 from sqlmodel import Session, select
 
-from app.core import JwtManager
+from app.core import JwtManager, settings
 from .audit_services import AuditServices
 from .password_services import PasswordServices
 from ..models import Users
-from ..schemas import AuthResponse
+from ..schemas import (
+    AuthResponse,
+    Response,
+    UserRead,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,14 +22,24 @@ class AuthServices:
     def __init__(
         self,
         db: Session,
-        password_services: PasswordServices,
-        jwt_manager: JwtManager,
+        password_services: PasswordServices | None = None,
+        jwt_manager: JwtManager | None = None,
         audit: AuditServices | None = None,
     ):
         self.db = db
-        self.password_services = password_services
-        self.jwt_manager = jwt_manager
+        self.password_services = password_services or PasswordServices()
+        self.jwt_manager = jwt_manager or JwtManager()
         self.audit = audit or AuditServices()
+
+    def me(self, user: Users) -> Response[UserRead]:
+        return Response(
+            success=True, message="User retrieved", code="USER_FOUND",
+            details=UserRead.model_validate(user),
+        )
+
+    def __still_default(self, other_hash: str, default: str) -> bool:
+        """Onboarding finishes only once both the password and the pin are no longer the defaults."""
+        return self.password_services.verify_password(default, other_hash)
 
     async def sign_in(
         self,
@@ -54,6 +68,15 @@ class AuthServices:
                     success=False,
                     message="Incorrect password",
                     code="INCORRECT_PASSWORD",
+                    details=None
+                )
+
+            if not user.is_active:
+                self.audit.sign_in(request, "USER_INACTIVE", email=email, user=user)
+                return AuthResponse(
+                    success=False,
+                    message="This account is deactivated",
+                    code="USER_INACTIVE",
                     details=None
                 )
 
@@ -87,6 +110,7 @@ class AuthServices:
                     "name": user.name,
                     "email": user.email,
                     "role": user.role.value,
+                    "needs_onboarding": user.needs_onboarding,
                     "access_token": access_token,
                     "refresh_token": refresh_token
                 }
@@ -149,6 +173,7 @@ class AuthServices:
                     "name": user.name,
                     "email": user.email,
                     "role": user.role.value,
+                    "needs_onboarding": user.needs_onboarding,
                     "access_token": access_token
                 },
             )
@@ -199,6 +224,7 @@ class AuthServices:
                 )
 
             user.password = self.password_services.hash_password(new_password)
+            user.has_default_credentials = user.has_default_credentials and self.__still_default(user.pin, settings.default_user_pin)
             self.db.add(user)
             self.db.commit()
             self.db.refresh(user)
@@ -219,7 +245,6 @@ class AuthServices:
 
         except Exception:
             self.db.rollback()
-            logger.exception("Password change failed for user %s", user.id)
             self.audit.change_password(request, "CHANGE_PASSWORD_FAILED", user=user, access_token=access_token)
             return AuthResponse(
                 success=False,
@@ -265,6 +290,7 @@ class AuthServices:
                 )
 
             user.pin = self.password_services.hash_password(new_pin)
+            user.has_default_credentials = user.has_default_credentials and self.__still_default(user.password, settings.default_user_password)
             self.db.add(user)
             self.db.commit()
             self.db.refresh(user)

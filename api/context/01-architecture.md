@@ -318,7 +318,11 @@ Predicts **carapace width and weight for each of the next 7 days**, based on the
 ## 13. Errors, Auth, Audit
 
 - Services raise domain errors (`FieldException` or domain-specific exceptions in `core/exceptions.py`). `register_exception_handlers` maps them to HTTP responses. Routers don't build error responses by hand.
-- Every non-public endpoint depends on `get_current_user` and `require_permissions(...)` from `authentication.users`.
+- **Authentication and authorization (two layers, both from `authentication.users`):**
+  1. **Router level: who are you.** Every protected router declares `APIRouter(..., dependencies=[Depends(get_current_user)])`. It validates the access token (present, signed, unexpired, type `access`), loads the user and rejects deactivated users with `401`. A router that mixes public, refresh-token and access-token routes (only `/auth`) puts the dependency on each endpoint instead.
+  2. **Endpoint level: what may you do.** Every protected endpoint adds `require_permissions(Permission.X)` (through an alias such as `CanCreateUsers`). It checks the user's role (`ADMIN`, `USER`, `STAFF`) against `ROLE_PERMISSIONS` in `core/security/permissions.py` and returns `403` when it's missing. FastAPI resolves `get_current_user` once per request, so the two layers don't repeat the lookup.
+  - The role is read from the DB row, not the token claim, so role changes and deactivation apply immediately.
+  - **Never compare roles in code** (`user.role == Role.ADMIN`). Access is decided only by permissions. When the rule depends on request data or a DB row (the role being assigned, the target user's role), the service checks it with `has_permission(actor.role, Permission.X)` and returns a failure code that the router maps to `403` (for example `Permission.USER_MANAGE_ADMINS`).
 - State-changing actions (create/update/delete, device commands, worker control) write an audit entry through `core.audit`.
 
 ## 14. Configuration

@@ -1,7 +1,16 @@
 from datetime import datetime
 from uuid import UUID, uuid4
-from sqlmodel import Field, func, SQLModel
-from sqlalchemy import Column, Enum as SAEnum
+from sqlmodel import (
+    Field,
+    func,
+    SQLModel,
+)
+from sqlalchemy import (
+    Column,
+    Enum as SAEnum,
+    false,
+    true,
+)
 from app.core.security import Role
 
 class Users(SQLModel, table=True):
@@ -12,7 +21,7 @@ class Users(SQLModel, table=True):
     name: str       = Field(max_length=150)
     email: str      = Field(max_length=254, unique=True, index=True)
     password: str   = Field(max_length=255)
-    pin: str        = Field(max_length=4, nullable=True, default=None)
+    pin: str        = Field(max_length=255)
     role: Role      = Field(
                         default=Role.USER,
                         sa_column=Column(
@@ -27,6 +36,8 @@ class Users(SQLModel, table=True):
                             server_default=Role.USER.value,
                         )
                     )
+    is_active: bool = Field(default=True, sa_column_kwargs={"server_default": true()})
+    has_default_credentials: bool = Field(default=True, sa_column_kwargs={"server_default": false()})
 
     created_at: datetime | None = Field(
         default=None,
@@ -38,3 +49,10 @@ class Users(SQLModel, table=True):
         nullable=False,
         sa_column_kwargs={"server_default": func.now(), "onupdate": func.now()},
     )
+
+    @property
+    def needs_onboarding(self) -> bool:
+        return self.has_default_credentials
+
+    def __repr__(self) -> str:
+        return f"Users(id={self.id}, email={self.email!r}, role={self.role.name}, is_active={self.is_active})"

@@ -8,6 +8,7 @@ SIGN_IN_OUTCOMES = {
     "LOGIN_SUCCESS":      (Outcome.SUCCESS, status.HTTP_200_OK),
     "EMAIL_NOT_FOUND":    (Outcome.FAILURE, status.HTTP_404_NOT_FOUND),
     "INCORRECT_PASSWORD": (Outcome.FAILURE, status.HTTP_401_UNAUTHORIZED),
+    "USER_INACTIVE":      (Outcome.DENIED,  status.HTTP_403_FORBIDDEN),
     "SIGN_IN_FAILED":     (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
 }
 
@@ -31,6 +32,26 @@ CHANGE_PASSWORD_OUTCOMES = {
     "CHANGE_PASSWORD_FAILED":  (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
 }
 
+USER_OUTCOMES = {
+    "USER_CREATED":              (Outcome.SUCCESS, status.HTTP_201_CREATED),
+    "USERS_LISTED":              (Outcome.SUCCESS, status.HTTP_200_OK),
+    "USER_FOUND":                (Outcome.SUCCESS, status.HTTP_200_OK),
+    "USER_UPDATED":              (Outcome.SUCCESS, status.HTTP_200_OK),
+    "USER_DEACTIVATED":          (Outcome.SUCCESS, status.HTTP_200_OK),
+    "CREDENTIALS_RESET":            (Outcome.SUCCESS, status.HTTP_200_OK),
+    "USER_NOT_FOUND":            (Outcome.FAILURE, status.HTTP_404_NOT_FOUND),
+    "EMAIL_ALREADY_EXISTS":      (Outcome.FAILURE, status.HTTP_409_CONFLICT),
+    "CANNOT_DEACTIVATE_SELF":    (Outcome.FAILURE, status.HTTP_409_CONFLICT),
+    "CANNOT_RESET_OWN_CREDENTIALS": (Outcome.FAILURE, status.HTTP_409_CONFLICT),
+    "ADMIN_ROLE_REQUIRED":       (Outcome.DENIED,  status.HTTP_403_FORBIDDEN),
+    "USER_CREATE_FAILED":        (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
+    "USERS_LIST_FAILED":         (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
+    "USER_GET_FAILED":           (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
+    "USER_UPDATE_FAILED":        (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
+    "USER_DEACTIVATE_FAILED":    (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
+    "CREDENTIALS_RESET_FAILED":     (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
+}
+
 # failure code -> (field, message) as the client sees it; "server" marks errors not tied to an input
 ERRORS = {
     "EMAIL_NOT_FOUND":         ("email",    "Email not found"),
@@ -42,19 +63,13 @@ ERRORS = {
     "PIN_VERIFICATION_FAILED": ("server",   "Unable to verify pin right now"),
     "SAME_PASSWORD":           ("new_password", "New password must be different from current password"),
     "CHANGE_PASSWORD_FAILED":  ("server",   "Unable to change password right now"),
+    "USER_INACTIVE":           ("email",    "This account is deactivated"),
+    "USER_NOT_FOUND":          ("path.user_id", "User not found"),
+    "EMAIL_ALREADY_EXISTS":    ("email",    "Email already exists"),
+    "CANNOT_DEACTIVATE_SELF":  ("path.user_id", "You cannot deactivate your own account"),
+    "CANNOT_RESET_OWN_CREDENTIALS": ("path.user_id", "Use change-password and change-pin for your own account"),
+    "ADMIN_ROLE_REQUIRED":     ("role",     "Only an admin can manage admin accounts"),
 }
-
-
-def _errors(*errors: tuple[str, str, str]) -> dict:
-    """changes payload in the same shape as 422 rows: {"errors": [{field, message, type}]}."""
-    return {"errors": [{"field": f, "message": m, "type": t} for f, m, t in errors]}
-
-
-def _code_errors(code: str) -> dict | None:
-    if code not in ERRORS:
-        return None
-    field, message = ERRORS[code]
-    return _errors((field, message, code.lower()))
 
 
 class AuditServices:
@@ -62,6 +77,18 @@ class AuditServices:
 
     def __init__(self, audit: CoreAuditServices | None = None):
         self.audit = audit or CoreAuditServices()
+
+    @staticmethod
+    def __errors(*errors: tuple[str, str, str]) -> dict:
+        """changes payload in the same shape as 422 rows: {"errors": [{field, message, type}]}."""
+        return {"errors": [{"field": f, "message": m, "type": t} for f, m, t in errors]}
+
+    @classmethod
+    def __code_errors(cls, code: str) -> dict | None:
+        if code not in ERRORS:
+            return None
+        field, message = ERRORS[code]
+        return cls.__errors((field, message, code.lower()))
 
     def sign_in(
         self,
@@ -81,7 +108,7 @@ class AuditServices:
             session_token=access_token,
             http_status=http_status,
             reason=None if outcome == Outcome.SUCCESS else code,
-            changes=_code_errors(code),
+            changes=self.__code_errors(code),
         )
 
     def pin(
@@ -101,7 +128,7 @@ class AuditServices:
             session_token=access_token,
             http_status=http_status,
             reason=None if outcome == Outcome.SUCCESS else code,
-            changes=changes or _code_errors(code),
+            changes=changes or self.__code_errors(code),
         )
 
     def change_password(
@@ -120,7 +147,7 @@ class AuditServices:
             session_token=access_token,
             http_status=http_status,
             reason=None if outcome == Outcome.SUCCESS else code,
-            changes=_code_errors(code),
+            changes=self.__code_errors(code),
         )
 
     def change_pin(
@@ -139,7 +166,31 @@ class AuditServices:
             session_token=access_token,
             http_status=http_status,
             reason=None if outcome == Outcome.SUCCESS else code,
-            changes=_code_errors(code),
+            changes=self.__code_errors(code),
+        )
+
+    def user(
+        self,
+        action: str,
+        request: Request | None,
+        code: str,
+        actor: Users,
+        target: Users | None = None,
+        changes: dict | None = None,
+    ) -> None:
+        outcome, http_status = USER_OUTCOMES[code]
+        self.audit.record(
+            action=action,
+            outcome=outcome,
+            request=request,
+            actor=actor,
+            session_token=getattr(request.state, "access_token", None) if request else None,
+            target_type="user" if target else None,
+            target_id=target.id if target else None,
+            target_label=target.email if target else None,
+            http_status=http_status,
+            reason=None if outcome == Outcome.SUCCESS else code,
+            changes=changes or self.__code_errors(code),
         )
 
     def token_rejected(
@@ -157,7 +208,7 @@ class AuditServices:
             session_token=access_token,
             http_status=status.HTTP_401_UNAUTHORIZED,
             reason=reason,
-            changes=_errors(("authorization", message, reason.lower())),
+            changes=self.__errors(("authorization", message, reason.lower())),
         )
 
     def permission_denied(
@@ -175,7 +226,7 @@ class AuditServices:
             session_token=access_token,
             http_status=status.HTTP_403_FORBIDDEN,
             reason=f"Missing permission(s): {', '.join(missing)}",
-            changes=_errors(*[
+            changes=self.__errors(*[
                 ("permission", f"Missing permission: {p}", "permission_denied") for p in missing
             ]),
         )

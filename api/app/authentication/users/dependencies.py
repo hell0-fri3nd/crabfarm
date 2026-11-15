@@ -1,13 +1,29 @@
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import (
+    Depends,
+    HTTPException,
+    Request,
+    status,
+)
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
 from sqlmodel import Session
 
-from app.core import get_db, JwtManager, Permission, has_permission
+from app.core import (
+    get_db,
+    JwtManager,
+    Permission,
+    Provide,
+    has_permission,
+)
 from .models import Users
-from .services import AuditServices
+from .services import (
+    AuditServices,
+    AuthServices,
+    UserServices,
+)
 
 
 bearer = HTTPBearer(auto_error=False)
@@ -20,7 +36,7 @@ class TokenAuth:
     def __init__(self, token_type: str):
         self.token_type = token_type
 
-    def _reject(
+    def __reject(
         self,
         request: Request,
         credentials: HTTPAuthorizationCredentials | None,
@@ -48,27 +64,29 @@ class TokenAuth:
         db: Session = Depends(get_db),
     ) -> Users:
         if credentials is None:
-            raise self._reject(request, credentials, "Not authenticated", "NOT_AUTHENTICATED")
+            raise self.__reject(request, credentials, "Not authenticated", "NOT_AUTHENTICATED")
 
         try:
             payload = JwtManager().decode_token(credentials.credentials)
         except ExpiredSignatureError:
-            raise self._reject(request, credentials, "Token expired", "TOKEN_EXPIRED")
+            raise self.__reject(request, credentials, "Token expired", "TOKEN_EXPIRED")
         except InvalidTokenError:
-            raise self._reject(request, credentials, "Invalid token", "INVALID_TOKEN")
+            raise self.__reject(request, credentials, "Invalid token", "INVALID_TOKEN")
 
         if payload.get("type") != self.token_type:
-            raise self._reject(request, credentials, "Invalid token type", "INVALID_TOKEN_TYPE")
+            raise self.__reject(request, credentials, "Invalid token type", "INVALID_TOKEN_TYPE")
 
         try:
             user_id = UUID(payload.get("sub", ""))
         except ValueError:
-            raise self._reject(request, credentials, "Invalid token subject", "INVALID_TOKEN_SUBJECT")
+            raise self.__reject(request, credentials, "Invalid token subject", "INVALID_TOKEN_SUBJECT")
 
         # Role is read from the DB, not the token, so role changes apply immediately
         user = db.get(Users, user_id)
         if not user:
-            raise self._reject(request, credentials, "User not found", "USER_NOT_FOUND")
+            raise self.__reject(request, credentials, "User not found", "USER_NOT_FOUND")
+        if not user.is_active:
+            raise self.__reject(request, credentials, "User is deactivated", "USER_INACTIVE")
 
         # Later audit events in this request (e.g. a 422 on the body) use these as the actor
         request.state.user = user
@@ -105,3 +123,13 @@ class RequirePermissions:
 
 
 require_permissions = RequirePermissions
+
+
+type CurrentUser = Annotated[Users, Depends(get_current_user)]
+type CanReadUsers = Annotated[Users, Depends(require_permissions(Permission.USER_READ))]
+type CanCreateUsers = Annotated[Users, Depends(require_permissions(Permission.USER_CREATE))]
+type CanUpdateUsers = Annotated[Users, Depends(require_permissions(Permission.USER_UPDATE))]
+type CanDeactivateUsers = Annotated[Users, Depends(require_permissions(Permission.USER_DEACTIVATE))]
+type CanResetCredentials = Annotated[Users, Depends(require_permissions(Permission.USER_RESET_CREDENTIALS))]
+type AuthServicesDep = Annotated[AuthServices, Depends(Provide(AuthServices))]
+type UserServicesDep = Annotated[UserServices, Depends(Provide(UserServices))]

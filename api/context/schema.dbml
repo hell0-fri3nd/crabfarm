@@ -21,8 +21,10 @@ Table auth.users {
   name       varchar(150) [not null]
   email      varchar(254) [not null, unique]
   password   varchar(255) [not null, note: 'argon2 hash']
-  pin        varchar(4)   [null, note: 'hashed 4-digit pin']
+  pin        varchar(255) [not null, note: 'argon2 hash of the 4-digit pin']
   role       auth.user_role [not null, default: 'USER']
+  is_active  boolean      [not null, default: true, note: 'false = deactivated']
+  has_default_credentials boolean [not null, default: false, note: 'true on create/reset until both password and pin are changed (API: needs_onboarding)']
   created_at timestamptz  [not null, default: `now()`]
   updated_at timestamptz  [not null, default: `now()`, note: 'onupdate now()']
 
