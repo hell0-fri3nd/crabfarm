@@ -3,11 +3,13 @@ from fastapi import (
     Depends
 )
 
+from app.authentication.users import get_current_user
 from .services import get_batches
 
 router = APIRouter(
     prefix="/crab",
     tags=["Crab Management"],
+    dependencies=[Depends(get_current_user)],
 )
 
 @router.get("/batch")
