@@ -15,10 +15,13 @@ from app.core import (
     FieldException,
     ValidationErrorResponse,
 )
+from app.core.security import rate_limit
 
 from ..dependencies import (
     AuthServicesDep,
+    CurrentRefreshSession,
     CurrentUser,
+    RefreshUser,
     bearer,
     get_refresh_user,
     get_current_user,
@@ -38,6 +41,13 @@ from ..services import AuthServices, PasswordServices
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+TOO_MANY_ATTEMPTS = {
+    status.HTTP_429_TOO_MANY_REQUESTS: {
+        "model": ErrorResponse,
+        "description": "Too many attempts from this client; retry after Retry-After seconds",
+    },
+}
 
 
 @router.get(
@@ -61,7 +71,9 @@ def me(user: CurrentUser, services: AuthServicesDep):
     response_model=AuthResponse,
     status_code=status.HTTP_200_OK,
     openapi_extra={AUDIT_ACTION_KEY: "auth.sign_in"},
+    dependencies=[Depends(rate_limit("auth.sign_in"))],
     responses={
+        **TOO_MANY_ATTEMPTS,
         status.HTTP_404_NOT_FOUND: {
             "model": ValidationErrorResponse,
             "description": "Email not found",
@@ -146,10 +158,16 @@ async def sign_in(
     response_model=AuthResponse,
     status_code=status.HTTP_200_OK,
     openapi_extra={AUDIT_ACTION_KEY: "auth.sign_in.pin"},
+    dependencies=[Depends(rate_limit("auth.sign_in.pin"))],
     responses={
+        **TOO_MANY_ATTEMPTS,
         status.HTTP_401_UNAUTHORIZED: {
             "model": ValidationErrorResponse,
-            "description": "Incorrect pin (missing/invalid refresh token returns a plain detail)",
+            "description": (
+                "Incorrect pin (type invalid_pin, message has the tries left) or too many wrong pins "
+                "(type pin_locked, the session is revoked). A missing, revoked or invalid refresh token "
+                "returns a plain detail."
+            ),
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "model": ValidationErrorResponse,
@@ -164,6 +182,7 @@ async def sign_in(
 async def pin(
     request: PinRequest,
     http_request: Request,
+    session: CurrentRefreshSession,
     user: Users = Depends(get_refresh_user),
     db: Session = Depends(get_db),
 )-> AuthResponse:
@@ -178,15 +197,16 @@ async def pin(
     result = await auth_service.pin(
         user=user,
         pin=request.pin,
+        session=session,
         request=http_request,
     )
 
-    if result.code == "INVALID_PIN":
+    if result.code in ("INVALID_PIN", "PIN_LOCKED"):
         raise FieldException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             field="pin",
             message=result.message,
-            type="invalid_pin",
+            type=result.code.lower(),
             action="auth.sign_in.pin",
         )
 
@@ -195,6 +215,36 @@ async def pin(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=result.message,
         )
+
+    return result
+
+
+@router.post(
+    "/sign-out",
+    response_model=Response[None],
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "auth.sign_out"},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "model": ErrorResponse,
+            "description": "Missing, invalid, expired or already revoked refresh token",
+        },
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "model": ErrorResponse,
+            "description": "Unexpected error during sign-out",
+        },
+    },
+)
+def sign_out(
+    user: RefreshUser,
+    session: CurrentRefreshSession,
+    services: AuthServicesDep,
+    http_request: Request,
+):
+    result = services.sign_out(user, session, request=http_request)
+
+    if result.code == "SIGN_OUT_FAILED":
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.message)
 
     return result
 

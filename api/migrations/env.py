@@ -4,7 +4,7 @@ from app.core import engine
 
 # Import every model module so its table registers on SQLModel.metadata
 # before target_metadata is read below. Add new model modules here.
-from app.authentication.users.models import Users
+from app.authentication.users.models import Sessions, Users
 from app.core.audit.models import AuditEvents
 # from app.crab_management.crab.models import Crabs, Batches
 # from app.crab_management.prediction.models import CrabLogs

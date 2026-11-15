@@ -17,3 +17,4 @@
 /api/app/authentication/users/schemas/__pycache__
 /api/app/core/audit/__pycache__
 /api/app/crab_management/__pycache__
+/api/app/authentication/users/models/__pycache__

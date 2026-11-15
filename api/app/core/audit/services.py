@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from fastapi import Request
 
 from ..database import SessionFactory
+from ..security.rate_limit import client_ip
 from .models import AuditEvents
 from .schemas import (
     ActorType,
@@ -107,9 +108,7 @@ class AuditService:
             return {}
 
         headers = request.headers
-        # First hop of X-Forwarded-For is the original client when behind a proxy
-        forwarded = headers.get("x-forwarded-for", "").split(",")[0].strip()
-        source_ip = forwarded or (request.client.host if request.client else None)
+        source_ip = client_ip(request)
 
         try:
             request_id = UUID(headers.get("x-correlation-id", ""))

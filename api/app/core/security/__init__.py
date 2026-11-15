@@ -5,6 +5,11 @@ from .permissions import (
     ROLE_PERMISSIONS,
     has_permission,
 )
+from .rate_limit import (
+    RateLimit,
+    client_ip,
+    rate_limit,
+)
 
 __all__ = [
     "JwtManager",
@@ -12,4 +17,7 @@ __all__ = [
     "Permission",
     "ROLE_PERMISSIONS",
     "has_permission",
+    "RateLimit",
+    "client_ip",
+    "rate_limit",
 ]

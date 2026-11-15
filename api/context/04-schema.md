@@ -14,7 +14,7 @@ One PostgreSQL database, **one Postgres schema per module**, the same way the co
 
 | Postgres schema | Owner module | Tables | Status |
 |---|---|---|---|
-| `auth` | `authentication` | `users` | live |
+| `auth` | `authentication` | `users`, `sessions` | live |
 | `audit` | `core/audit` | `audit_events` | live |
 | `crab_management` | `crab_management` | `crabs`, `batches`, `logs` | live (see §6 drift) |
 | `monitoring` | `monitoring` | sensors, readings, devices, commands | planned |
@@ -43,6 +43,24 @@ One PostgreSQL database, **one Postgres schema per module**, the same way the co
 | `updated_at` | `timestamptz` | no | `now()` | `onupdate=now()` |
 
 Indexes: `ix_auth_users_email` (unique), `ix_auth_users_id`.
+
+### `auth.sessions`
+
+One row per refresh token. Its `id` is the token's `jti`, so revoking the row kills the token.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | `uuid` | no | `uuid4()` (app) | PK, = refresh token `jti` |
+| `user_id` | `uuid` | no | | FK → `auth.users.id` `ON DELETE CASCADE` (same module), indexed |
+| `is_remembered` | `boolean` | no | | "Keep me signed in"; picks the refresh lifetime |
+| `expires_at` | `timestamptz` | no | | absolute end; kept on rotation |
+| `failed_pin_attempts` | `int` | no | `0` | wrong PINs on this session; at `pin_max_attempts` it's revoked |
+| `revoked_at` | `timestamptz` | yes | | `null` = live |
+| `revoked_reason` | enum `auth.session_revoked_reason` (`signed_out`, `rotated`, `pin_locked`, `reuse_detected`, `deactivated`, `credentials_reset`) | yes | | stores enum **values** |
+| `created_at` | `timestamptz` | no | `now()` | |
+| `updated_at` | `timestamptz` | no | `now()` | `onupdate=now()` |
+
+Indexes: `ix_auth_sessions_user_id`. Revoked rows are kept as history (a rotated row is how token reuse is detected).
 
 ### `audit.audit_events`
 
@@ -91,6 +109,9 @@ Indexes: `occurred_at`, `actor_id`, `action`.
 ### Relationships
 
 ```
+Within auth (real FK):
+auth.users 1 ──< auth.sessions (sessions.user_id, ON DELETE CASCADE)
+
 Within crab_management (real FKs):
 crab_management.batches 1 ──< crab_management.logs (logs.batch_id, optional)
 crab_management.crabs   1 ──< crab_management.logs (logs.crab_id)

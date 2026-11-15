@@ -27,7 +27,7 @@ Architecture and layering rules are in `01-architecture.md`.
 - **Nest at most one level**, and only when the child can't exist without the parent: `/crabs/{crab_id}/logs`. Cross-cutting queries use the top-level collection with filters: `/logs?batch_id=...`.
 - **Path parameters** are named `{<resource>_id}`: `{batch_id}`, `{device_id}`.
 - **Actions** (non-CRUD verbs) are allowed only when no resource fits. They are always `POST`, in kebab-case:
-  - Auth flows: `/auth/sign-in`, `/auth/sign-in/pin`, `/auth/change-password`, `/auth/change-pin` (existing).
+  - Auth flows: `/auth/sign-in`, `/auth/sign-in/pin`, `/auth/sign-out`, `/auth/change-password`, `/auth/change-pin` (existing).
   - A state change on one resource: `POST /cameras/{camera_id}/start`, `POST /cameras/{camera_id}/stop`.
   - When something is created, prefer a sub-resource noun over a verb: `POST /devices/{device_id}/commands`, not `/devices/{id}/send-cmd`.
 
@@ -226,8 +226,9 @@ Status codes listed are in addition to the defaults every protected endpoint has
 
 | Method | Path | Success | Notable errors |
 |---|---|---|---|
-| POST | `/auth/sign-in` | 200 `LOGIN_SUCCESS` (includes `needs_onboarding`) | 404 email, 401 password, 403 deactivated |
-| POST | `/auth/sign-in/pin` | 200 `PIN_VERIFIED` | 401 pin / refresh token |
+| POST | `/auth/sign-in` | 200 `LOGIN_SUCCESS` (includes `needs_onboarding`, `refresh_token`, `refresh_expires_at`) | 404 email, 401 password, 403 deactivated, 429 |
+| POST | `/auth/sign-in/pin` (refresh token as Bearer) | 200 `PIN_VERIFIED` (new `access_token` **and** a rotated `refresh_token` with the same `refresh_expires_at`) | 401 `invalid_pin` (message has the tries left), 401 `pin_locked` (session revoked), 401 plain detail for a missing/revoked/reused refresh token, 429 |
+| POST | `/auth/sign-out` (refresh token as Bearer) | 200 `SIGNED_OUT` (revokes that session) | 401 token already invalid |
 | PATCH | `/auth/change-password` | 200 | 400 wrong current, 409 same as current |
 | PATCH | `/auth/change-pin` | 200 | 400 wrong current, 409 same as current |
 | GET | `/auth/me` (any role, access token) | 200 `USER_FOUND` (includes `needs_onboarding`) | 401 missing/expired/invalid token or deactivated user |
@@ -239,6 +240,13 @@ Status codes listed are in addition to the defaults every protected endpoint has
 | POST | `/users/{user_id}/reset-credentials` (no body: password **and** pin back to the defaults) | 200 `CREDENTIALS_RESET` | 403, 404, 409 your own account |
 
 User management (`user:read`, `user:create`, `user:update`, `user:deactivate`, `user:reset_credentials`) is granted to `ADMIN` and `USER`, not `STAFF`. Creating, editing, deactivating or resetting an `ADMIN` account also needs `user:manage_admins` (only `ADMIN` has it). Every role changes its own password and pin through `/auth/change-password` and `/auth/change-pin`. A deactivated user gets `403 USER_INACTIVE` at sign-in and `401` on any token.
+
+**Sessions.** Every refresh token is a row in `auth.sessions` (its `jti`), checked by `get_refresh_user` on each use:
+- **Rotation:** a correct PIN revokes the session (`rotated`) and issues a new one with the **same** `expires_at`, so a PIN never extends the session.
+- **Reuse detection:** presenting a rotated token again revokes **every** session of that user (`reuse_detected`), because the token was copied.
+- **PIN lockout:** wrong PINs are counted per session. After `settings.pin_max_attempts` (5) the session is revoked (`pin_locked`) and the user must sign in with their password.
+- **Revocation:** `POST /auth/sign-out` (`signed_out`), deactivating a user (`deactivated`) and resetting credentials (`credentials_reset`) revoke sessions immediately. Access tokens stay valid until they expire (≤ `jwt_access_token_expire_minutes`).
+- **Rate limit:** `/auth/sign-in` and `/auth/sign-in/pin` allow `settings.auth_rate_limit` (10) requests per `auth_rate_limit_window_seconds` (60) per client IP (first `X-Forwarded-For` hop), then `429` with `Retry-After`. The counter is in process memory, so it's per API process.
 
 **Onboarding.** New and reset users get `settings.default_user_password` / `settings.default_user_pin` and `has_default_credentials = true`, exposed as `needs_onboarding` on sign-in, PIN sign-in and every `UserRead`. It clears only when the user has changed **both** through `/auth/change-password` and `/auth/change-pin` (each checks whether the other is still the default). The change endpoints never set it back to `true`.
 
