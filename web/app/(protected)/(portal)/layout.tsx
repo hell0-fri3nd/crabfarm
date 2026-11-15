@@ -1,15 +1,19 @@
+import { Suspense } from 'react';
+
 import CustomAppShell from '@/components/custom/custom-app-shell';
+import CustomAppSidebar from '@/components/custom/custom-app-sidebar';
 import CustomBubbles from '@/components/custom/custom-bubbles';
 import CustomFooter from '@/components/custom/custom-footer';
 import CustomSessionGate from '@/components/custom/custom-session-gate';
 import CustomTabBar from '@/components/custom/custom-tab-bar';
 import CustomTopBar from '@/components/custom/custom-top-bar';
-import { PREVIEW_HIGH_ALERT_COUNT } from '@/lib/preview';
+import { PREVIEW_FEEDING, PREVIEW_HIGH_ALERT_COUNT } from '@/lib/preview';
 
 import CustomPortalSidebar from './components/custom-portal-sidebar';
 
 const PortalLayout = ({ children }: LayoutProps<'/'>) => (
-  <CustomSessionGate stage="portal">
+  <>
+    <CustomSessionGate stage="portal" />
     <CustomAppShell>
       <a
         href="#content"
@@ -17,7 +21,9 @@ const PortalLayout = ({ children }: LayoutProps<'/'>) => (
       >
         Skip to main content
       </a>
-      <CustomPortalSidebar />
+      <Suspense fallback={<CustomAppSidebar alertCount={PREVIEW_HIGH_ALERT_COUNT} feeding={PREVIEW_FEEDING} />}>
+        <CustomPortalSidebar />
+      </Suspense>
       <div className="relative isolate flex min-w-0 flex-1 flex-col">
         <CustomBubbles className="fixed" />
         <CustomTopBar />
@@ -28,7 +34,7 @@ const PortalLayout = ({ children }: LayoutProps<'/'>) => (
         <CustomTabBar alertCount={PREVIEW_HIGH_ALERT_COUNT} />
       </div>
     </CustomAppShell>
-  </CustomSessionGate>
+  </>
 );
 
 export default PortalLayout;

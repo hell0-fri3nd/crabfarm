@@ -8,6 +8,7 @@ import CustomBrandLogo from '@/components/custom/custom-brand-logo';
 import CustomFeedingStatus from '@/components/custom/custom-feeding-status';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toInitials } from '@/lib/format';
 import { DASHBOARD_HREF, NAV_GROUPS, PROFILE_NAV_ITEM, isActivePath, toAlertLabel } from '@/lib/navigation';
@@ -17,7 +18,7 @@ import { useUiStore } from '@/stores/ui-store';
 import type { ReactNode } from 'react';
 
 type CustomAppSidebarProps = {
-  user: { name: string; role: string };
+  user?: { name: string; role: string };
   alertCount: number;
   feeding: { isOn: boolean; nextFeedLabel: string };
 };
@@ -86,24 +87,37 @@ const CustomAppSidebar = ({ user, alertCount, feeding }: CustomAppSidebarProps) 
           </Tooltip>
         </div>
 
-        <CustomRailTooltip label={`${user.name} · ${user.role}`} isEnabled={isCollapsed}>
-          <Link
-            href={PROFILE_NAV_ITEM.href}
-            aria-current={isActivePath(pathname, PROFILE_NAV_ITEM.href) ? 'page' : undefined}
-            className="mx-auto flex items-center justify-center rounded-xl transition-colors hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent sidebar-full:mx-0 sidebar-full:h-15 sidebar-full:justify-start sidebar-full:gap-3 sidebar-full:border sidebar-full:border-sidebar-border sidebar-full:bg-sidebar-foreground/3 sidebar-full:px-3"
+        {user ? (
+          <CustomRailTooltip label={`${user.name} · ${user.role}`} isEnabled={isCollapsed}>
+            <Link
+              href={PROFILE_NAV_ITEM.href}
+              aria-current={isActivePath(pathname, PROFILE_NAV_ITEM.href) ? 'page' : undefined}
+              className="mx-auto flex items-center justify-center rounded-xl transition-colors hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent sidebar-full:mx-0 sidebar-full:h-15 sidebar-full:justify-start sidebar-full:gap-3 sidebar-full:border sidebar-full:border-sidebar-border sidebar-full:bg-sidebar-foreground/3 sidebar-full:px-3"
+            >
+              <Avatar className="size-10 sidebar-full:size-9">
+                <AvatarFallback className="bg-sidebar-primary/15 text-sm font-bold text-sidebar-primary">
+                  {toInitials(user.name)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="sr-only sidebar-full:not-sr-only sidebar-full:flex sidebar-full:min-w-0 sidebar-full:flex-1 sidebar-full:flex-col">
+                <span className="truncate text-sm font-semibold">{user.name}</span>
+                <span className="truncate text-xs text-sidebar-foreground/70">{user.role}</span>
+              </span>
+              <ChevronRight className="hidden size-4 text-sidebar-foreground/60 sidebar-full:block" aria-hidden />
+            </Link>
+          </CustomRailTooltip>
+        ) : (
+          <div
+            aria-hidden
+            className="mx-auto flex items-center justify-center sidebar-full:mx-0 sidebar-full:h-15 sidebar-full:justify-start sidebar-full:gap-3 sidebar-full:px-3"
           >
-            <Avatar className="size-10 sidebar-full:size-9">
-              <AvatarFallback className="bg-sidebar-primary/15 text-sm font-bold text-sidebar-primary">
-                {toInitials(user.name)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="sr-only sidebar-full:not-sr-only sidebar-full:flex sidebar-full:min-w-0 sidebar-full:flex-1 sidebar-full:flex-col">
-              <span className="truncate text-sm font-semibold">{user.name}</span>
-              <span className="truncate text-xs text-sidebar-foreground/70">{user.role}</span>
+            <Skeleton className="size-10 rounded-full sidebar-full:size-9" />
+            <span className="hidden sidebar-full:flex sidebar-full:flex-1 sidebar-full:flex-col sidebar-full:gap-1.5">
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="h-3 w-14" />
             </span>
-            <ChevronRight className="hidden size-4 text-sidebar-foreground/60 sidebar-full:block" aria-hidden />
-          </Link>
-        </CustomRailTooltip>
+          </div>
+        )}
       </div>
 
       <nav

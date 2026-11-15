@@ -2,6 +2,7 @@ import 'server-only';
 
 import { cookies, headers as requestHeaders } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { connection } from 'next/server';
 import { z } from 'zod';
 
 import { env } from '@/lib/env';
@@ -32,11 +33,14 @@ const failure = (status: number, message: string): ApiResult<never> => ({
 });
 
 const buildHeaders = async (hasBody: boolean, isAuthenticated: boolean, bearerToken?: string) => {
+  // A FastAPI call is per request; Cache Components refuses crypto.randomUUID() in anything it could prerender
+  await connection();
+  const forwardedFor = (await requestHeaders()).get('x-forwarded-for');
+
   const headers = new Headers({ Accept: 'application/json', 'X-Correlation-ID': crypto.randomUUID() });
   if (hasBody) headers.set('Content-Type', 'application/json');
 
   // FastAPI rate-limits and audits by client IP; without this every user would share the BFF's address
-  const forwardedFor = (await requestHeaders()).get('x-forwarded-for');
   if (forwardedFor) headers.set('X-Forwarded-For', forwardedFor);
 
   if (!isAuthenticated) return headers;
