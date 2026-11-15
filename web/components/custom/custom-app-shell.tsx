@@ -20,7 +20,8 @@ const CustomAppShell = ({ children }: CustomAppShellProps) => {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== 'b' || !(event.ctrlKey || event.metaKey)) return;
+      // Browser autofill (e.g. a saved password) fires keydown with no `key`
+      if (event.key?.toLowerCase() !== 'b' || !(event.ctrlKey || event.metaKey)) return;
       event.preventDefault();
       toggleSidebar();
     };
