@@ -20,7 +20,7 @@ const PortalLayout = ({ children }: LayoutProps<'/'>) => (
       <CustomPortalSidebar />
       <div className="relative isolate flex min-w-0 flex-1 flex-col">
         <CustomBubbles className="fixed" />
-        <CustomTopBar liveLabel="updated 12 s ago" />
+        <CustomTopBar />
         <main id="content" tabIndex={-1} className="flex-1 px-4 pt-6 pb-28 outline-none sm:pt-8 md:px-8 md:pb-12">
           {children}
         </main>
