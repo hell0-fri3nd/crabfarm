@@ -244,7 +244,7 @@ export default RootLayout;
 | Status & feedback | `OctagonAlert` High · `TriangleAlert` Medium, warning toast · `Info` Low, info toast · `CircleCheck` success · `CircleX` error toast · `CircleAlert` field error · `Check` done / rule met |
 | Sensors | `Thermometer` temperature · `Droplet` pH · `Waves` salinity · `FlaskConical` ammonia · `Wind` oxygen |
 | Actions | `Play` start/resume · `Pause` pause · `Square` stop · `Plus` add/new · `Trash` delete · `Download` PNG/PDF · `Camera` / `CameraOff` camera on/off · `Scale` scale connected · `RotateCcw` rescan · `Search` search · `Calendar` date range · `FileDown` export CSV · `Send` send · `ThumbsUp` / `ThumbsDown` feedback |
-| Forms & account | `Mail` email · `Lock` password, PIN locked · `Eye` show password · `KeyRound` reset · `UserPlus` invite · `Pencil` edit |
+| Forms & account | `Mail` email · `Lock` password, PIN locked · `Eye` show password · `KeyRound` reset · `UserPlus` add user · `Pencil` edit |
 | Buttons | `Utensils` feed now · `Save` save · `LogIn` sign in · `ArrowLeft` back · `UserX` deactivate · `UserCheck` reactivate, change role · `ChartLine` see trend · `ChevronDown` load older · `ChevronLeft` previous |
 
 ## 11. Shared Components (component map)
@@ -311,7 +311,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | **Scan** | Save log | Card, Input, Button, Alert, Sonner | `custom-stepper`, `custom-scan-viewport`, `custom-severity-alert` | Scale, Camera, CameraOff, ScanLine, RotateCcw, Check, TriangleAlert, CircleCheck |
 | **Logs** | Export CSV | Tabs, Input, Select, Popover, Calendar, Table, Pagination | `custom-severity-badge`, `custom-empty-state` | Search, Calendar, FileDown, OctagonAlert, TriangleAlert, Info |
 | **Activity** | — (read-only) | ToggleGroup, Input, Table, Badge | `custom-empty-state` | Search, History, ChevronDown |
-| **Users** | Invite user | Table, Avatar, Select, Dialog, AlertDialog, Sonner | `custom-status-pill` | UserPlus, Search, KeyRound, UserX, UserCheck |
+| **Users** | Add user | Table, Avatar, Select, Dialog, AlertDialog, Sonner | `custom-status-pill` | UserPlus, Search, KeyRound, UserX, UserCheck |
 | **My profile** | Save | Card, Avatar, Form, Input, InputOTP, AlertDialog, Sonner | `custom-password-rules`, `custom-theme-switch` | Pencil, Mail, LogOut, Sun, Moon, Check, Save |
 | **Assistant** | Send | ScrollArea, Textarea, Button, Card, Alert, AlertDialog | `custom-chat-message`, `custom-source-chip`, `custom-action-proposal` | Bot, Plus, Info, ScrollText, ThumbsUp, ThumbsDown, Send, Square |
 
@@ -381,7 +381,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 
 - **Titles name the thing:** Feeding, not *Configuration*.
 - **The line under a title reports state** ("Running · next feed 6:00 AM"), never a description of the page.
-- **Buttons are verb + object, naming the outcome:** "Feed A1 now", "Send invite", "Export CSV".
+- **Buttons are verb + object, naming the outcome:** "Feed A1 now", "Add user", "Export CSV".
 - **Use farm vocabulary** (Nielsen #2). Hints are short and specific. Errors say what to do ("Weight can't be negative. Re-zero the scale.").
 
 ## 18. Review Checklist

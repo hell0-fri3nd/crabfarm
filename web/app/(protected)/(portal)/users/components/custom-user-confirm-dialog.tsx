@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '../lib/role-meta';
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, toRoleArticle } from '../lib/role-meta';
 
 import type { UserAction } from '../types/users';
 
@@ -29,7 +29,7 @@ const toCopy = (action: UserAction) => {
   if (action.kind === 'reset') {
     return {
       title: `Reset ${name}'s password and PIN?`,
-      body: `${name} is signed out on every device and gets a temporary password. They'll set a new password and PIN on their next sign-in. Their logs and role stay.`,
+      body: `${name}'s password and PIN go back to the defaults, and they set new ones on their next sign-in. Devices already signed in stay signed in until their session expires. Their logs and role stay.`,
       confirm: 'Reset password and PIN',
       icon: KeyRound,
       isDestructive: false,
@@ -47,7 +47,7 @@ const toCopy = (action: UserAction) => {
   }
 
   return {
-    title: `Make ${name} ${action.role === 'admin' ? 'an' : 'a'} ${ROLE_LABELS[action.role]}?`,
+    title: `Make ${name} ${toRoleArticle(action.role)} ${ROLE_LABELS[action.role]}?`,
     body: `${ROLE_LABELS[action.role]}: ${ROLE_DESCRIPTIONS[action.role]} The change applies the next time ${name} loads a page.`,
     confirm: `Make ${ROLE_LABELS[action.role]}`,
     icon: UserCheck,

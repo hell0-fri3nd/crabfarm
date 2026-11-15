@@ -10,7 +10,7 @@ const STATUS_LOOK = {
   running: { label: 'Running', dot: 'bg-primary', text: 'text-primary' },
   active: { label: 'Active', dot: 'bg-primary', text: 'text-primary' },
   paused: { label: 'Paused', dot: 'bg-warning', text: 'text-warning' },
-  invited: { label: 'Invited', dot: 'bg-info', text: 'text-info' },
+  invited: { label: 'Not set up', dot: 'bg-info', text: 'text-info' },
   stopped: { label: 'Stopped', dot: 'bg-destructive', text: 'text-destructive' },
   offline: { label: 'Offline', dot: 'bg-muted-foreground', text: 'text-muted-foreground' },
   deactivated: { label: 'Deactivated', dot: 'bg-muted-foreground', text: 'text-muted-foreground' },

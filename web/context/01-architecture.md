@@ -70,7 +70,7 @@ web/
 │   │       ├── qr-stickers/          # DOMAIN: generate / print crab QR stickers
 │   │       ├── scan/                 # DOMAIN: scan QR → weigh/width → save crab log
 │   │       ├── assistant/            # DOMAIN: chat page (Ask AI button in the top bar opens it)
-│   │       ├── users/                # DOMAIN: invite, roles, deactivate (admin)
+│   │       ├── users/                # DOMAIN: add users, roles, deactivate (admin)
 │   │       ├── activity/             # DOMAIN: audit trail grouped by day
 │   │       └── profile/              # DOMAIN: my profile, password, PIN, theme
 │   │           (each portal domain has: page.tsx, layout.tsx?, api/ components/ lib/ actions/ events/ types/)

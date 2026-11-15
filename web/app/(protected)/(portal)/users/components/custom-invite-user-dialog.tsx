@@ -19,7 +19,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '../lib/role-meta';
-import { inviteUserSchema, roleSchema } from '../types/users';
+import { ADMIN_ROLE, inviteUserSchema, roleSchema } from '../types/users';
+
+import type { FieldError as ApiFieldError } from '@/types/api';
 
 import type { InviteUserInput } from '../types/users';
 
@@ -27,12 +29,22 @@ type CustomInviteUserDialogProps = {
   isOpen: boolean;
   takenEmails: string[];
   onOpenChange: (isOpen: boolean) => void;
-  onInvite: (values: InviteUserInput) => void;
+  canManageAdmins: boolean;
+  onInvite: (values: InviteUserInput) => Promise<ApiFieldError[]>;
 };
 
-const DEFAULT_VALUES: InviteUserInput = { name: '', email: '', role: 'operator' };
+const FORM_FIELDS = new Set<string>(['name', 'email', 'role']);
 
-const CustomInviteUserDialog = ({ isOpen, takenEmails, onOpenChange, onInvite }: CustomInviteUserDialogProps) => {
+const DEFAULT_VALUES: InviteUserInput = { name: '', email: '', role: 'STAFF' };
+
+const CustomInviteUserDialog = ({
+  isOpen,
+  takenEmails,
+  canManageAdmins,
+  onOpenChange,
+  onInvite,
+}: CustomInviteUserDialogProps) => {
+  const roleOptions = roleSchema.options.filter((role) => canManageAdmins || role !== ADMIN_ROLE);
   const form = useForm<InviteUserInput>({
     resolver: zodResolver(inviteUserSchema),
     mode: 'onTouched',
@@ -45,12 +57,19 @@ const CustomInviteUserDialog = ({ isOpen, takenEmails, onOpenChange, onInvite }:
     onOpenChange(isNextOpen);
   };
 
-  const handleInvite = (values: InviteUserInput) => {
+  const handleInvite = async (values: InviteUserInput) => {
     if (takenEmails.includes(values.email)) {
       form.setError('email', { message: 'Someone already uses this email. Search for them in the list instead.' });
       return;
     }
-    onInvite(values);
+
+    const errors = (await onInvite(values)).filter(({ field }) => FORM_FIELDS.has(field));
+    if (errors.length > 0) {
+      errors.forEach(({ field, message }, index) =>
+        form.setError(field as keyof InviteUserInput, { message }, { shouldFocus: index === 0 }),
+      );
+      return;
+    }
     form.reset(DEFAULT_VALUES);
   };
 
@@ -58,8 +77,8 @@ const CustomInviteUserDialog = ({ isOpen, takenEmails, onOpenChange, onInvite }:
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Invite a user</DialogTitle>
-          <DialogDescription>They get an email with a temporary password that works for 24 hours.</DialogDescription>
+          <DialogTitle>Add a user</DialogTitle>
+          <DialogDescription>They sign in with the default password and PIN, then set their own on first sign-in.</DialogDescription>
         </DialogHeader>
         <form noValidate onSubmit={form.handleSubmit(handleInvite)}>
           <FieldGroup className="gap-6">
@@ -116,7 +135,7 @@ const CustomInviteUserDialog = ({ isOpen, takenEmails, onOpenChange, onInvite }:
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {roleSchema.options.map((role) => (
+                      {roleOptions.map((role) => (
                         <SelectItem key={role} value={role}>
                           {ROLE_LABELS[role]}
                         </SelectItem>
@@ -135,7 +154,7 @@ const CustomInviteUserDialog = ({ isOpen, takenEmails, onOpenChange, onInvite }:
               </DialogClose>
               <Button type="submit" className="h-11" disabled={form.formState.isSubmitting}>
                 <UserPlus aria-hidden />
-                Send invite
+                Add user
               </Button>
             </DialogFooter>
           </FieldGroup>

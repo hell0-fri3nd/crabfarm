@@ -18,18 +18,21 @@ import CustomRoleSelect from './custom-role-select';
 import CustomUserActions from './custom-user-actions';
 import CustomUserConfirmDialog from './custom-user-confirm-dialog';
 import CustomUserIdentity from './custom-user-identity';
-import { ROLE_LABELS, matchesSearch } from '../lib/role-meta';
+import { addUser } from '../actions/add-user';
+import { changeRole } from '../actions/change-role';
+import { deactivateUser, reactivateUser, resetUserCredentials } from '../actions/user-status';
+import { ROLE_LABELS, matchesSearch, toFarmUser, toRoleArticle, toStatus } from '../lib/role-meta';
 import { usersSearchSchema } from '../types/users';
 
-import type { FarmUser, InviteUserInput, Role, UserAction, UserStatus } from '../types/users';
+import type { FieldError } from '@/types/api';
+import type { ApiUser, FarmUser, InviteUserInput, Role, UserAction, UserStatus } from '../types/users';
 
 type CustomUsersBoardProps = {
   initialUsers: FarmUser[];
+  canManageAdmins: boolean;
 };
 
-const INVITE_EXPIRY_LABEL = 'Invite expires in 24 h';
-
-const CustomUsersBoard = ({ initialUsers }: CustomUsersBoardProps) => {
+const CustomUsersBoard = ({ initialUsers, canManageAdmins }: CustomUsersBoardProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -52,56 +55,87 @@ const CustomUsersBoard = ({ initialUsers }: CustomUsersBoardProps) => {
   const updateUser = (id: string, changes: Partial<FarmUser>) =>
     setUsers((current) => current.map((user) => (user.id === id ? { ...user, ...changes } : user)));
 
-  const handleConfirm = (action: UserAction) => {
+  // Keeps the row's "last active" label; mutation responses don't carry it
+  const applyApiUser = (apiUser: ApiUser) => updateUser(apiUser.id, { role: apiUser.role, status: toStatus(apiUser) });
+
+  const failWith = (title: string, result: { message: string; errors: { message: string }[] }) =>
+    notify.error(title, { description: result.errors[0]?.message ?? result.message });
+
+  const reactivate = async (user: FarmUser) => {
+    const result = await reactivateUser(user.id);
+    if (!result.ok) return failWith(`Couldn't reactivate ${user.name}`, result);
+
+    applyApiUser(result.data);
+    router.refresh();
+    notify.success(`${user.name} reactivated`, { description: 'They can sign in again with their current password.' });
+  };
+
+  const handleConfirm = async (action: UserAction) => {
     setPendingAction(null);
     const { user } = action;
 
     if (action.kind === 'reset') {
-      notify.success(`Reset sent to ${user.name}`, {
-        description: "They'll set a new password and PIN on their next sign-in.",
+      const result = await resetUserCredentials(user.id);
+      if (!result.ok) return failWith(`Couldn't reset ${user.name}'s password and PIN`, result);
+
+      applyApiUser(result.data);
+      router.refresh();
+      notify.success(`${user.name}'s password and PIN were reset`, {
+        description: "Give them the default password and PIN. They'll set their own on their next sign-in.",
       });
       return;
     }
 
     if (action.kind === 'deactivate') {
-      updateUser(user.id, { status: 'deactivated' });
+      const result = await deactivateUser(user.id);
+      if (!result.ok) return failWith(`Couldn't deactivate ${user.name}`, result);
+
+      applyApiUser(result.data);
+      router.refresh();
       notify.undo(`${user.name} deactivated`, {
-        description: 'Signed out everywhere. Their logs stay.',
-        onUndo: () => updateUser(user.id, { status: user.status }),
+        description: "They're signed out and can't sign in. Their logs stay.",
+        onUndo: () => reactivate(user),
       });
       return;
     }
 
+    // Optimistic: the select flips at once and rolls back if FastAPI refuses
     updateUser(user.id, { role: action.role });
-    notify.success(`${user.name} is now ${action.role === 'admin' ? 'an' : 'a'} ${ROLE_LABELS[action.role]}`);
+    const result = await changeRole({ user_id: user.id, role: action.role });
+    if (!result.ok) {
+      updateUser(user.id, { role: user.role });
+      notify.error(`Couldn't change ${user.name}'s role`, { description: result.errors[0]?.message ?? result.message });
+      return;
+    }
+
+    router.refresh();
+    notify.success(`${user.name} is now ${toRoleArticle(result.data.role)} ${ROLE_LABELS[result.data.role]}`);
   };
 
   const handleRoleChange = (user: FarmUser, role: Role) => setPendingAction({ kind: 'role', user, role });
 
-  const handleReactivate = (user: FarmUser) => {
-    updateUser(user.id, { status: 'active' });
-    notify.success(`${user.name} reactivated`, { description: 'They can sign in again with their current password.' });
-  };
+  // Field errors go back to the dialog to show under their inputs; anything else is a toast
+  const handleInvite = async (values: InviteUserInput): Promise<FieldError[]> => {
+    const result = await addUser(values);
+    if (!result.ok) {
+      if (result.errors.length === 0) failWith(`Couldn't add ${values.name}`, result);
+      return result.errors;
+    }
 
-  const handleResendInvite = (user: FarmUser) => {
-    updateUser(user.id, { last_active_label: INVITE_EXPIRY_LABEL });
-    notify.success('Invite sent again', { description: `${user.email} · expires in 24 hours` });
-  };
-
-  const handleInvite = ({ name, email, role }: InviteUserInput) => {
-    setUsers((current) => [
-      ...current,
-      { id: `u-${Date.now()}`, name, email, role, status: 'invited', last_active_label: INVITE_EXPIRY_LABEL, is_self: false },
-    ]);
+    // A brand-new user is never the signed-in one, so is_self is always false here
+    setUsers((current) => [...current, toFarmUser(result.data, '')]);
     setIsInviteOpen(false);
-    notify.success(`Invite sent to ${name}`, { description: `${email} · ${ROLE_LABELS[role]}` });
+    router.refresh();
+    notify.success(`${result.data.name} added as ${toRoleArticle(result.data.role)} ${ROLE_LABELS[result.data.role]}`, {
+      description: 'Give them the default password and PIN. They set their own on first sign-in.',
+    });
+    return [];
   };
 
   const actionHandlers = {
     onReset: (user: FarmUser) => setPendingAction({ kind: 'reset', user }),
     onDeactivate: (user: FarmUser) => setPendingAction({ kind: 'deactivate', user }),
-    onResendInvite: handleResendInvite,
-    onReactivate: handleReactivate,
+    onReactivate: reactivate,
   };
 
   return (
@@ -110,13 +144,13 @@ const CustomUsersBoard = ({ initialUsers }: CustomUsersBoardProps) => {
         title="Users"
         status={
           <span>
-            {countOf('active')} active · {countOf('invited')} invited · {countOf('deactivated')} deactivated
+            {countOf('active')} active · {countOf('invited')} not set up · {countOf('deactivated')} deactivated
           </span>
         }
         actions={
           <Button type="button" className="h-11 px-5" onClick={() => setIsInviteOpen(true)}>
             <UserPlus aria-hidden />
-            Invite user
+            Add user
           </Button>
         }
       />
@@ -166,7 +200,7 @@ const CustomUsersBoard = ({ initialUsers }: CustomUsersBoardProps) => {
                       <CustomUserIdentity user={user} />
                     </TableCell>
                     <TableCell className="py-3">
-                      <CustomRoleSelect user={user} onChange={(role) => handleRoleChange(user, role)} />
+                      <CustomRoleSelect user={user} canManageAdmins={canManageAdmins} onChange={(role) => handleRoleChange(user, role)} />
                     </TableCell>
                     <TableCell className="py-3">
                       <CustomStatusPill status={user.status} className="text-sm" />
@@ -192,7 +226,7 @@ const CustomUsersBoard = ({ initialUsers }: CustomUsersBoardProps) => {
                     <CustomStatusPill status={user.status} className="mt-1 shrink-0" />
                   </div>
                   <p className="text-xs text-muted-foreground">Last active · {user.last_active_label}</p>
-                  <CustomRoleSelect user={user} onChange={(role) => handleRoleChange(user, role)} />
+                  <CustomRoleSelect user={user} canManageAdmins={canManageAdmins} onChange={(role) => handleRoleChange(user, role)} />
                   <CustomUserActions user={user} {...actionHandlers} className="[&>*]:flex-1" />
                 </Card>
               </li>
@@ -205,6 +239,7 @@ const CustomUsersBoard = ({ initialUsers }: CustomUsersBoardProps) => {
         isOpen={isInviteOpen}
         takenEmails={users.map(({ email }) => email)}
         onOpenChange={setIsInviteOpen}
+        canManageAdmins={canManageAdmins}
         onInvite={handleInvite}
       />
       <CustomUserConfirmDialog action={pendingAction} onConfirm={handleConfirm} onCancel={() => setPendingAction(null)} />

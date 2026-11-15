@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { KeyRound, Pencil, Send, UserCheck, UserX } from 'lucide-react';
+import { KeyRound, Pencil, UserCheck, UserX } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -11,7 +11,6 @@ import type { FarmUser } from '../types/users';
 type CustomUserActionsProps = {
   user: FarmUser;
   onReset: (user: FarmUser) => void;
-  onResendInvite: (user: FarmUser) => void;
   onDeactivate: (user: FarmUser) => void;
   onReactivate: (user: FarmUser) => void;
   className?: string;
@@ -20,7 +19,7 @@ type CustomUserActionsProps = {
 const DESTRUCTIVE_OUTLINE =
   'border-destructive/50 bg-card/60 text-destructive hover:bg-destructive/10 hover:text-destructive';
 
-const CustomUserActions = ({ user, onReset, onResendInvite, onDeactivate, onReactivate, className }: CustomUserActionsProps) => {
+const CustomUserActions = ({ user, onReset, onDeactivate, onReactivate, className }: CustomUserActionsProps) => {
   if (user.is_self) {
     return (
       <div className={cn('flex flex-wrap items-center gap-2 sm:justify-end', className)}>
@@ -48,13 +47,8 @@ const CustomUserActions = ({ user, onReset, onResendInvite, onDeactivate, onReac
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2 sm:justify-end', className)}>
-      {user.status === 'invited' ? (
-        <Button type="button" variant="ghost" className="h-11" onClick={() => onResendInvite(user)}>
-          <Send aria-hidden />
-          Resend invite
-          <span className="sr-only">to {user.name}</span>
-        </Button>
-      ) : (
+      {/* Someone not set up yet still has the default password and PIN, so a reset would change nothing */}
+      {user.status !== 'invited' && (
         <Button type="button" variant="ghost" className="h-11" onClick={() => onReset(user)}>
           <KeyRound aria-hidden />
           Reset
