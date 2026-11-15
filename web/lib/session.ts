@@ -64,16 +64,6 @@ export const setSessionCookies = async (
   );
 };
 
-// A PIN unlock rotates the refresh token but keeps its original expiry, so the cookie follows that date
-export const setRotatedSessionCookies = async (
-  { access_token, refresh_token }: SessionTokens,
-  { name, refreshExpiresAt }: { name: string; refreshExpiresAt: string },
-) => {
-  const secondsLeft = Math.max(Math.floor((Date.parse(refreshExpiresAt) - Date.now()) / 1000), 0);
-  await setAccessCookie(access_token);
-  await setRefreshCookies(refresh_token, name, secondsLeft);
-};
-
 export const getRefreshToken = async () => (await cookies()).get(REFRESH_TOKEN_COOKIE)?.value;
 
 export const getSignedInName = async () => (await cookies()).get(USER_NAME_COOKIE)?.value;

@@ -1,4 +1,4 @@
-import { signOut } from '@/actions/sign-out';
+import { signOut } from '@/app/(protected)/(portal)/profile/actions/sign-out';
 import { Button } from '@/components/ui/button';
 import { getSignedInName } from '@/lib/session';
 

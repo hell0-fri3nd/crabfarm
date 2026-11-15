@@ -13,7 +13,7 @@ import {
   isActivePath,
   toAlertLabel,
 } from '@/lib/navigation';
-import { signOut } from '@/actions/sign-out';
+import { signOut } from '@/app/(protected)/(portal)/profile/actions/sign-out';
 import { cn } from '@/lib/utils';
 
 type CustomTabBarProps = {

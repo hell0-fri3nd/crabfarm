@@ -35,8 +35,4 @@ export type PinInput = z.infer<typeof pinSchema>;
 
 export const pinResultSchema = signedInUserSchema.extend({
   access_token: z.string(),
-  refresh_token: z.string(),
-  refresh_expires_at: z.iso.datetime({ offset: true }),
 });
-
-export const PIN_LOCKED_ERROR = 'pin_locked';

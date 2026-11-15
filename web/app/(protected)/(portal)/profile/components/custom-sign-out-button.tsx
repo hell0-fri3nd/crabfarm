@@ -15,7 +15,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { signOut } from '@/actions/sign-out';
+import { signOut } from '@/app/(protected)/(portal)/profile/actions/sign-out';
 
 const CustomSignOutButton = () => {
   const [isSigningOut, startSignOut] = useTransition();

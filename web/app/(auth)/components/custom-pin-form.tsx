@@ -10,12 +10,12 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { toInitials } from '@/lib/format';
 import { DASHBOARD_HREF } from '@/lib/navigation';
-import { ONBOARDING_HREF, SIGN_IN_HREF } from '@/lib/routes';
+import { ONBOARDING_HREF } from '@/lib/routes';
 import { notify } from '@/lib/notify';
 import { PIN_LENGTH } from '@/types/pin';
 
 import { unlockWithPin } from '../actions/unlock-with-pin';
-import { PIN_LOCKED_ERROR, pinSchema } from '../types/auth';
+import { pinSchema } from '../types/auth';
 
 import type { PinInput } from '../types/auth';
 
@@ -43,12 +43,6 @@ const CustomPinForm = ({ name }: CustomPinFormProps) => {
     }
 
     form.resetField('pin');
-    if (result.errors.some(({ type }) => type === PIN_LOCKED_ERROR)) {
-      notify.error('PIN locked', { description: result.message });
-      router.replace(SIGN_IN_HREF);
-      return;
-    }
-
     const pinError = result.errors.find(({ field }) => field === 'pin');
     if (pinError) {
       form.setError('pin', { message: pinError.message }, { shouldFocus: true });
