@@ -1,10 +1,13 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import CustomStepper from '@/components/custom/custom-stepper';
+import { DASHBOARD_HREF } from '@/lib/navigation';
 import { notify } from '@/lib/notify';
 
+import { completeOnboarding } from '../actions/complete-onboarding';
 import CustomLookStep from './custom-look-step';
 import CustomPasswordStep from './custom-password-step';
 import CustomPinStep from './custom-pin-step';
@@ -24,6 +27,7 @@ const STEPS: Step[] = [
 ];
 
 const CustomOnboardingWizard = ({ name, email }: CustomOnboardingWizardProps) => {
+  const router = useRouter();
   const [stepIndex, setStepIndex] = useState(0);
   const [password, setPassword] = useState<PasswordStepInput>();
   const [pin, setPin] = useState<PinStepInput>();
@@ -40,10 +44,23 @@ const CustomOnboardingWizard = ({ name, email }: CustomOnboardingWizardProps) =>
     setStepIndex(2);
   };
 
-  const handleFinish = () => {
-    notify.info('Onboarding is not connected yet', {
-      description: 'Every step is valid. Finishing will save your password and PIN once the BFF is wired up.',
-    });
+  const handleFinish = async () => {
+    if (!password) return setStepIndex(0);
+    if (!pin) return setStepIndex(1);
+
+    const result = await completeOnboarding(password, pin);
+    if (result.ok) {
+      notify.success("You're all set", { description: 'Use your new password to sign in and your PIN to unlock.' });
+      router.replace(DASHBOARD_HREF);
+      return;
+    }
+
+    // Send the user back to the step that holds the rejected value
+    const fields = new Set(result.errors.map(({ field }) => field));
+    if (fields.has('new_password') || fields.has('confirm_password')) setStepIndex(0);
+    else if (fields.has('new_pin') || fields.has('confirm_pin')) setStepIndex(1);
+
+    notify.error("Couldn't finish setting up", { description: result.errors[0]?.message ?? result.message });
   };
 
   return (

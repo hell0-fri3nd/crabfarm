@@ -15,7 +15,7 @@ import type { LookStepInput } from '../types/onboarding';
 
 type CustomLookStepProps = {
   onBack: () => void;
-  onComplete: (values: LookStepInput) => void;
+  onComplete: (values: LookStepInput) => void | Promise<void>;
 };
 
 const THEME_CHOICES = {

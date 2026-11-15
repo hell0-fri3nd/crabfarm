@@ -32,3 +32,8 @@ export const lookStepSchema = z.object({
 });
 
 export type LookStepInput = z.infer<typeof lookStepSchema>;
+
+export type OnboardingInput = {
+  new_password: PasswordStepInput['new_password'];
+  new_pin: PinStepInput['new_pin'];
+};
