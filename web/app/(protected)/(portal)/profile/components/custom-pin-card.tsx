@@ -12,7 +12,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/c
 import { notify } from '@/lib/notify';
 import { PIN_LENGTH } from '@/types/pin';
 
-import { simulateSave } from '../lib/preview-profile';
+import { changePin } from '../actions/change-pin';
 import { pinFormSchema } from '../types/profile';
 
 import type { PinFormInput } from '../types/profile';
@@ -25,6 +25,8 @@ const FIELDS = [
   { name: 'confirm_pin', label: 'Type it again', hint: null },
 ] as const;
 
+const FIELD_NAMES = new Set<string>(FIELDS.map(({ name }) => name));
+
 const CustomPinCard = () => {
   const form = useForm<PinFormInput>({
     resolver: zodResolver(pinFormSchema),
@@ -33,8 +35,18 @@ const CustomPinCard = () => {
     defaultValues: EMPTY_VALUES,
   });
 
-  const handleSave = async () => {
-    await simulateSave();
+  const handleSave = async (values: PinFormInput) => {
+    const result = await changePin(values);
+
+    if (!result.ok) {
+      const fieldErrors = result.errors.filter(({ field }) => FIELD_NAMES.has(field));
+      fieldErrors.forEach(({ field, message }, index) =>
+        form.setError(field as keyof PinFormInput, { message }, { shouldFocus: index === 0 }),
+      );
+      if (fieldErrors.length === 0) notify.error("Couldn't update your PIN", { description: result.message });
+      return;
+    }
+
     form.reset(EMPTY_VALUES);
     notify.success('PIN updated', { description: 'Use it to unlock on devices where you stay signed in.' });
   };

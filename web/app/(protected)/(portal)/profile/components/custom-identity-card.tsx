@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { toInitials } from '@/lib/format';
 import { notify } from '@/lib/notify';
 
-import { simulateSave } from '../lib/preview-profile';
+import { updateName } from '../actions/update-name';
 import { nameFormSchema } from '../types/profile';
 
 import type { NameFormInput, Profile } from '../types/profile';
@@ -24,6 +25,7 @@ type CustomIdentityCardProps = {
 };
 
 const CustomIdentityCard = ({ profile }: CustomIdentityCardProps) => {
+  const router = useRouter();
   const [name, setName] = useState(profile.name);
   const [isEditing, setIsEditing] = useState(false);
   const form = useForm<NameFormInput>({
@@ -34,10 +36,23 @@ const CustomIdentityCard = ({ profile }: CustomIdentityCardProps) => {
   });
 
   const handleSave = async (values: NameFormInput) => {
-    await simulateSave();
-    setName(values.name);
+    const result = await updateName(values);
+
+    if (!result.ok) {
+      const nameError = result.errors.find(({ field }) => field === 'name');
+      if (nameError) {
+        form.setError('name', { message: nameError.message }, { shouldFocus: true });
+        return;
+      }
+      notify.error("Couldn't save your name", { description: result.message });
+      return;
+    }
+
+    setName(result.data.name);
+    form.reset(result.data);
     setIsEditing(false);
-    notify.success('Name saved', { description: `You show up as ${values.name} across CrabFarm.` });
+    router.refresh();
+    notify.success('Name saved', { description: `You show up as ${result.data.name} across CrabFarm.` });
   };
 
   const handleCancel = () => {

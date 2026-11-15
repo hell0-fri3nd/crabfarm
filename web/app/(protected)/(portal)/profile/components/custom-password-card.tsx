@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { KeyRound } from 'lucide-react';
@@ -12,7 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { notify } from '@/lib/notify';
 
-import { simulateSave } from '../lib/preview-profile';
+import { changePassword } from '../actions/change-password';
 import { createPasswordFormSchema } from '../types/profile';
 
 import type { PasswordFormInput } from '../types/profile';
@@ -30,7 +31,10 @@ const FIELDS = [
   { name: 'confirm_password', label: 'Type it again', autoComplete: 'new-password' },
 ] as const;
 
+const FIELD_NAMES = new Set<string>(FIELDS.map(({ name }) => name));
+
 const CustomPasswordCard = ({ name, changedLabel }: CustomPasswordCardProps) => {
+  const router = useRouter();
   const form = useForm<PasswordFormInput>({
     resolver: zodResolver(createPasswordFormSchema(name)),
     mode: 'onTouched',
@@ -39,9 +43,20 @@ const CustomPasswordCard = ({ name, changedLabel }: CustomPasswordCardProps) => 
   });
   const newPassword = useWatch({ control: form.control, name: 'new_password' });
 
-  const handleSave = async () => {
-    await simulateSave();
+  const handleSave = async (values: PasswordFormInput) => {
+    const result = await changePassword(values);
+
+    if (!result.ok) {
+      const fieldErrors = result.errors.filter(({ field }) => FIELD_NAMES.has(field));
+      fieldErrors.forEach(({ field, message }, index) =>
+        form.setError(field as keyof PasswordFormInput, { message }, { shouldFocus: index === 0 }),
+      );
+      if (fieldErrors.length === 0) notify.error("Couldn't update your password", { description: result.message });
+      return;
+    }
+
     form.reset(EMPTY_VALUES);
+    router.refresh();
     notify.success('Password updated', { description: 'Use it next time you sign in. Your PIN stays the same.' });
   };
 

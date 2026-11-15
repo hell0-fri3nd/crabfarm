@@ -35,6 +35,7 @@ export const createPasswordFormSchema = (name: string) =>
       message: "The passwords don't match. Type it again.",
     });
 export type PasswordFormInput = z.infer<ReturnType<typeof createPasswordFormSchema>>;
+export type ChangePasswordInput = Omit<PasswordFormInput, 'confirm_password'>;
 
 const SEQUENTIAL_PIN = '0123456789'.slice(0, PIN_LENGTH);
 
@@ -57,11 +58,23 @@ export const pinFormSchema = z
     message: "The PINs don't match. Enter it again.",
   });
 export type PinFormInput = z.infer<typeof pinFormSchema>;
+export type ChangePinInput = Omit<PinFormInput, 'confirm_pin'>;
+
+export const toFieldErrors = (issues: z.core.$ZodIssue[]) =>
+  issues.map(({ path, message, code }) => ({ field: path.join('.'), message, type: code }));
 
 export const themeOptionSchema = z.enum(['light', 'dark']);
 export type ThemeOption = z.infer<typeof themeOptionSchema>;
 
 export const activityAreaSchema = z.enum(['Data', 'Assistant', 'Users', 'Auth']);
+
+export const activityEventSchema = z.object({
+  id: z.uuid(),
+  action: z.string(),
+  target_label: z.string().nullable(),
+  occurred_at: z.iso.datetime({ offset: true }),
+});
+export type ActivityEvent = z.infer<typeof activityEventSchema>;
 
 export const recentActivitySchema = z.object({
   id: z.string(),

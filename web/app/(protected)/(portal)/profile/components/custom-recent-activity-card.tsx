@@ -10,9 +10,10 @@ import type { RecentActivity } from '../types/profile';
 
 type CustomRecentActivityCardProps = {
   items: RecentActivity[];
+  isUnavailable?: boolean;
 };
 
-const CustomRecentActivityCard = ({ items }: CustomRecentActivityCardProps) => (
+const CustomRecentActivityCard = ({ items, isUnavailable = false }: CustomRecentActivityCardProps) => (
   <Card className="gap-5 rounded-2xl py-5 sm:py-6">
     <CustomCardHeading
       title="My recent activity"
@@ -26,6 +27,11 @@ const CustomRecentActivityCard = ({ items }: CustomRecentActivityCardProps) => (
       }
     />
     <CardContent className="px-4 sm:px-6">
+      {items.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          {isUnavailable ? "Couldn't load your activity. Refresh to try again." : 'Nothing yet. Your actions will show up here.'}
+        </p>
+      )}
       <ul className="divide-y divide-border">
         {items.map(({ id, area, title, at_label }) => (
           <li key={id} className="flex items-start gap-3 py-4 first:pt-0 last:pb-0">

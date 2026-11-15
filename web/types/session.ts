@@ -6,6 +6,7 @@ export const currentUserSchema = z.object({
   email: z.email(),
   role: z.string(),
   needs_onboarding: z.boolean(),
+  updated_at: z.iso.datetime({ offset: true }).nullable(),
 });
 
 export type CurrentUser = z.infer<typeof currentUserSchema>;
