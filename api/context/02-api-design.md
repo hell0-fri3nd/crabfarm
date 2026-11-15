@@ -232,6 +232,7 @@ Status codes listed are in addition to the defaults every protected endpoint has
 | PATCH | `/auth/change-password` | 200 | 400 wrong current, 409 same as current |
 | PATCH | `/auth/change-pin` | 200 | 400 wrong current, 409 same as current |
 | GET | `/auth/me` (any role, access token) | 200 `USER_FOUND` (includes `needs_onboarding`) | 401 missing/expired/invalid token or deactivated user |
+| POST | `/auth/onboarding` (`{new_password, new_pin}`, access token; only while `needs_onboarding`) | 200 `ONBOARDED` (sets both in one commit, `has_default_credentials=false`) | 409 already set up (plain detail), 409 `default_password` / `default_pin` field errors, 422 |
 | GET | `/auth/me/activity` (`?limit=` 1–50, default 5) | 200 `ACTIVITY_LISTED`: the caller's own **successful** audit events, newest first (`id, action, target_label, occurred_at`) | 401, 422 bad `limit` |
 | PATCH | `/auth/me` (`{name}` only; any role edits their own name, never email or role) | 200 `USER_UPDATED` (audited as `auth.update_me`) | 401, 422 name not 2–150 chars or extra fields |
 | GET | `/users` (`?page=&size=&q=&role=&is_active=&sort=`) | 200 `USERS_LISTED` | 403 without `user:read` |

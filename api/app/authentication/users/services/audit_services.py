@@ -55,6 +55,14 @@ USER_OUTCOMES = {
     "USER_DEACTIVATE_FAILED":    (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
     "CREDENTIALS_RESET_FAILED":     (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
 }
+ONBOARDING_OUTCOMES = {
+    "ONBOARDED":            (Outcome.SUCCESS, status.HTTP_200_OK),
+    "ALREADY_ONBOARDED":    (Outcome.FAILURE, status.HTTP_409_CONFLICT),
+    "DEFAULT_PASSWORD":     (Outcome.FAILURE, status.HTTP_409_CONFLICT),
+    "DEFAULT_PIN":          (Outcome.FAILURE, status.HTTP_409_CONFLICT),
+    "ONBOARDING_FAILED":    (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
+}
+
 
 # failure code -> (field, message) as the client sees it; "server" marks errors not tied to an input
 ERRORS = {
@@ -67,6 +75,10 @@ ERRORS = {
     "PIN_VERIFICATION_FAILED": ("server",   "Unable to verify pin right now"),
     "SAME_PASSWORD":           ("new_password", "New password must be different from current password"),
     "CHANGE_PASSWORD_FAILED":  ("server",   "Unable to change password right now"),
+    "ALREADY_ONBOARDED":       ("server",   "This account is already set up"),
+    "DEFAULT_PASSWORD":        ("new_password", "Pick a password other than the one you were given"),
+    "DEFAULT_PIN":             ("new_pin",  "Pick a pin other than the one you were given"),
+    "ONBOARDING_FAILED":       ("server",   "Unable to finish setting up your account right now"),
     "USER_INACTIVE":           ("email",    "This account is deactivated"),
     "USER_NOT_FOUND":          ("path.user_id", "User not found"),
     "EMAIL_ALREADY_EXISTS":    ("email",    "Email already exists"),
@@ -163,6 +175,29 @@ class AuditServices:
             reason=None if outcome == Outcome.SUCCESS else code,
             changes=self.__code_errors(code),
         )
+
+    def onboarding(
+        self,
+        request: Request | None,
+        code: str,
+        user: Users,
+        access_token: str | None = None,
+    ) -> None:
+        outcome, http_status = ONBOARDING_OUTCOMES[code]
+        self.audit.record(
+            action="auth.onboarding",
+            outcome=outcome,
+            request=request,
+            actor=user,
+            session_token=access_token,
+            http_status=http_status,
+            reason=None if outcome == Outcome.SUCCESS else code,
+            changes=self.__code_errors(code),
+        )
+
+    @staticmethod
+    def error_for(code: str) -> tuple[str, str]:
+        return ERRORS[code]
 
     def change_pin(
         self,

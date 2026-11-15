@@ -5,6 +5,7 @@ from .auth_schemas import (
     SignInRequest,
     ChangePasswordRequest,
     ChangePinRequest,
+    OnboardingRequest,
     AuthResponse,
     ErrorResponse,
 )

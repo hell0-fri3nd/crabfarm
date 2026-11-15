@@ -35,6 +35,7 @@ from ..schemas import (
     SignInRequest,
     ChangePasswordRequest,
     ChangePinRequest,
+    OnboardingRequest,
     AuthResponse,
     ErrorResponse,
     Response,
@@ -68,6 +69,57 @@ TOO_MANY_ATTEMPTS = {
 )
 def me(user: CurrentUser, services: AuthServicesDep):
     return services.me(user)
+
+
+@router.post(
+    "/onboarding",
+    response_model=AuthResponse,
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "auth.onboarding"},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "model": ErrorResponse,
+            "description": "Missing, invalid or expired access token, or the user is deactivated",
+        },
+        status.HTTP_409_CONFLICT: {
+            "model": ValidationErrorResponse,
+            "description": "Already set up, or the new password or pin is still the default",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "model": ValidationErrorResponse,
+            "description": "Password not 8 to 128 characters, or pin not exactly 4 digits",
+        },
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "model": ErrorResponse,
+            "description": "Unexpected error saving the new credentials",
+        },
+    },
+)
+def complete_onboarding(
+    payload: OnboardingRequest,
+    http_request: Request,
+    user: CurrentUser,
+    services: AuthServicesDep,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+) -> AuthResponse:
+    result = services.complete_onboarding(user, payload, request=http_request, access_token=credentials.credentials)
+
+    if result.code == "ONBOARDING_FAILED":
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.message)
+    if result.code == "ALREADY_ONBOARDED":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.message)
+    if result.code in ("DEFAULT_PASSWORD", "DEFAULT_PIN"):
+        field = "new_password" if result.code == "DEFAULT_PASSWORD" else "new_pin"
+        raise FieldException(
+            status_code=status.HTTP_409_CONFLICT,
+            field=field,
+            message=result.message,
+            type=result.code.lower(),
+            detail=result.message,
+            action="auth.onboarding",
+        )
+
+    return result
 
 
 @router.get(

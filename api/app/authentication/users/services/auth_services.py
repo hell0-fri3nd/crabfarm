@@ -14,6 +14,7 @@ from ..schemas import (
     ActivityQuery,
     ActivityRead,
     AuthResponse,
+    OnboardingRequest,
     Response,
     UpdateMeRequest,
     UserRead,
@@ -40,6 +41,44 @@ class AuthServices:
             success=True, message="User retrieved", code="USER_FOUND",
             details=UserRead.model_validate(user),
         )
+
+    def complete_onboarding(
+        self,
+        user: Users,
+        payload: OnboardingRequest,
+        request: Request | None = None,
+        access_token: str | None = None,
+    ) -> AuthResponse:
+        try:
+            code = (
+                "ALREADY_ONBOARDED" if not user.has_default_credentials
+                else "DEFAULT_PASSWORD" if payload.new_password == settings.default_user_password
+                else "DEFAULT_PIN" if payload.new_pin == settings.default_user_pin
+                else None
+            )
+            if code:
+                self.audit.onboarding(request, code, user=user, access_token=access_token)
+                return AuthResponse(success=False, message=self.audit.error_for(code)[1], code=code, details=None)
+
+            # Both in one commit, so nobody ends up half set up with a default left behind
+            user.password = self.password_services.hash_password(payload.new_password)
+            user.pin = self.password_services.hash_password(payload.new_pin)
+            user.has_default_credentials = False
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+
+            self.audit.onboarding(request, "ONBOARDED", user=user, access_token=access_token)
+            return AuthResponse(success=True, message="Your account is set up", code="ONBOARDED", details=None)
+
+        except Exception:
+            self.db.rollback()
+            logger.exception("Onboarding failed for %s", user.id)
+            self.audit.onboarding(request, "ONBOARDING_FAILED", user=user, access_token=access_token)
+            return AuthResponse(
+                success=False, message=self.audit.error_for("ONBOARDING_FAILED")[1],
+                code="ONBOARDING_FAILED", details=None,
+            )
 
     def my_activity(self, user: Users, query: ActivityQuery) -> Response[list[ActivityRead]]:
         # Only what the user actually did: failed attempts and rejected tokens are security noise, not activity

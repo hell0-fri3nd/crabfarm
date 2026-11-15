@@ -79,6 +79,24 @@ class ChangePinRequest(BaseModel):
             raise ValueError("Pin must be exactly 4 digits")
         return value
     
+class OnboardingRequest(BaseModel):
+    """First sign-in: replaces the default password and pin together; the defaults were just proven at sign-in."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"example": {"new_password": "new_password", "new_pin": "5678"}},
+    )
+    new_password: str = Field(min_length=8, max_length=128, description="New password, 8 to 128 characters.")
+    new_pin: str = Field(description="New pin, exactly 4 digits.")
+
+    @field_validator("new_pin")
+    @classmethod
+    def pin_must_be_4_digits(cls, value: str) -> str:
+        if not (len(value) == 4 and value.isdigit()):
+            raise ValueError("Pin must be exactly 4 digits")
+        return value
+
+
 class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
