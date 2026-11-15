@@ -67,7 +67,7 @@ import 'server-only';
 
 export const batchApi = {
   get: (batchId: string) => bff.get(`/batches/${batchId}`, batchSchema),
-  create: (input: CreateBatchInput) => bff.post('/batches', input, batchSchema),
+  create: (input: CreateBatchInput) => bff.post('/batches', batchSchema, { body: input }),
 };
 ```
 
