@@ -113,6 +113,9 @@ api/app/
 │   ├── api.py
 │   ├── detection/          # camera start/stop, live SSE stream of results (no tables)
 │   └── qr/                 # QR scan
+├── system/                 # cross-cutting live channel (no tables)
+│   ├── api.py
+│   └── events/             # GET /events/stream: system.<type> events over SSE
 ├── assistant/
 │   ├── api.py
 │   └── chat/               # single chat endpoint + LangGraph (graph/); no tables
@@ -126,7 +129,9 @@ api/ml/                     # OUTSIDE app/: offline training only, never importe
 └── models/                 # saved artifacts (gitignored), e.g. growth_v3.joblib
 ```
 
-Domains: `authentication`, `crab_management`, `monitoring`, `vision`, `assistant`.
+Domains: `authentication`, `crab_management`, `monitoring`, `vision`, `assistant`, `system`.
+
+`system/events` has no `models` layer (like `vision` and `assistant/chat`). It's the reference stream: copy its router/services/dependencies when a domain adds its own `/<resource>/stream`.
 To add a domain, update this file first.
 
 ## 5. Resource Anatomy (non-negotiable)
@@ -211,7 +216,9 @@ Never call a sync `Session` directly inside an `async def`.
 - `infrastructure/streaming` runs **one** AMQP consumer per API process. It binds an exclusive auto-delete queue to the keys it needs and fans messages out to an `asyncio.Queue` for each connected client.
 - The SSE endpoint subscribes a client queue, yields `event:`/`data:` frames, sends a heartbeat comment every 15 s, and unsubscribes on disconnect.
 - Filtering (by device, pond or camera) happens in the hub, not in RabbitMQ bindings per client.
-- **Auth:** browser `EventSource` can't send headers, so SSE endpoints accept the JWT from an httpOnly cookie or a `?token=` query param. They validate it with the same `core.security` code.
+- **Built:** `infrastructure/messaging` (`RabbitClient`, `publish()`, `topics.py`) and `infrastructure/streaming` (`StreamHub`, `event_stream()`, `format_event()`). The FastAPI `lifespan` connects the client, declares `crabfarm.events` and starts one hub bound to the keys streams need (today `system.#`); add a domain's keys there. If RabbitMQ is down at startup the API still starts, and stream endpoints answer `503` + `Retry-After` until a restart.
+- **Per client:** a bounded queue (`sse_client_queue_size`, oldest dropped when full), a `retry: 5000` frame first, `: ping` every `sse_heartbeat_seconds`, every broker body validated by the stream's `*Event` schema (invalid ones are logged and dropped), and the stream **ends when the access token expires**, so the client reconnects with a fresh token.
+- **Auth:** the browser never calls FastAPI; the Next.js BFF (`/api/stream/...`) sends the access token as `Authorization: Bearer`, so stream endpoints use the normal `get_current_user` + `require_permissions`. Cookie or `?token=` auth is only needed if a non-BFF client ever streams directly.
 - SSE is one-way. All client actions go through normal `POST` endpoints.
 
 ## 9. Device Commands

@@ -289,6 +289,12 @@ User management (`user:read`, `user:create`, `user:update`, `user:deactivate`, `
 | GET | `/detections/stream` (`?camera_id=`) | 200 SSE `detection.created` (live only, not stored) | — |
 | POST | `/qr/scan` (multipart image) | 200 `QR_DECODED` + linked crab/batch | 413, 415, 404 no QR found in image, 404 code not linked to a crab/batch |
 
+### system
+
+| Method | Path | Success | Notable errors |
+|---|---|---|---|
+| GET | `/events/stream` (`events:read`, every role) | 200 SSE `system.announcement`, `system.test` (data: `SystemEvent {type, message, occurred_at}`), ends at the access token's expiry | 503 broker unreachable (`Retry-After`) |
+
 ### assistant
 
 | Method | Path | Success | Notable errors |

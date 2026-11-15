@@ -15,6 +15,7 @@ class Permission(str, Enum):
     USER_DEACTIVATE     = "user:deactivate"
     USER_RESET_CREDENTIALS = "user:reset_credentials"
     USER_MANAGE_ADMINS  = "user:manage_admins"
+    EVENTS_READ         = "events:read"
 
 
 USER_MANAGEMENT = frozenset({
@@ -33,10 +34,12 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
         Permission.BATCH_READ,
         Permission.BATCH_CREATE,
         Permission.LOG_READ,
+        Permission.EVENTS_READ,
     }),
     Role.USER: frozenset({
         Permission.CRAB_READ,
         Permission.BATCH_READ,
+        Permission.EVENTS_READ,
     }) | USER_MANAGEMENT,
 }
 

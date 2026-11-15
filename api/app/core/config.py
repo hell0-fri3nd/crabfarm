@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     auth_rate_limit: int = Field(default=10, ge=1)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=1)
 
+    rabbitmq_host: str = "localhost"
+    rabbitmq_port: int = 5672
+    rabbitmq_user: str = "guest"
+    rabbitmq_password: str = "guest"
+    rabbitmq_vhost: str = "/"
+
+    sse_heartbeat_seconds: int = Field(default=15, ge=1)
+    sse_client_queue_size: int = Field(default=100, ge=1)
+
     # Given to new and reset users; onboarding forces both to be changed on first sign-in
     default_user_password: str = Field(default="@HelloFriend1234", min_length=8, max_length=128)
     default_user_pin: str = Field(default="1234", pattern=r"^\d{4}$")
