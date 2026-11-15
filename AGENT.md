@@ -31,7 +31,7 @@ Rules:
 | `api/context/02-api-design.md` | REST resources, methods, status codes, `{success, message, code, details}` envelope, error shape, Pydantic validation, endpoint catalog |
 | `api/context/03-coding-rules.md` | Python style: file-first layers, class-based schemas/services/dependencies, naming, Pythonic sugar, dunders, comments |
 | `api/context/04-schema.md` + `schema.dbml` | Postgres schema-per-module, SQL naming, normalization, **no cross-module FKs**, known drift, migration rules |
-| `web/context/01-architecture.md` | Next.js App Router + BFF, httpOnly-cookie tokens, `(auth)` / `(protected)/team-onboarding` / `(protected)/(portal)` domains, layered domain folders, data flow, zod, zustand |
+| `web/context/01-architecture.md` | Next.js App Router + BFF, httpOnly-cookie tokens, `(auth)` / `(protected)/team-onboarding` / `(protected)/(portal)` domains, layered domain folders (each with its own `api/` endpoint fetchers), data flow, zod, zustand |
 | `web/context/02-coding-rules.md` | Arrow functions assigned to `const`, naming, `custom-<name>.tsx`, ESLint config, idiomatic TypeScript, the Next.js Way |
 | `web/context/03-design-systems.md` | Design tokens, typography, components per page, icons, feedback patterns, UX laws, WCAG 2.2 AA, review checklist |
 
@@ -60,7 +60,7 @@ crabfarm/
 ## 2. Commands
 
 ```bash
-# infrastructure (repo root, needs .env with DB_* and RABBITMQ_*)
+# infrastructure (repo root, needs .env with DB_* and RABBITMQ_*; the same .env feeds FastAPI and web/, which also needs API_URL)
 docker compose up -d
 
 # backend (from api/)

@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { LogIn, Mail } from 'lucide-react';
@@ -9,13 +10,26 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { DASHBOARD_HREF } from '@/lib/navigation';
 import { notify } from '@/lib/notify';
+import { ONBOARDING_HREF } from '@/lib/routes';
 
+import { signIn } from '../actions/sign-in';
 import { signInSchema } from '../types/auth';
 
 import type { SignInInput } from '../types/auth';
 
-const CustomSignInForm = () => {
+const SIGN_IN_FIELDS = Object.keys(signInSchema.shape) as (keyof SignInInput)[];
+
+const isSignInField = (field: string): field is keyof SignInInput =>
+  SIGN_IN_FIELDS.includes(field as keyof SignInInput);
+
+type CustomSignInFormProps = {
+  rememberMeDays: number;
+};
+
+const CustomSignInForm = ({ rememberMeDays }: CustomSignInFormProps) => {
+  const router = useRouter();
   const form = useForm<SignInInput>({
     resolver: zodResolver(signInSchema),
     mode: 'onTouched',
@@ -23,10 +37,20 @@ const CustomSignInForm = () => {
     defaultValues: { email: '', password: '', remember_me: true },
   });
 
-  const handleSignIn = async () => {
-    notify.info('Sign-in is not connected yet', {
-      description: 'The form is valid. It will call the BFF once auth is wired up.',
+  const handleSignIn = async (input: SignInInput) => {
+    const result = await signIn(input);
+
+    if (result.ok) {
+      router.replace(result.data.needs_onboarding ? ONBOARDING_HREF : DASHBOARD_HREF);
+      return;
+    }
+
+    const fieldErrors = result.errors.filter(({ field }) => isSignInField(field));
+    fieldErrors.forEach(({ field, message }, index) => {
+      if (isSignInField(field)) form.setError(field, { message }, { shouldFocus: index === 0 });
     });
+
+    if (fieldErrors.length === 0) notify.error("Couldn't sign in", { description: result.message });
   };
 
   return (
@@ -92,6 +116,9 @@ const CustomSignInForm = () => {
                 />
                 <FieldLabel htmlFor="remember_me" className="font-medium">
                   Keep me signed in on this device
+                  <span className="font-normal text-muted-foreground">
+                    for {rememberMeDays} {rememberMeDays === 1 ? 'day' : 'days'}
+                  </span>
                 </FieldLabel>
               </Field>
             )}

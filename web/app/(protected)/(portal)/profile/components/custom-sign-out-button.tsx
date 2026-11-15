@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
 import { LogOut } from 'lucide-react';
 
 import {
@@ -15,9 +15,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { signOut } from '@/actions/sign-out';
 
 const CustomSignOutButton = () => {
-  const router = useRouter();
+  const [isSigningOut, startSignOut] = useTransition();
+
+  const handleSignOut = () => startSignOut(signOut);
 
   return (
     <AlertDialog>
@@ -40,9 +43,9 @@ const CustomSignOutButton = () => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={() => router.push('/sign-in')}>
+          <AlertDialogAction variant="destructive" disabled={isSigningOut} onClick={handleSignOut}>
             <LogOut aria-hidden />
-            Sign out
+            {isSigningOut ? 'Signing out…' : 'Sign out'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

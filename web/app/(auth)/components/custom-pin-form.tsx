@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
@@ -8,10 +9,13 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { toInitials } from '@/lib/format';
+import { DASHBOARD_HREF } from '@/lib/navigation';
+import { ONBOARDING_HREF, SIGN_IN_HREF } from '@/lib/routes';
 import { notify } from '@/lib/notify';
 import { PIN_LENGTH } from '@/types/pin';
 
-import { pinSchema } from '../types/auth';
+import { unlockWithPin } from '../actions/unlock-with-pin';
+import { PIN_LOCKED_ERROR, pinSchema } from '../types/auth';
 
 import type { PinInput } from '../types/auth';
 
@@ -22,6 +26,7 @@ type CustomPinFormProps = {
 const PIN_SLOTS = Array.from({ length: PIN_LENGTH }, (_, index) => index);
 
 const CustomPinForm = ({ name }: CustomPinFormProps) => {
+  const router = useRouter();
   const form = useForm<PinInput>({
     resolver: zodResolver(pinSchema),
     mode: 'onSubmit',
@@ -29,11 +34,28 @@ const CustomPinForm = ({ name }: CustomPinFormProps) => {
     defaultValues: { pin: '' },
   });
 
-  const handleUnlock = async () => {
-    notify.info('PIN sign-in is not connected yet', {
-      description: 'The PIN is valid. It will call the BFF once auth is wired up.',
-    });
-    form.reset();
+  const handleUnlock = async (input: PinInput) => {
+    const result = await unlockWithPin(input);
+
+    if (result.ok) {
+      router.replace(result.data.needs_onboarding ? ONBOARDING_HREF : DASHBOARD_HREF);
+      return;
+    }
+
+    form.resetField('pin');
+    if (result.errors.some(({ type }) => type === PIN_LOCKED_ERROR)) {
+      notify.error('PIN locked', { description: result.message });
+      router.replace(SIGN_IN_HREF);
+      return;
+    }
+
+    const pinError = result.errors.find(({ field }) => field === 'pin');
+    if (pinError) {
+      form.setError('pin', { message: pinError.message }, { shouldFocus: true });
+      return;
+    }
+
+    notify.error("Couldn't unlock", { description: result.message });
   };
 
   const submitPin = form.handleSubmit(handleUnlock);

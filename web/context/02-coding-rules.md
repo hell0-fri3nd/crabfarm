@@ -59,8 +59,19 @@ export default CustomSensorCard;
 
 - **Exports:**
   - Components use `export default` (one component per file), as do Next.js files (`page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`).
-  - `lib/`, `actions/`, `events/`, `types/` and `stores/` use **named** exports (`export const ...`).
-- Server Actions are arrow functions too:
+  - `api/`, `lib/`, `actions/`, `events/`, `types/` and `stores/` use **named** exports (`export const ...`).
+- Endpoint fetchers (`api/`) are an object of arrow functions, one per FastAPI endpoint:
+
+```ts
+import 'server-only';
+
+export const batchApi = {
+  get: (batchId: string) => bff.get(`/batches/${batchId}`, batchSchema),
+  create: (input: CreateBatchInput) => bff.post('/batches', input, batchSchema),
+};
+```
+
+- Server Actions are arrow functions too, and reach FastAPI only through `api/`:
 
 ```ts
 'use server';
@@ -69,7 +80,10 @@ export const createBatch = async (input: CreateBatchInput): Promise<ActionResult
   const parsed = createBatchSchema.safeParse(input);
   if (!parsed.success) return toFieldErrors(parsed.error);
 
-  return bff.post('/batches', parsed.data, batchSchema);
+  const result = await batchApi.create(parsed.data);
+  if (!result.ok) return { ok: false, message: result.message, errors: result.errors };
+
+  return { ok: true, message: result.message, data: result.data };
 };
 ```
 
@@ -85,6 +99,7 @@ export const createBatch = async (input: CreateBatchInput): Promise<ActionResult
 | Event handler | camelCase, `handle<Event>` (props: `on<Event>`) | `const handleLogout = () => {}`, `onSubmit` |
 | Zustand action | camelCase verb | `const setUserData = (data) => {}` |
 | BFF / API fetcher | camelCase verb | `const getSessionToken = () => {}` |
+| Endpoint fetcher (`api/`) | `<resource>Api` object, camelCase verb keys | `batchApi.list(filters)`, `batchApi.create(input)` |
 | Server Action | camelCase verb | `const signIn = async () => {}` |
 
 ### Everything else
@@ -100,6 +115,7 @@ export const createBatch = async (input: CreateBatchInput): Promise<ActionResult
 | Type from a schema | PascalCase of the schema | `type CrabLog = z.infer<typeof crabLogSchema>` |
 | zustand store hook | `use<Name>Store` | `useAuthStore`, `useUiStore` |
 | Query options / keys | camelCase object | `crabQueries.list(filters)`, `crabKeys.all` |
+| Endpoint fetcher file | `<resource>-api.ts` in the domain `api/` | `batch-api.ts`, `sensor-api.ts` |
 | Constants | UPPER_SNAKE_CASE | `MAX_UPLOAD_MB`, `LIVE_WINDOW_SIZE` |
 | Booleans | `is` / `has` / `can` / `should` prefix | `isLoading`, `hasMolted`, `canEdit` |
 | API fields | keep FastAPI's **snake_case** in schemas and types (no mapping layer) | `crab.batch_id`, `reading.measured_at` |
@@ -205,7 +221,7 @@ Prefer the right-hand column.
 | `x!` non-null assertion | narrow with a guard / early return |
 | nested `if`s / nested ternaries | guard clauses with early `return`, or a lookup object |
 | `switch` over a status → label/variant | a typed map: `const STATUS_VARIANT = { ... } as const satisfies Record<Status, Variant>` |
-| boolean flags for result states | discriminated unions: `ActionResult<T> = { ok: true; data: T } \| { ok: false; errors: FieldError[] }` |
+| boolean flags for result states | discriminated unions: `ActionResult<T> = { ok: true; message: string; data: T } \| { ok: false; message: string; errors: FieldError[] }` (`types/api.ts`) |
 | `className={'a ' + (on ? 'b' : '')}` | `cn('a', on && 'b')` |
 
 Don't be clever for its own sake. If a one-liner needs a second read, split it.
@@ -253,6 +269,7 @@ Don't be clever for its own sake. If a one-liner needs a second read, split it.
 
 ## 10. Quick Checklist
 
+- [ ] FastAPI paths appear only in a domain (or global) `api/` file; actions and pages call those fetchers.
 - [ ] Every function is a `const` arrow function. Components use `export default`; everything else uses named exports.
 - [ ] Names follow §3, files are kebab-case, and custom component files are `custom-<name>.tsx`.
 - [ ] `eslint .` and `tsc --noEmit` pass.

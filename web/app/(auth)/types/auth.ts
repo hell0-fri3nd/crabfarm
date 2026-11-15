@@ -13,8 +13,30 @@ export const signInSchema = z.object({
 
 export type SignInInput = z.infer<typeof signInSchema>;
 
+export const signedInUserSchema = z.object({
+  name: z.string(),
+  email: z.email(),
+  role: z.string(),
+  needs_onboarding: z.boolean(),
+});
+
+export type SignedInUser = z.infer<typeof signedInUserSchema>;
+
+export const signInResultSchema = signedInUserSchema.extend({
+  access_token: z.string(),
+  refresh_token: z.string(),
+});
+
 export const pinSchema = z.object({
   pin: pinCodeSchema,
 });
 
 export type PinInput = z.infer<typeof pinSchema>;
+
+export const pinResultSchema = signedInUserSchema.extend({
+  access_token: z.string(),
+  refresh_token: z.string(),
+  refresh_expires_at: z.iso.datetime({ offset: true }),
+});
+
+export const PIN_LOCKED_ERROR = 'pin_locked';

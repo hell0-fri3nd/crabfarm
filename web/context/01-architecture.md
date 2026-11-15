@@ -52,18 +52,18 @@ web/
 │   │   ├── layout.tsx                # auth shell; redirects to portal if already signed in
 │   │   ├── sign-in/page.tsx
 │   │   ├── pin/page.tsx
-│   │   ├── components/  lib/  actions/  events/  types/
+│   │   ├── api/  components/  lib/  actions/  events/  types/
 │   │
 │   ├── (protected)/                  # requires a session
-│   │   ├── layout.tsx                # verifies session server-side → else /sign-in
+│   │   ├── layout.tsx                # <Suspense> boundary for every session read (cacheComponents)
 │   │   │
 │   │   ├── team-onboarding/          # DOMAIN: first login → reset password + set pin
-│   │   │   ├── layout.tsx            # if already onboarded → portal
+│   │   │   ├── layout.tsx            # <CustomSessionGate stage="onboarding">: already onboarded → portal
 │   │   │   ├── page.tsx
-│   │   │   ├── components/  lib/  actions/  events/  types/
+│   │   │   ├── api/  components/  lib/  actions/  events/  types/
 │   │   │
 │   │   └── (portal)/                 # all authenticated app pages
-│   │       ├── layout.tsx            # app shell (sidebar, header, assistant); requires onboarding done
+│   │       ├── layout.tsx            # <CustomSessionGate stage="portal"> + app shell; needs onboarding → team-onboarding
 │   │       ├── dashboard/            # DOMAIN: briefing, live sensor tiles, alerts, growth forecast
 │   │       ├── logs/                 # DOMAIN: crab and sensor logs (tabs), export
 │   │       ├── feeding/              # DOMAIN: feeders, schedules, feed now, stop system
@@ -73,23 +73,25 @@ web/
 │   │       ├── users/                # DOMAIN: invite, roles, deactivate (admin)
 │   │       ├── activity/             # DOMAIN: audit trail grouped by day
 │   │       └── profile/              # DOMAIN: my profile, password, PIN, theme
-│   │           (each portal domain has: page.tsx, layout.tsx?, components/ lib/ actions/ events/ types/)
+│   │           (each portal domain has: page.tsx, layout.tsx?, api/ components/ lib/ actions/ events/ types/)
 │   │
 │   └── api/                          # BFF Route Handlers (proxy + streams), no UI
 │       ├── [...path]/route.ts        # GET proxy for TanStack Query reads
 │       ├── stream/[...path]/route.ts # SSE proxy
-│       └── assistant/chat/route.ts   # chat stream proxy
+│       ├── assistant/chat/route.ts   # chat stream proxy
+│       └── session/end/route.ts      # clears the session cookies → /sign-in (render can't delete cookies)
 │
 ├── components/                       # GLOBAL shared components (used by ≥ 2 domains)
 │   ├── ui/                           # shadcn-generated primitives (untouched; see 03)
 │   └── custom/                       # shared custom-<name>.tsx (shell, severity, sensor tile, charts, …)
+├── api/                              # GLOBAL endpoint fetchers used by ≥ 2 domains
 ├── lib/                              # GLOBAL: bff client, session, query client/keys, utils (cn)
 ├── actions/                          # GLOBAL Server Actions used by ≥ 2 domains (e.g. sign-out)
 ├── events/                           # GLOBAL SSE hooks used by ≥ 2 domains
 ├── types/                            # GLOBAL zod schemas + inferred types (envelope, page, user)
 ├── hooks/                            # GLOBAL non-SSE client hooks (use-mobile, use-debounce)
 ├── stores/                           # GLOBAL zustand UI stores
-└── middleware.ts                     # optimistic cookie check → redirect
+└── proxy.ts                          # Next 16 name for middleware: optimistic cookie check → redirect
 ```
 
 ### Domain layers (every domain has these)
@@ -99,37 +101,41 @@ web/
 | `page.tsx` | Route entry, a **Server Component**. Fetches or prefetches and composes domain components. | No business logic; thin |
 | `layout.tsx` | Domain shell / guard (only where the domain needs one) | Guards run server-side |
 | `components/` | Domain UI (`"use client"` only on interactive leaves) | Uses shadcn primitives from `@/components/ui` |
+| `api/` | **Endpoint fetchers**: one `<resource>-api.ts` per FastAPI resource, exporting a `<resource>Api` object with one function per endpoint (`batchApi.list(filters)`, `batchApi.create(input)`). The FastAPI path lives here and nowhere else. | `import "server-only"`; calls FastAPI through the BFF client and parses the response with the domain's zod schema. No UI, no cookies handling of its own. |
 | `lib/` | Domain helpers: query keys, query options, mappers, formatters, table column defs | Pure TS; no JSX unless it's a column def |
-| `actions/` | **Server Actions** (`"use server"`) for this domain's writes | Validate with zod → call FastAPI through the BFF client → return `ActionResult` |
+| `actions/` | **Server Actions** (`"use server"`) for this domain's writes | Validate with zod → call the domain's `api/` fetcher → return `ActionResult`. Never call the BFF client or write a FastAPI path directly. |
 | `events/` | **SSE subscription hooks** (`use-<resource>-stream.ts`) | Open `/api/stream/...`, validate each event with zod, write into the TanStack Query cache |
 | `types/` | **zod schemas** + `z.infer` types for this domain | The single source for both form validation and response parsing |
 
 - Domain folders (`components/`, `lib/`, …) never contain `page.tsx` or `route.ts`, so they're never routable.
-- **The "2 or more" rule:** code starts **inside its domain**. When a second domain needs it, **move it to the global folder** of the same layer (`components/`, `lib/`, `actions/`, `events/`, `types/`).
+- **The "2 or more" rule:** code starts **inside its domain**. When a second domain needs it, **move it to the global folder** of the same layer (`api/`, `components/`, `lib/`, `actions/`, `events/`, `types/`).
 - A domain **never imports from another domain's folders**. If it needs something from another domain, promote that thing to global first.
-- Import direction: `page/layout → components → (events, lib, actions) → types`. Global folders never import from `app/`.
+- Import direction: `page/layout → components → (events, lib, actions) → api → types`. Only server code (`page.tsx`, `layout.tsx`, `actions/`) imports `api/`; client components never do. Global folders never import from `app/`.
 
 ## 4. Authentication (httpOnly cookies only)
 
 | Cookie | Contents | Flags |
 |---|---|---|
-| `access_token` | FastAPI access JWT | `httpOnly`, `Secure` (prod), `SameSite=Lax`, `Path=/`, `maxAge` = token expiry |
-| `refresh_token` | FastAPI refresh JWT | `httpOnly`, `Secure` (prod), `SameSite=Strict`, `Path=/`, `maxAge` = refresh expiry |
+| `access_token` | FastAPI access JWT | `httpOnly` (always), `Secure` = `COOKIE_SECURE`, `SameSite` = `ACCESS_COOKIE_SAMESITE` (default `lax`), `Path` = `COOKIE_PATH` (default `/`), `maxAge` = `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` |
+| `refresh_token` | FastAPI refresh JWT | `httpOnly` (always), `Secure` = `COOKIE_SECURE`, `SameSite` = `REFRESH_COOKIE_SAMESITE` (default `strict`), `Path` = `COOKIE_PATH`, `maxAge` = `JWT_REFRESH_TOKEN_REMEMBER_ME_DAYS` when "Keep me signed in" is checked, otherwise `JWT_REFRESH_TOKEN_EXPIRE_DAYS` |
 
-In production, prefix both with `__Host-`. Tokens are written and read **only** server-side (`cookies()` from `next/headers`) in `lib/session.ts` (`import "server-only"`).
+The cookie options come from the root `.env` through `lib/env.ts` (§6). `COOKIE_SECURE` defaults to `true` in production and `false` otherwise. `httpOnly` is never configurable. Secure cookies get the `__Host-` prefix when the path is `/`, otherwise `__Secure-`. `SameSite=none` is rejected at startup unless `COOKIE_SECURE=true`. Cookie lifetimes use the **same JWT expiry keys as FastAPI** (shared root `.env`), so a cookie never outlives or undercuts its token; the BFF never decodes JWTs. The PIN flow, once built, must keep the original remember-me choice. Tokens are written and read **only** server-side (`cookies()` from `next/headers`) in `lib/session.ts` (`import "server-only"`).
 
 **Flows**
 
 1. **Sign in:** `(auth)/sign-in` form → `signIn` Server Action → zod validates → `POST /auth/sign-in` → sets both cookies → returns `{ name, role, needs_onboarding }` (never the tokens) → redirect to `team-onboarding` or the portal.
-2. **PIN unlock:** when the access token is missing or expired but a refresh token exists, the user is sent to `(auth)/pin`. That calls `POST /auth/sign-in/pin` with the refresh token and replaces the cookies. The PIN only re-issues the access token; it is **not** a sign-in option, so `/sign-in` has no link to `/pin`.
+2. **PIN unlock:** when the access token is missing or expired but a refresh token exists, the user is sent to `(auth)/pin`. That calls `POST /auth/sign-in/pin` with the refresh token as Bearer. FastAPI **rotates** the refresh token but keeps its original expiry, so the BFF replaces both cookies and sizes the refresh cookie from `refresh_expires_at` (the remember-me lifetime never grows). The wrong-PIN message carries the tries left; after 5 the session is revoked (`pin_locked`): the action clears the cookies, the form shows an error toast and goes to `/sign-in`. The page has a "Not you? Sign out" link. The page greets the user from a `user_name` httpOnly cookie set at sign-in with the refresh lifetime. A 401 without field errors (refresh token rejected) clears the cookies and goes to `/sign-in`. The PIN only re-issues the access token; it is **not** a sign-in option, so `/sign-in` has no link to `/pin`.
 3. **Team onboarding:** on first sign-in, the user must change their password and set a PIN (`PATCH /auth/change-password`, `PATCH /auth/change-pin`) before `(portal)` is reachable. `(portal)/layout.tsx` redirects un-onboarded users. `team-onboarding/layout.tsx` redirects onboarded users away.
    *Backend:* `POST /auth/sign-in`, `POST /auth/sign-in/pin` and `GET /auth/me` return `needs_onboarding`. It turns `false` only after both the password and the pin have been changed. An admin reset (`POST /users/{user_id}/reset-credentials`) sets it back to `true`.
-4. **Sign out:** global `actions/sign-out.ts` deletes both cookies → `/sign-in`.
-5. **401 from FastAPI** anywhere in the BFF → clear `access_token` and redirect to `/pin` if a refresh token exists, otherwise `/sign-in`.
+4. **Sign out:** global `actions/sign-out.ts` (a Server Action, so Next.js checks its Origin) calls `POST /auth/sign-out` with the refresh token to revoke the session (best effort), deletes the cookies → `/sign-in`. Used by the profile page, the phone More sheet and the "Not you? Sign out" link on `/pin`. `/api/session/end` is only the internal sink for dead sessions, never a user-facing sign-out.
+5. **401 from FastAPI** anywhere in the BFF (render, Server Action, Route Handler) is handled once, in `lib/bff/api-client.ts`: a token 401 (no field errors) on an access-token call redirects to `/pin` if a refresh cookie exists, otherwise to `/api/session/end`. Calls that send their own `bearerToken` (PIN, sign-out) or are unauthenticated (sign-in) handle their 401s themselves, because there a 401 means wrong credentials. `/api/session/end` clears the cookies and redirects to `/sign-in` (rendering can't delete cookies; this also breaks the `/sign-in` ↔ `/dashboard` loop a rejected access cookie would cause).
 
 **Guards**
-- `middleware.ts` is **optimistic only**: it checks whether the cookie exists and redirects. It doesn't decode or trust tokens.
-- Real checks happen server-side in `(protected)/layout.tsx` (session) and `(portal)/layout.tsx` (onboarding), plus every FastAPI call, which validates the JWT itself.
+- `proxy.ts` is **optimistic only**: it checks whether the cookies exist and redirects (protected path: no access → `/pin` if refresh exists, else `/api/session/end` → `/sign-in`; `/pin` without refresh → `/api/session/end`; `/sign-in` with access → `/dashboard`, with only a refresh → `/pin`). While the refresh token lives, `/sign-in` is unreachable; once it expires, `/pin` is unreachable. The rules: **access expired → PIN**, **refresh expired → forced sign-out**, **`needs_onboarding` → forced onboarding** (`CustomSessionGate`). It doesn't decode or trust tokens. Its `matcher` runs on **every page** except `api/`, `_next/` and static files, and only `/sign-in` and `/pin` are public, so every route under `(portal)` or `team-onboarding` (route groups don't appear in URLs) is protected without being listed. A new public page must be added as an explicit exception in `proxy.ts`.
+- Real checks happen server-side through `lib/auth.ts` → `getCurrentUser()` (React `cache`, one `GET /auth/me` per request, via the global `api/session-api.ts`). `components/custom/custom-session-gate.tsx` uses it in the `(portal)` and `team-onboarding` layouts for the onboarding redirect. Every FastAPI call also validates the JWT itself.
+- Server code that needs the user calls `getCurrentUser()`; never pass tokens or decode JWTs in the web app.
+- The BFF client forwards the browser's `X-Forwarded-For`, so FastAPI's per-IP rate limit and audit see the real client, not the Next.js server.
+- `app/(protected)/error.tsx` catches a FastAPI outage or 5xx during the session check (plain cause + Try again).
 - Role/permission-based UI hiding is cosmetic. FastAPI enforces permissions.
 
 ## 5. Data Flow
@@ -137,8 +143,8 @@ In production, prefix both with `__Host-`. Tokens are written and read **only** 
 | Need | Path | Notes |
 |---|---|---|
 | **Read** (tables, reports, details) | Client: TanStack Query → `GET /api/<fastapi path>` (BFF proxy) → FastAPI | Query options live in the domain `lib/` (`crabQueries.list(filters)`). The response is parsed with zod. |
-| **First paint** | `page.tsx` (Server Component) prefetches with the server BFF client → `HydrationBoundary` | Same query keys as the client |
-| **Write** (create, update, delete, commands) | Client form → domain **Server Action** → zod → FastAPI → `ActionResult` | Then `queryClient.invalidateQueries(...)` on the client and a `sonner` toast with `message` |
+| **First paint** | `page.tsx` (Server Component) prefetches through the domain `api/` fetcher → `HydrationBoundary` | Same query keys as the client |
+| **Write** (create, update, delete, commands) | Client form → domain **Server Action** → zod → domain `api/` fetcher → FastAPI → `ActionResult` | Then `queryClient.invalidateQueries(...)` on the client and a `sonner` toast with `message` |
 | **Live** (sensors, devices, detections, forecasts) | `events/` hook → `EventSource("/api/stream/<resource>/stream?...")` → BFF streams the FastAPI SSE body through | Same-origin, so cookies are sent automatically. The BFF adds the Bearer header upstream. |
 | **Assistant chat** | `assistant` domain → `POST /api/assistant/chat` (streaming) → FastAPI SSE | `thread_id` is kept only in a non-persisted zustand store. No history (matches the API). |
 
@@ -146,6 +152,7 @@ In production, prefix both with `__Host-`. Tokens are written and read **only** 
 - Builds `${API_URL}${API_PREFIX}${path}`, attaches the bearer token from cookies and forwards `X-Correlation-ID`.
 - Parses success with `apiResponse(schema)`, the zod version of FastAPI's `{ success, message, code, details }`.
 - Parses errors into `{ detail, errors[{ field, message, type }] }` and maps `errors[]` back onto form fields (`form.setError(field, …)`).
+- Returns an `ApiResult<T>` and never throws: a network failure or timeout (10 s) becomes `{ ok: false, status: 0, message }`, and an unparseable body becomes a generic error. The form shows `errors[]` under matching fields and `message` as an error toast when no field matches.
 
 **Live charts:** `events/` hooks append incoming events into the query cache (`queryClient.setQueryData`) with a bounded window (e.g. last N points). Charts just read the query, so components never manage socket state.
 
@@ -160,7 +167,7 @@ In production, prefix both with `__Host-`. Tokens are written and read **only** 
 | FastAPI responses (BFF + query fns) | `apiResponse(DetailSchema).parse(json)` |
 | SSE events | `EventSchema.safeParse(JSON.parse(e.data))`. Invalid events are dropped and logged. |
 | Search params / route params | `searchParamsSchema.parse(...)` in `page.tsx` |
-| Env vars | `lib/env.ts` parses `process.env` with zod at startup |
+| Env vars | `lib/env.ts` parses `process.env` with zod at startup. Every value comes from the **repo-root `.env`** (read by `lib/env.ts`; real environment variables override it), shared with FastAPI and docker compose: `API_URL` (FastAPI origin, e.g. `http://localhost:8000`), `API_PREFIX` (same key FastAPI uses), the optional cookie keys `COOKIE_SECURE`, `COOKIE_PATH`, `ACCESS_COOKIE_SAMESITE`, `REFRESH_COOKIE_SAMESITE`, and the JWT expiry keys shared with FastAPI `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, `JWT_REFRESH_TOKEN_EXPIRE_DAYS`, `JWT_REFRESH_TOKEN_REMEMBER_ME_DAYS` (§4). Code reads `env.*`, never `process.env` directly. No `web/.env*` files. |
 
 Schemas live in the domain `types/` (or global `types/` once shared), and the types come from them (`type Crab = z.infer<typeof crabSchema>`). Don't hand-write a duplicate interface.
 
@@ -183,6 +190,7 @@ Schemas live in the domain `types/` (or global `types/` once shared), and the ty
 ## 8. Rendering Rules
 
 - Server Components by default. Add `"use client"` only on leaves that need state, effects, browser APIs, TanStack Query hooks or event handlers.
+- `cacheComponents` is on: reading `cookies()` (directly or through `getCurrentUser()`) outside a `<Suspense>` boundary is a build error. Protected routes get theirs from `(protected)/layout.tsx`; anything else that reads the session (e.g. `/pin`) wraps the reading component in its own `<Suspense>` with a skeleton.
 - Anything that touches cookies or `API_URL` imports `"server-only"`.
 - Each portal domain has `loading.tsx` (skeleton) and `error.tsx` where it needs them. The root has `not-found.tsx`.
 
@@ -203,9 +211,9 @@ Schemas live in the domain `types/` (or global `types/` once shared), and the ty
 
 ## 10. Checklist: Adding a Portal Domain
 
-1. Create `app/(protected)/(portal)/<domain>/` with `page.tsx` and the folders `components/`, `lib/`, `actions/`, `events/`, `types/`.
+1. Create `app/(protected)/(portal)/<domain>/` with `page.tsx` and the folders `api/`, `components/`, `lib/`, `actions/`, `events/`, `types/`.
 2. Write zod schemas in `types/` first, then infer the types.
-3. Reads: query options in `lib/`. Writes: Server Actions in `actions/`. Live: hooks in `events/`.
+3. Endpoints: one `<resource>-api.ts` per FastAPI resource in `api/`. Reads: query options in `lib/`. Writes: Server Actions in `actions/` that call `api/`. Live: hooks in `events/`.
 4. Build it from its row in `03-design-systems.md` §13 (shadcn parts, `custom-` components, lucide icons), then run the §18 review checklist.
 5. Add it to the sidebar nav and to the mapping in §9.
 6. Anything a second domain needs gets promoted to the global folder.

@@ -13,6 +13,7 @@ import {
   isActivePath,
   toAlertLabel,
 } from '@/lib/navigation';
+import { signOut } from '@/actions/sign-out';
 import { cn } from '@/lib/utils';
 
 type CustomTabBarProps = {
@@ -93,12 +94,15 @@ const CustomTabBar = ({ alertCount }: CustomTabBarProps) => {
                 ))}
                 <li className="mx-3 my-2 border-t border-border" aria-hidden />
                 <li>
-                  <SheetClose asChild>
-                    <Link href="/sign-in" className={cn(SHEET_LINK_CLASS, 'font-semibold text-destructive hover:bg-destructive/10')}>
+                  <form action={signOut}>
+                    <button
+                      type="submit"
+                      className={cn(SHEET_LINK_CLASS, 'w-full font-semibold text-destructive hover:bg-destructive/10')}
+                    >
                       <LogOut className="size-4.5" aria-hidden />
                       Sign out
-                    </Link>
-                  </SheetClose>
+                    </button>
+                  </form>
                 </li>
               </ul>
             </SheetContent>
