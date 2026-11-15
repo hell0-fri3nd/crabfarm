@@ -16,6 +16,7 @@ from app.core import (
     has_permission,
     settings,
 )
+from app.core.audit import AuditEvents, Outcome
 from .audit_services import AuditServices
 from .password_services import PasswordServices
 from ..models import Users
@@ -46,6 +47,7 @@ FAILURE_MESSAGES = {
     "USER_GET_FAILED": "Unable to retrieve user right now",
     "USER_UPDATE_FAILED": "Unable to update user right now",
     "USER_DEACTIVATE_FAILED": "Unable to deactivate user right now",
+    "USER_REACTIVATE_FAILED": "Unable to reactivate user right now",
     "CREDENTIALS_RESET_FAILED": "Unable to reset credentials right now",
 }
 
@@ -142,8 +144,20 @@ class UserServices:
                 .limit(query.size)
             ).all()
 
+            last_active = dict(self.db.exec(
+                select(AuditEvents.actor_id, func.max(AuditEvents.occurred_at))
+                .where(
+                    AuditEvents.actor_id.in_([u.id for u in users]),
+                    AuditEvents.outcome == Outcome.SUCCESS.value,
+                )
+                .group_by(AuditEvents.actor_id)
+            ).all())
+
             page = Page[UserRead](
-                items=[UserRead.model_validate(u) for u in users],
+                items=[
+                    UserRead.model_validate(u).model_copy(update={"last_active_at": last_active.get(u.id)})
+                    for u in users
+                ],
                 total=total,
                 page=query.page,
                 size=query.size,
@@ -240,6 +254,34 @@ class UserServices:
             self.db.rollback()
             logger.exception("User deactivation failed for %s", user_id)
             return self.__fail(action, "USER_DEACTIVATE_FAILED", actor, request)
+
+    def reactivate(self, user_id: UUID, actor: Users, request: Request | None = None) -> Response[UserRead]:
+        action = "user.reactivate"
+        try:
+            if not (user := self.db.get(Users, user_id)):
+                return self.__fail(action, "USER_NOT_FOUND", actor, request)
+            if self.__requires_admin(actor, user.role):
+                return self.__fail(action, "ADMIN_ROLE_REQUIRED", actor, request, target=user)
+
+            was_active = user.is_active
+            user.is_active = True
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+
+            self.audit.user(
+                action, request, "USER_REACTIVATED", actor=actor, target=user,
+                changes={"before": {"is_active": was_active}, "after": {"is_active": True}},
+            )
+            return Response(
+                success=True, message="User reactivated", code="USER_REACTIVATED",
+                details=UserRead.model_validate(user),
+            )
+
+        except Exception:
+            self.db.rollback()
+            logger.exception("User reactivation failed for %s", user_id)
+            return self.__fail(action, "USER_REACTIVATE_FAILED", actor, request)
 
     def reset_credentials(self, user_id: UUID, actor: Users, request: Request | None = None) -> Response[UserRead]:
         action = "user.reset_credentials"

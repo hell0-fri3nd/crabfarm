@@ -89,3 +89,5 @@ class UserRead(BaseModel):
     needs_onboarding: bool
     created_at: datetime | None
     updated_at: datetime | None
+    # Only GET /users fills this (newest successful audit event); other endpoints leave it null
+    last_active_at: datetime | None = None

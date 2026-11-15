@@ -240,6 +240,7 @@ Status codes listed are in addition to the defaults every protected endpoint has
 | GET | `/users/{user_id}` | 200 `USER_FOUND` | 404 |
 | PATCH | `/users/{user_id}` | 200 `USER_UPDATED` | 403 non-admin touching an admin, 404, 409 email exists |
 | DELETE | `/users/{user_id}` | 200 `USER_DEACTIVATED` (sets `is_active=false`, idempotent) | 403, 404, 409 deactivating yourself |
+| POST | `/users/{user_id}/reactivate` (no body, `user:deactivate`) | 200 `USER_REACTIVATED` (sets `is_active=true`, idempotent; password and pin unchanged) | 403 non-admin touching an admin, 404 |
 | POST | `/users/{user_id}/reset-credentials` (no body: password **and** pin back to the defaults) | 200 `CREDENTIALS_RESET` | 403, 404, 409 your own account |
 
 User management (`user:read`, `user:create`, `user:update`, `user:deactivate`, `user:reset_credentials`) is granted to `ADMIN` and `USER`, not `STAFF`. Creating, editing, deactivating or resetting an `ADMIN` account also needs `user:manage_admins` (only `ADMIN` has it). Every role changes its own password and pin through `/auth/change-password` and `/auth/change-pin`. A deactivated user gets `403 USER_INACTIVE` at sign-in and `401` on any token.

@@ -177,6 +177,25 @@ def deactivate_user(user_id: UUID, request: Request, actor: CanDeactivateUsers, 
 
 
 @router.post(
+    "/{user_id}/reactivate",
+    response_model=Response[UserRead],
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "user.reactivate"},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
+        status.HTTP_403_FORBIDDEN: ADMIN_REQUIRED,
+        status.HTTP_404_NOT_FOUND: NOT_FOUND,
+        status.HTTP_422_UNPROCESSABLE_CONTENT: INVALID,
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error reactivating the user"},
+    },
+)
+def reactivate_user(user_id: UUID, request: Request, actor: CanDeactivateUsers, services: UserServicesDep):
+    result = services.reactivate(user_id, actor=actor, request=request)
+    __raise_for(result, "user.reactivate")
+    return result
+
+
+@router.post(
     "/{user_id}/reset-credentials",
     response_model=Response[UserRead],
     status_code=status.HTTP_200_OK,

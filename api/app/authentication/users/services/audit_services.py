@@ -42,6 +42,7 @@ USER_OUTCOMES = {
     "USER_FOUND":                (Outcome.SUCCESS, status.HTTP_200_OK),
     "USER_UPDATED":              (Outcome.SUCCESS, status.HTTP_200_OK),
     "USER_DEACTIVATED":          (Outcome.SUCCESS, status.HTTP_200_OK),
+    "USER_REACTIVATED":          (Outcome.SUCCESS, status.HTTP_200_OK),
     "CREDENTIALS_RESET":            (Outcome.SUCCESS, status.HTTP_200_OK),
     "USER_NOT_FOUND":            (Outcome.FAILURE, status.HTTP_404_NOT_FOUND),
     "EMAIL_ALREADY_EXISTS":      (Outcome.FAILURE, status.HTTP_409_CONFLICT),
@@ -53,6 +54,7 @@ USER_OUTCOMES = {
     "USER_GET_FAILED":           (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
     "USER_UPDATE_FAILED":        (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
     "USER_DEACTIVATE_FAILED":    (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
+    "USER_REACTIVATE_FAILED":    (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
     "CREDENTIALS_RESET_FAILED":     (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
 }
 ONBOARDING_OUTCOMES = {
