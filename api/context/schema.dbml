@@ -34,33 +34,6 @@ Table auth.users {
   }
 }
 
-Enum auth.session_revoked_reason {
-  signed_out
-  rotated
-  pin_locked
-  reuse_detected
-  deactivated
-  credentials_reset
-}
-
-Table auth.sessions {
-  id                  uuid        [pk, note: 'uuid4 from app; = refresh token jti']
-  user_id             uuid        [not null]
-  is_remembered       boolean     [not null]
-  expires_at          timestamptz [not null, note: 'absolute end; kept on rotation']
-  failed_pin_attempts int         [not null, default: 0]
-  revoked_at          timestamptz [null]
-  revoked_reason      auth.session_revoked_reason [null]
-  created_at          timestamptz [not null, default: `now()`]
-  updated_at          timestamptz [not null, default: `now()`, note: 'onupdate now()']
-
-  indexes {
-    user_id [name: 'ix_auth_sessions_user_id']
-  }
-
-  Note: 'One row per refresh token. Revoked rows are kept; a rotated row presented again revokes every session of the user.'
-}
-
 //// ───────────── audit ─────────────
 
 Table audit.audit_events {
@@ -153,6 +126,5 @@ Table crab_management.logs {
 
 //// ───────────── relationships (within a module only) ─────────────
 
-Ref fk_sessions_user_id_users: auth.sessions.user_id > auth.users.id [delete: cascade]
 Ref fk_logs_batch_id_batches: crab_management.logs.batch_id > crab_management.batches.id
 Ref fk_logs_crab_id_crabs:    crab_management.logs.crab_id > crab_management.crabs.id

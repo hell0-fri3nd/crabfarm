@@ -15,13 +15,11 @@ SIGN_IN_OUTCOMES = {
 PIN_OUTCOMES = {
     "PIN_VERIFIED":            (Outcome.SUCCESS, status.HTTP_200_OK),
     "INVALID_PIN":             (Outcome.FAILURE, status.HTTP_401_UNAUTHORIZED),
-    "PIN_LOCKED":              (Outcome.DENIED,  status.HTTP_401_UNAUTHORIZED),
     "PIN_VERIFICATION_FAILED": (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
 }
 
 SIGN_OUT_OUTCOMES = {
-    "SIGNED_OUT":      (Outcome.SUCCESS, status.HTTP_200_OK),
-    "SIGN_OUT_FAILED": (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
+    "SIGNED_OUT": (Outcome.SUCCESS, status.HTTP_200_OK),
 }
 
 CHANGE_PIN_OUTCOMES = {
@@ -66,8 +64,6 @@ ERRORS = {
     "INCORRECT_CURRENT_PIN": ("current_pin", "Incorrect current pin"),
     "SIGN_IN_FAILED":          ("server",   "Unable to sign in right now"),
     "INVALID_PIN":             ("pin",      "Invalid pin"),
-    "PIN_LOCKED":              ("pin",      "Too many wrong PINs"),
-    "SIGN_OUT_FAILED":         ("server",   "Unable to sign out right now"),
     "PIN_VERIFICATION_FAILED": ("server",   "Unable to verify pin right now"),
     "SAME_PASSWORD":           ("new_password", "New password must be different from current password"),
     "CHANGE_PASSWORD_FAILED":  ("server",   "Unable to change password right now"),
@@ -147,8 +143,6 @@ class AuditServices:
             request=request,
             actor=user,
             http_status=http_status,
-            reason=None if outcome == Outcome.SUCCESS else code,
-            changes=self.__code_errors(code),
         )
 
     def change_password(

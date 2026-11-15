@@ -20,8 +20,6 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = 1
     jwt_refresh_token_remember_me_days: int = 7
 
-    # A refresh session is revoked after this many wrong PINs, forcing a password sign-in
-    pin_max_attempts: int = Field(default=5, ge=1)
     auth_rate_limit: int = Field(default=10, ge=1)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=1)
 

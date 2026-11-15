@@ -18,8 +18,7 @@ from app.core import (
 )
 from .audit_services import AuditServices
 from .password_services import PasswordServices
-from .session_services import SessionServices
-from ..models import SessionRevokedReason, Users
+from ..models import Users
 from ..schemas import (
     CreateUserRequest,
     ListUsersQuery,
@@ -61,7 +60,6 @@ class UserServices:
         self.db = db
         self.password_services = password_services or PasswordServices()
         self.audit = audit or AuditServices()
-        self.sessions = SessionServices(db)
 
     def __fail(
         self,
@@ -226,16 +224,12 @@ class UserServices:
             was_active = user.is_active
             user.is_active = False
             self.db.add(user)
-            revoked = self.sessions.revoke_all(user.id, SessionRevokedReason.DEACTIVATED)
             self.db.commit()
             self.db.refresh(user)
 
             self.audit.user(
                 action, request, "USER_DEACTIVATED", actor=actor, target=user,
-                changes={
-                    "before": {"is_active": was_active},
-                    "after": {"is_active": False, "sessions_revoked": revoked},
-                },
+                changes={"before": {"is_active": was_active}, "after": {"is_active": False}},
             )
             return Response(
                 success=True, message="User deactivated", code="USER_DEACTIVATED",
@@ -260,13 +254,12 @@ class UserServices:
             for field, value in self.__default_credentials().items():
                 setattr(user, field, value)
             self.db.add(user)
-            revoked = self.sessions.revoke_all(user.id, SessionRevokedReason.CREDENTIALS_RESET)
             self.db.commit()
             self.db.refresh(user)
 
             self.audit.user(
                 action, request, "CREDENTIALS_RESET", actor=actor, target=user,
-                changes={"after": {"has_default_credentials": True, "sessions_revoked": revoked}},
+                changes={"after": {"has_default_credentials": True}},
             )
             return Response(
                 success=True, message="Password and pin reset to the defaults", code="CREDENTIALS_RESET",

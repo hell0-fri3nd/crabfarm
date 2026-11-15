@@ -18,11 +18,10 @@ from app.core import (
     Provide,
     has_permission,
 )
-from .models import Sessions, Users
+from .models import Users
 from .services import (
     AuditServices,
     AuthServices,
-    SessionServices,
     UserServices,
 )
 
@@ -89,14 +88,6 @@ class TokenAuth:
         if not user.is_active:
             raise self.__reject(request, credentials, "User is deactivated", "USER_INACTIVE")
 
-        if self.token_type == "refresh":
-            session = SessionServices(db).resolve(payload.get("jti"), user)
-            # resolve() may have revoked every session on token reuse, so persist that even when rejecting
-            db.commit()
-            if not session:
-                raise self.__reject(request, credentials, "Session expired or revoked", "SESSION_REVOKED")
-            request.state.refresh_session = session
-
         # Later audit events in this request (e.g. a 422 on the body) use these as the actor
         request.state.user = user
         if self.token_type == "access":
@@ -107,16 +98,6 @@ class TokenAuth:
 
 get_current_user = TokenAuth("access")
 get_refresh_user = TokenAuth("refresh")
-
-
-class RefreshSession:
-    """The live session behind the request's refresh token (validated by get_refresh_user)."""
-
-    def __call__(self, request: Request, user: Users = Depends(get_refresh_user)) -> Sessions:
-        return request.state.refresh_session
-
-
-get_refresh_session = RefreshSession()
 
 
 class RequirePermissions:
@@ -145,8 +126,6 @@ require_permissions = RequirePermissions
 
 
 type CurrentUser = Annotated[Users, Depends(get_current_user)]
-type RefreshUser = Annotated[Users, Depends(get_refresh_user)]
-type CurrentRefreshSession = Annotated[Sessions, Depends(get_refresh_session)]
 type CanReadUsers = Annotated[Users, Depends(require_permissions(Permission.USER_READ))]
 type CanCreateUsers = Annotated[Users, Depends(require_permissions(Permission.USER_CREATE))]
 type CanUpdateUsers = Annotated[Users, Depends(require_permissions(Permission.USER_UPDATE))]

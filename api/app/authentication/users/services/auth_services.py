@@ -8,12 +8,7 @@ from sqlmodel import Session, select
 from app.core import JwtManager, settings
 from .audit_services import AuditServices
 from .password_services import PasswordServices
-from .session_services import SessionServices
-from ..models import (
-    SessionRevokedReason,
-    Sessions,
-    Users,
-)
+from ..models import Users
 from ..schemas import (
     AuthResponse,
     Response,
@@ -35,26 +30,17 @@ class AuthServices:
         self.password_services = password_services or PasswordServices()
         self.jwt_manager = jwt_manager or JwtManager()
         self.audit = audit or AuditServices()
-        self.sessions = SessionServices(db, self.jwt_manager)
-
-    def sign_out(self, user: Users, session: Sessions, request: Request | None = None) -> Response[None]:
-        try:
-            self.sessions.revoke(session, SessionRevokedReason.SIGNED_OUT)
-            self.db.commit()
-            self.audit.sign_out(request, "SIGNED_OUT", user=user)
-            return Response(success=True, message="Signed out", code="SIGNED_OUT", details=None)
-
-        except Exception:
-            self.db.rollback()
-            logger.exception("Sign-out failed for %s", user.id)
-            self.audit.sign_out(request, "SIGN_OUT_FAILED", user=user)
-            return Response(success=False, message="Unable to sign out right now", code="SIGN_OUT_FAILED")
 
     def me(self, user: Users) -> Response[UserRead]:
         return Response(
             success=True, message="User retrieved", code="USER_FOUND",
             details=UserRead.model_validate(user),
         )
+
+    def sign_out(self, user: Users, request: Request | None = None) -> AuthResponse:
+        # Tokens are stateless, so sign-out only records who left; the client drops its cookies
+        self.audit.sign_out(request, "SIGNED_OUT", user=user)
+        return AuthResponse(success=True, message="Signed out", code="SIGNED_OUT", details=None)
 
     def __still_default(self, other_hash: str, default: str) -> bool:
         """Onboarding finishes only once both the password and the pin are no longer the defaults."""
@@ -99,8 +85,13 @@ class AuthServices:
                     details=None
                 )
 
-            session, refresh_token = self.sessions.create(user, is_remembered=remember_me)
-            self.db.commit()
+            refresh_token = self.jwt_manager.create_refresh_token(
+                data={
+                    "sub": str(user.id),
+                    "role": user.role.value,
+                },
+                remember_me=remember_me,
+            )
 
             access_token = self.jwt_manager.create_access_token(
                 data={
@@ -126,14 +117,11 @@ class AuthServices:
                     "role": user.role.value,
                     "needs_onboarding": user.needs_onboarding,
                     "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "refresh_expires_at": session.expires_at.isoformat(),
+                    "refresh_token": refresh_token
                 }
             )
 
         except Exception:
-            self.db.rollback()
-            logger.exception("Sign-in failed for %s", email)
             self.audit.sign_in(request, "SIGN_IN_FAILED", email=email)
             return AuthResponse(
                 success=False,
@@ -146,33 +134,17 @@ class AuthServices:
         self,
         user: Users,
         pin: str,
-        session: Sessions,
         request: Request | None = None,
     ) -> AuthResponse:
         try:
             if not self.password_services.verify_password(pin, user.pin):
-                tries_left = self.sessions.record_failed_pin(session)
-                self.db.commit()
-
-                if tries_left == 0:
-                    self.audit.pin(request, "PIN_LOCKED", user=user)
-                    return AuthResponse(
-                        success=False,
-                        message="Too many wrong PINs. Sign in with your email and password.",
-                        code="PIN_LOCKED",
-                        details=None,
-                    )
-
                 self.audit.pin(request, "INVALID_PIN", user=user)
                 return AuthResponse(
                     success=False,
-                    message=f"Invalid pin. {tries_left} {'try' if tries_left == 1 else 'tries'} left.",
+                    message="Invalid pin",
                     code="INVALID_PIN",
                     details=None
                 )
-
-            rotated, refresh_token = self.sessions.rotate(user, session)
-            self.db.commit()
 
             access_token = self.jwt_manager.create_access_token(
                 data={
@@ -207,15 +179,11 @@ class AuthServices:
                     "email": user.email,
                     "role": user.role.value,
                     "needs_onboarding": user.needs_onboarding,
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "refresh_expires_at": rotated.expires_at.isoformat(),
+                    "access_token": access_token
                 },
             )
 
         except Exception:
-            self.db.rollback()
-            logger.exception("PIN verification failed for %s", user.id)
             self.audit.pin(request, "PIN_VERIFICATION_FAILED", user=user)
             return AuthResponse(
                 success=False,
