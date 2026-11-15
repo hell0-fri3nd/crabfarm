@@ -60,6 +60,17 @@ class UpdateUserRequest(BaseModel):
         return self
 
 
+class UpdateMeRequest(BaseModel):
+    """Self-service profile edit: only the name, so nobody can change their own email or role."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+        json_schema_extra={"example": {"name": "Juan Dela Cruz"}},
+    )
+    name: str = Field(min_length=2, max_length=150)
+
+
 class ListUsersQuery(PageQuery):
     q: str | None = Field(default=None, min_length=1, max_length=254, description="Search by name or email.")
     role: Role | None = None

@@ -1,7 +1,10 @@
+from typing import Annotated
+
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Query,
     Request,
     status,
 )
@@ -26,6 +29,8 @@ from ..dependencies import (
 )
 from ..models import Users
 from ..schemas import (
+    ActivityQuery,
+    ActivityRead,
     PinRequest,
     SignInRequest,
     ChangePasswordRequest,
@@ -33,6 +38,7 @@ from ..schemas import (
     AuthResponse,
     ErrorResponse,
     Response,
+    UpdateMeRequest,
     UserRead,
 )
 from ..services import AuthServices, PasswordServices
@@ -62,6 +68,52 @@ TOO_MANY_ATTEMPTS = {
 )
 def me(user: CurrentUser, services: AuthServicesDep):
     return services.me(user)
+
+
+@router.get(
+    "/me/activity",
+    response_model=Response[list[ActivityRead]],
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "model": ErrorResponse,
+            "description": "Missing, invalid or expired access token, or the user is deactivated",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "model": ValidationErrorResponse,
+            "description": "limit is not between 1 and 50",
+        },
+    },
+)
+def my_activity(query: Annotated[ActivityQuery, Query()], user: CurrentUser, services: AuthServicesDep):
+    return services.my_activity(user, query)
+
+
+@router.patch(
+    "/me",
+    response_model=Response[UserRead],
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "auth.update_me"},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "model": ErrorResponse,
+            "description": "Missing, invalid or expired access token, or the user is deactivated",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "model": ValidationErrorResponse,
+            "description": "Name is not 2 to 150 characters, or the body has fields other than name",
+        },
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "model": ErrorResponse,
+            "description": "Unexpected error updating the profile",
+        },
+    },
+)
+def update_me(payload: UpdateMeRequest, request: Request, user: CurrentUser, services: AuthServicesDep):
+    result = services.update_me(user, payload, request=request)
+    if result.code == "USER_UPDATE_FAILED":
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.message)
+    return result
 
 
 @router.post(

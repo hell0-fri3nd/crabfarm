@@ -6,12 +6,16 @@ from fastapi import Request
 from sqlmodel import Session, select
 
 from app.core import JwtManager, settings
+from app.core.audit import AuditEvents, Outcome
 from .audit_services import AuditServices
 from .password_services import PasswordServices
 from ..models import Users
 from ..schemas import (
+    ActivityQuery,
+    ActivityRead,
     AuthResponse,
     Response,
+    UpdateMeRequest,
     UserRead,
 )
 
@@ -36,6 +40,43 @@ class AuthServices:
             success=True, message="User retrieved", code="USER_FOUND",
             details=UserRead.model_validate(user),
         )
+
+    def my_activity(self, user: Users, query: ActivityQuery) -> Response[list[ActivityRead]]:
+        # Only what the user actually did: failed attempts and rejected tokens are security noise, not activity
+        events = self.db.exec(
+            select(AuditEvents)
+            .where(AuditEvents.actor_id == user.id, AuditEvents.outcome == Outcome.SUCCESS.value)
+            .order_by(AuditEvents.occurred_at.desc())
+            .limit(query.limit)
+        ).all()
+        return Response(
+            success=True, message="Activity retrieved", code="ACTIVITY_LISTED",
+            details=[ActivityRead.model_validate(event) for event in events],
+        )
+
+    def update_me(self, user: Users, payload: UpdateMeRequest, request: Request | None = None) -> Response[UserRead]:
+        action = "auth.update_me"
+        try:
+            before = {"name": user.name}
+            user.name = payload.name
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+
+            self.audit.user(
+                action, request, "USER_UPDATED", actor=user, target=user,
+                changes={"before": before, "after": {"name": user.name}},
+            )
+            return Response(
+                success=True, message="Profile updated", code="USER_UPDATED",
+                details=UserRead.model_validate(user),
+            )
+
+        except Exception:
+            self.db.rollback()
+            logger.exception("Profile update failed for %s", user.id)
+            self.audit.user(action, request, "USER_UPDATE_FAILED", actor=user, target=user)
+            return Response(success=False, message="Couldn't update your profile", code="USER_UPDATE_FAILED", details=None)
 
     def sign_out(self, user: Users, request: Request | None = None) -> AuthResponse:
         # Tokens are stateless, so sign-out only records who left; the client drops its cookies

@@ -1,4 +1,7 @@
 
+from datetime import datetime
+from uuid import UUID
+
 from pydantic import (
     BaseModel,
     EmailStr,
@@ -6,6 +9,20 @@ from pydantic import (
     Field,
     field_validator,
 )
+
+
+class ActivityQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    limit: int = Field(default=5, ge=1, le=50, description="How many of the newest events to return.")
+
+
+class ActivityRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    action: str
+    target_label: str | None
+    occurred_at: datetime
 
 
 

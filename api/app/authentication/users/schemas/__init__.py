@@ -1,4 +1,6 @@
 from .auth_schemas import (
+    ActivityQuery,
+    ActivityRead,
     PinRequest,
     SignInRequest,
     ChangePasswordRequest,
@@ -9,6 +11,7 @@ from .auth_schemas import (
 from .user_schemas import (
     CreateUserRequest,
     UpdateUserRequest,
+    UpdateMeRequest,
     ListUsersQuery,
     UserRead,
 )
