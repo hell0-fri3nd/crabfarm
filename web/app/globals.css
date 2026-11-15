@@ -167,3 +167,8 @@
   outline: 2px solid var(--ring);
   outline-offset: -1px;
 }
+
+[aria-invalid='true']:focus-visible,
+[data-slot='input-group']:has([data-slot='input-group-control'][aria-invalid='true']:focus-visible) {
+  outline-color: var(--destructive);
+}

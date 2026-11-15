@@ -371,7 +371,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | Long work (> 3 s) | Determinate progress, estimate, cancel (sticker PDF, CSV export). |
 | Empty | `custom-empty-state`: icon, one-line title, a hint for how to fill it, one action. |
 | No results | Same component, with **Clear filters**. |
-| Error | Plain cause + fix + action. Field errors sit under the field, linked by `aria-describedby`. |
+| Error | Plain cause + fix + action. Field errors sit under the field, linked by `aria-describedby`. An invalid field (`aria-invalid`) keeps a red border and a **red focus ring** (`--destructive`), never the green `--ring`. |
 | Partial | Show what loaded and mark what failed (one sensor offline ≠ the whole dashboard failing). |
 | Success | A clear end state (Peak-End) and the next step ready. |
 | Long text | Truncate with a tooltip or wrap; never break the layout. Test long names and emails. |
