@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { logTypeSchema } from '@/types/crab-log';
 import { sensorKindSchema } from '@/types/sensor';
 import { severitySchema } from '@/types/severity';
 
@@ -8,6 +9,7 @@ export type LogTab = z.infer<typeof logTabSchema>;
 
 export const logViewSchema = z.enum(['table', 'chart']);
 export type LogView = z.infer<typeof logViewSchema>;
+
 export const datePresetSchema = z.enum(['today', '7d', '30d']);
 export type DatePreset = z.infer<typeof datePresetSchema>;
 
@@ -17,33 +19,11 @@ export type LevelFilter = z.infer<typeof levelFilterSchema>;
 export { sensorKindSchema };
 export type { SensorKind } from '@/types/sensor';
 
-export const logTypeSchema = z.enum(['actual', 'prediction']);
-export type LogType = z.infer<typeof logTypeSchema>;
+export { logTypeSchema };
+export type { ApiLog, LogType, LogsPage } from '@/types/crab-log';
 
 export const logTypeFilterSchema = z.enum(['all', ...logTypeSchema.options]);
 export type LogTypeFilter = z.infer<typeof logTypeFilterSchema>;
-
-const apiDecimalSchema = z.union([z.string(), z.number()]).pipe(z.coerce.number());
-
-export const apiLogSchema = z.object({
-  id: z.number().int().positive(),
-  batch_id: z.number().int().positive().nullable(),
-  crab_id: z.number().int().positive(),
-  user_id: z.uuid(),
-  log_type: logTypeSchema,
-  width_mm: apiDecimalSchema.nullable(),
-  weight_g: apiDecimalSchema.nullable(),
-  created_at: z.iso.datetime({ offset: true }),
-});
-export type ApiLog = z.infer<typeof apiLogSchema>;
-
-export const logsPageSchema = z.object({
-  items: z.array(apiLogSchema),
-  total: z.number().int().nonnegative(),
-  page: z.number().int(),
-  size: z.number().int(),
-});
-export type LogsPage = z.infer<typeof logsPageSchema>;
 
 export const crabLogSchema = z.object({
   id: z.string(),

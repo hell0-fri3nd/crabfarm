@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { crabLogsApi } from '@/api/crab-logs-api';
 import { crabsApi } from '@/api/crabs-api';
 import { teamApi } from '@/api/team-api';
 import { getCurrentUser } from '@/lib/auth';
@@ -9,7 +10,6 @@ import type { ApiResult } from '@/types/api';
 
 import { toChartPoints } from './chart-points';
 import { EMPTY_CRAB_LOG_PAGE, toCrabLog, toCrabLogPage, toLogsQuery, toPageCount } from './crab-log-query';
-import { logsApi } from '../api/logs-api';
 
 import type { LogContext } from './crab-log-query';
 import type { CrabLog, CrabLogChart, CrabLogPage, LogsSearchParams } from '../types/logs';
@@ -38,14 +38,14 @@ export const loadCrabLogPage = async (
   const query = toLogsQuery(params, context.crabs, now, params.page);
   if (!query) return { ok: true, page: EMPTY_CRAB_LOG_PAGE };
 
-  const result = await logsApi.list(query);
+  const result = await crabLogsApi.list(query);
   if (!result.ok) return failed(result);
 
   const lastPage = toPageCount(result.data.total);
   if (params.page <= lastPage || result.data.total === 0) return { ok: true, page: toCrabLogPage(result.data, context) };
 
   const lastQuery = toLogsQuery({ ...params, page: lastPage }, context.crabs, now, lastPage);
-  const last = lastQuery ? await logsApi.list(lastQuery) : result;
+  const last = lastQuery ? await crabLogsApi.list(lastQuery) : result;
   return last.ok ? { ok: true, page: toCrabLogPage(last.data, context) } : failed(last);
 };
 
@@ -62,7 +62,7 @@ export const loadAllCrabLogs = async (
     const query = toLogsQuery(params, context.crabs, now, page, EXPORT_PAGE_SIZE);
     if (!query) break;
 
-    const result = await logsApi.list(query);
+    const result = await crabLogsApi.list(query);
     if (!result.ok) return failed(result);
 
     total = result.data.total;
