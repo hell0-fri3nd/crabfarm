@@ -24,7 +24,7 @@ Architecture and layering rules are in `01-architecture.md`.
 
 - **Resources are plural nouns in kebab-case:** `/batches`, `/crabs`, `/logs`, `/forecasts`, `/devices`, `/sensors`, `/cameras`.
 - **No domain segment in the URL.** The domain is a code concern, so the URL is `/batches`, not `/crab-management/batches`. The resource router's `prefix` is the resource itself, matching `/auth` and `/users` today.
-- **Nest at most one level**, and only when the child can't exist without the parent: `/crabs/{crab_id}/logs`. Cross-cutting queries use the top-level collection with filters: `/logs?batch_id=...`.
+- **Nest at most one level**, and only when the child can't exist without the parent. Logs are the exception, by decision: one `/logs` router, so a crab's logs are read with `GET /logs/{crab_id}` and created with `POST /logs` (`crab_id` in the body). Cross-cutting queries use the top-level collection with filters: `/logs?batch_id=...`.
 - **Path parameters** are named `{<resource>_id}`: `{batch_id}`, `{device_id}`.
 - **Actions** (non-CRUD verbs) are allowed only when no resource fits. They are always `POST`, in kebab-case:
   - Auth flows: `/auth/sign-in`, `/auth/sign-in/pin`, `/auth/change-password`, `/auth/change-pin` (existing).
@@ -271,8 +271,9 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 | GET | `/crabs` (`?batch_id=&q=`) | 200 | — |
 | POST | `/crabs` | 201 | 404 batch, 409 tag/QR exists |
 | GET / PATCH / DELETE | `/crabs/{crab_id}` | 200 | 404 |
-| GET | `/logs` (`?batch_id=&crab_id=&from=&to=`) | 200 | — |
-| POST | `/crabs/{crab_id}/logs` | 201 | 404 crab, 400 date out of range |
+| GET | `/logs` (`AnyRole`; `?page=&size=` (size defaults to **7**, max 100) `&batch_id=&crab_id=&log_type=&from=&to=&sort=`, `sort` ∈ `±created_at`, `±width_mm`, `±weight_g`, default `-created_at`; `from` inclusive, `to` exclusive, on `created_at`) | 200 `LOGS_LISTED` (a page; an empty page is still 200) | 422 bad filter, `from ≥ to`, or sort |
+| GET | `/logs/{crab_id}` (`AnyRole`; same query as `/logs` without `crab_id`, paginated; an unknown crab is an empty page, not a 404) | 200 `LOGS_LISTED` | 422 |
+| POST | `/logs` (`AnyRole`; `{crab_id, batch_id?, log_type = actual, width_mm?, weight_g?}`, at least one measurement) | 201 `LOG_CREATED` (`user_id` = the caller) | 404 `crab_not_found` (`crab_id`), 404 `batch_not_found` (`batch_id`), read from the foreign-key violation on insert (no lookup first), 422 |
 | GET / PATCH / DELETE | `/logs/{log_id}` | 200 | 404 |
 | POST | `/forecasts` (`{batch_id \| crab_id}`) | 202 `FORECAST_QUEUED` | 404 subject, 409 run already queued, 503 broker |
 | GET | `/forecasts` (`?batch_id=&crab_id=`) | 200 latest runs | — |

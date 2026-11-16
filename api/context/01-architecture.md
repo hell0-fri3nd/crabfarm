@@ -229,7 +229,7 @@ Never call a sync `Session` directly inside an `async def`.
 ## 10. Worker
 
 - Separate process: `python -m app.worker`. Same settings and codebase, no FastAPI.
-- **Camera detection job:** reads cameras directly (RTSP/USB) → YOLOv8 → computes crab width (px → mm using the camera's calibration) → publishes `vision.detection.{camera_id}`. **Vision writes nothing to the database.** Results are live-only (SSE). A width becomes permanent only when a user records it as a crab log (`POST /crabs/{crab_id}/logs`).
+- **Camera detection job:** reads cameras directly (RTSP/USB) → YOLOv8 → computes crab width (px → mm using the camera's calibration) → publishes `vision.detection.{camera_id}`. **Vision writes nothing to the database.** Results are live-only (SSE). A width becomes permanent only when a user records it as a crab log (`POST /logs`).
 - **Sensor persistence job:** durable queue bound to `farm.*.sensors.#` → validates → batch-inserts readings through `monitoring.sensors` services.
 - Cameras are started and stopped by `worker.camera.{start|stop}` events that the API publishes. The worker never exposes HTTP.
 - The YOLOv8 model is loaded once at worker start through `infrastructure/vision`. The API process never loads YOLO.
@@ -358,4 +358,4 @@ Predicts **carapace width and weight for each of the next 7 days**, based on the
 - `authentication/users/router/auth.py` declares `async def` endpoints but uses the sync `Session`. Convert them to `def` (§7).
 - `main.py` has `CRAB_ROUTERS` commented out. Re-enable it once `crab_management` routers follow §5.
 - `crab_management/crab/` has no `__init__.py`, so `crab_management/api.py` currently picks up `crab.router` as a module, not an `APIRouter`. Add `crab/__init__.py` that exports `router` (and the services).
-- `crab_management/logs/` only has `models.py`. Complete the resource anatomy when logs endpoints are built.
+- `crab_management/logs/` has list and create only; `GET`/`PATCH`/`DELETE /logs/{log_id}` aren't built yet.
