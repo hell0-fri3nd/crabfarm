@@ -72,9 +72,9 @@ const SIMPLE_EVENTS: Record<string, string> = {
   'auth.sign_in.pin': 'Unlocked with PIN',
   'auth.sign_out': 'Signed out',
   'auth.onboarding': 'Finished first sign-in setup',
-  'auth.change_password': 'Changed their password',
-  'auth.change_pin': 'Changed their PIN',
-  'auth.update_me': 'Updated their name',
+  'auth.change_password': 'Changed password',
+  'auth.change_pin': 'Changed PIN',
+  'auth.update_me': 'Changed name',
   'auth.access_token_rejected': 'Session expired or invalid',
   'auth.refresh_token_rejected': 'Saved sign-in expired or invalid',
 };
@@ -117,14 +117,34 @@ const describeSuccess = (event: AuditEvent, crabs: Crab[]) => {
   if (action === 'log.create') return describeLog(event, crabs);
   if (action === 'crab.sticker_download') return describeStickers(event);
   if (action === 'batch.create') return target_label ? `Started Batch ${target_label}` : 'Started a batch';
-  if (action === 'auth.role_denied') return `Tried a page their role can't use${event.http_path ? ` · ${event.http_path}` : ''}`;
+  if (action === 'auth.role_denied') return event.http_path ? `Blocked by role · ${event.http_path}` : 'Blocked by role';
 
   const targetEvent = TARGET_EVENTS[action];
   if (targetEvent) return target_label ? `${targetEvent} ${target_label}` : targetEvent;
   return SIMPLE_EVENTS[action] ?? action;
 };
 
-const FAILED_PREFIX: Record<string, string> = { 'auth.sign_in': 'Sign-in failed', 'auth.sign_in.pin': 'PIN unlock failed' };
+const FAILED_EVENTS: Record<string, string> = {
+  'auth.sign_in': 'Sign-in failed',
+  'auth.sign_in.pin': 'PIN unlock failed',
+  'auth.onboarding': "Couldn't finish first sign-in setup",
+  'auth.change_password': "Couldn't change password",
+  'auth.change_pin': "Couldn't change PIN",
+  'auth.update_me': "Couldn't change name",
+  'log.create': "Couldn't log a crab",
+  'batch.create': "Couldn't start a batch",
+  'crab.sticker_download': "Couldn't download QR stickers",
+  'user.create': "Couldn't add user",
+  'user.update': "Couldn't update user",
+  'user.deactivate': "Couldn't deactivate",
+  'user.reactivate': "Couldn't reactivate",
+  'user.reset_credentials': "Couldn't reset password and PIN for",
+};
+
+const describeFailure = ({ action, target_label }: AuditEvent) => {
+  const failed = FAILED_EVENTS[action] ?? 'An action failed';
+  return action in TARGET_EVENTS && target_label ? `${failed} ${target_label}` : failed;
+};
 
 // audit_events.reason holds the service's result code; people read the cause, not the code
 const REASON_LABELS: Record<string, string> = {
@@ -161,7 +181,7 @@ export const describeEvent = (event: AuditEvent, crabs: Crab[]) => {
     return describeSuccess(event, crabs);
   }
 
-  const failed = FAILED_PREFIX[event.action] ?? `${describeSuccess(event, crabs)}, not done`;
+  const failed = describeFailure(event);
   return event.reason ? `${failed} · ${toReasonLabel(event.reason)}` : failed;
 };
 
