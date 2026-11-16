@@ -5,7 +5,7 @@ const GROUP_KEYS = ['a', 'b', 'c'];
 const ROW_KEYS = ['1', '2', '3', '4', '5'];
 
 const FeedingLoading = () => (
-  <div className="mx-auto flex w-full max-w-6xl flex-col gap-8" aria-busy="true">
+  <div className="flex w-full flex-col gap-8" aria-busy="true">
     <p className="sr-only" role="status">
       Loading feeding…
     </p>

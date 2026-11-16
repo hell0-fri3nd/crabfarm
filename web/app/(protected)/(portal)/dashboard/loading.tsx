@@ -5,7 +5,7 @@ const TILE_KEYS = ['temperature', 'ph', 'salinity', 'ammonia', 'oxygen'];
 const STAT_KEYS = ['cages', 'crabs', 'batch', 'next-feed'];
 
 const DashboardLoading = () => (
-  <div className="mx-auto flex w-full max-w-6xl flex-col gap-8" aria-busy="true">
+  <div className="flex w-full flex-col gap-8" aria-busy="true">
     <p className="sr-only" role="status">
       Loading the dashboard…
     </p>

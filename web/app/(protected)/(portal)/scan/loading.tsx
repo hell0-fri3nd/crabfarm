@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 const STEP_KEYS = ['scan', 'weigh', 'save'];
 
 const ScanLoading = () => (
-  <div className="mx-auto flex w-full max-w-6xl flex-col gap-8" aria-busy="true">
+  <div className="flex w-full flex-col gap-8" aria-busy="true">
     <p className="sr-only" role="status">
       Loading the scanner…
     </p>

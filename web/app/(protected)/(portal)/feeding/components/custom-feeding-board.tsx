@@ -116,7 +116,7 @@ const CustomFeedingBoard = ({ groups, initialCages, nextFeed }: CustomFeedingBoa
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+    <div className="flex w-full flex-col gap-8">
       <CustomPageHeader
         title="Feeding"
         status={

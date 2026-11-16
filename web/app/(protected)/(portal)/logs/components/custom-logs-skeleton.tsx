@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 const ROW_KEYS = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'];
 
 const CustomLogsSkeleton = () => (
-  <div className="mx-auto flex w-full max-w-6xl flex-col gap-8" aria-busy="true">
+  <div className="flex w-full flex-col gap-8" aria-busy="true">
     <p className="sr-only" role="status">
       Loading logs…
     </p>

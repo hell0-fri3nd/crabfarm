@@ -3,7 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 const CARD_KEYS = ['password', 'pin', 'preferences', 'activity'];
 
 const ProfileLoading = () => (
-  <div className="mx-auto flex w-full max-w-6xl flex-col gap-8" aria-busy="true">
+  <div className="flex w-full flex-col gap-8" aria-busy="true">
     <p className="sr-only" role="status">
       Loading your profile…
     </p>

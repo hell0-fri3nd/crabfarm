@@ -5,7 +5,7 @@ const STICKER_KEYS = ['one', 'two', 'three', 'four', 'five', 'six'];
 const FIELD_KEYS = ['batch', 'group', 'crabs', 'size', 'paper'];
 
 const QrStickersLoading = () => (
-  <div className="mx-auto flex w-full max-w-6xl flex-col gap-8" aria-busy="true">
+  <div className="flex w-full flex-col gap-8" aria-busy="true">
     <p className="sr-only" role="status">
       Loading QR stickers…
     </p>

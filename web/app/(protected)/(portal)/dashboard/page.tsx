@@ -19,7 +19,7 @@ import {
 export const metadata: Metadata = { title: 'Dashboard' };
 
 const DashboardPage = () => (
-  <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+  <div className="flex w-full flex-col gap-8">
     <CustomBriefing firstName={toFirstName(PREVIEW_USER.name)} summary={PREVIEW_BRIEFING} />
     <CustomSummaryStats stats={PREVIEW_SUMMARY} />
     <CustomAlertList alerts={PREVIEW_ALERTS} />
