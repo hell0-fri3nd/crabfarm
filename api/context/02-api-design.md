@@ -129,7 +129,7 @@ To keep OpenAPI typed, make `Response` generic: `Response[BatchRead]`, `Response
 | `400 Bad Request` | Well-formed request rejected by a business rule | incorrect current password/pin, a log date before the batch's stocking date |
 | `401 Unauthorized` | Missing, invalid or expired token, or wrong sign-in credentials; include `WWW-Authenticate: Bearer` for token errors | `/auth/sign-in` wrong password |
 | `403 Forbidden` | Authenticated but the role isn't allowed | `STAFF` calling `POST /users` |
-| `404 Not Found` | The resource in the path doesn't exist (or is soft-deleted) | `GET /crabs/{unknown}`, sign-in email not found (existing) |
+| `404 Not Found` | The resource in the path doesn't exist (or is soft-deleted), or a collection that returns 404 when empty (only where the catalog says so) | `GET /crabs/{unknown}`, sign-in email not found (existing), `GET /batches` with no batches (`BATCHES_NOT_FOUND`) |
 | `409 Conflict` | Duplicate unique value or a state conflict | email already used, new password same as current, device offline, camera already running |
 | `413 Content Too Large` | Upload over the limit | QR image > `settings.max_upload_mb` |
 | `415 Unsupported Media Type` | Wrong upload type | QR scan with a non-image |
@@ -265,7 +265,7 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 
 | Method | Path | Success | Notable errors |
 |---|---|---|---|
-| GET | `/batches` (`AnyRole`) | 200 `BATCHES_LISTED` | 401 |
+| GET | `/batches` (`AnyRole`) | 200 `BATCHES_LISTED` | 401, 404 `BATCHES_NOT_FOUND` (no batches yet) |
 | POST | `/batches` (`DeveloperOrAdmin`) | 201 `BATCH_CREATED` | 403 `STAFF`, 409 code exists |
 | GET / PATCH / DELETE | `/batches/{batch_id}` | 200 | 404, 409 batch has crabs (delete) |
 | GET | `/crabs` (`?batch_id=&q=`) | 200 | — |

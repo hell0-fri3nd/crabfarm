@@ -1,8 +1,7 @@
-from fastapi import APIRouter
-
-from .crab import router as crab_router
-
-
+from .batches import batches_router
+from .crab import crab_router
 ROUTERS = [
-    crab_router
+    crab_router,
+    batches_router
+    
 ]

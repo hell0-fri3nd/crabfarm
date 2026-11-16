@@ -23,3 +23,6 @@
 /api/app/infrastructure/__pycache__
 /api/app/infrastructure/messaging/__pycache__
 /api/app/infrastructure/streaming/__pycache__
+/api/app/crab_management/batches/services/__pycache__
+/api/app/crab_management/batches/__pycache__
+/api/app/crab_management/batches/models/__pycache__

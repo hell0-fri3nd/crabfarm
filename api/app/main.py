@@ -9,11 +9,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import settings, register_exception_handlers
-from app.authentication import ROUTERS as AUTH_ROUTERS
+
 from app.infrastructure.messaging import RabbitClient, SYSTEM_EVENTS
 from app.infrastructure.streaming import StreamHub
+
 from app.system import ROUTERS as SYSTEM_ROUTERS
-# from app.crab_management import ROUTERS as CRAB_ROUTERS
+from app.authentication import ROUTERS as AUTH_ROUTERS
+from app.crab_management import ROUTERS as CRAB_ROUTERS
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +77,8 @@ This API provides endpoints for interacting with the Crabfarm backend.
 
     for router in (
         *AUTH_ROUTERS,
+        *CRAB_ROUTERS,
         *SYSTEM_ROUTERS,
-        # *CRAB_ROUTERS,
     ):
         app.include_router(router, prefix=settings.api_prefix)
 
