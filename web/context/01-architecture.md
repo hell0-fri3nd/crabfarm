@@ -202,8 +202,8 @@ Schemas live in the domain `types/` (or global `types/` once shared), and the ty
 | `dashboard` | `/sensors`, `/sensors/stream`, `/forecasts`, `/forecasts/stream` |
 | `logs` | `/logs`, `/crabs`, `/batches`, `/sensors/{id}/readings` |
 | `feeding` | `/devices`, `/devices/{id}/commands`, `/devices/stream` (schedules: API resource to add) |
-| `qr-stickers` | `/batches` (list, create), `/crabs` (groups and crabs for every batch), `POST /crabs/sticker-downloads` (called before each PDF/PNG download; the file is only made when it succeeds, so the API's role check and audit decide), `GET /audit-events?action=crab.sticker_download&outcome=SUCCESS&size=5` (recent downloads: the API returns everyone's for ADMIN/DEVELOPER and only the caller's for STAFF; **See all** opens `/activity?q=sticker`) |
-| `scan` | `/qr/scan`, `/cameras`, `/cameras/{id}/start\|stop`, `/detections/stream`, `POST /crabs/{id}/logs` |
+| `qr-stickers` | `/batches` (list, create), `/crabs` (groups and crabs for every batch), `POST /crabs/sticker-downloads` (called before each PDF/PNG download; the file is only made when it succeeds, so the API's role check and audit decide), `GET /audit-events?action=crab.sticker_download&outcome=SUCCESS&size=5` (recent downloads: the API returns everyone's for ADMIN/DEVELOPER and only the caller's for STAFF; **See all** opens `/activity?type=stickers&range=12m&result=success` (the same slice, so the counts match)) |
+| `scan` | `/batches` + `/crabs` (a scanned or typed code `B<batch>-<crab>` must name an existing batch and crab; zod rejects it otherwise, e.g. "There's no Batch 3 yet"), `POST /logs` (Save log: `weight_g` and `width_mm` sent exactly as typed, no unit conversion; weight is typed until the scale is wired), `GET /logs?from=<farm day start>&size=1` (logged-today count), `GET /audit-events?action=log.create&outcome=SUCCESS&size=5` (recent logs: everyone's for ADMIN/DEVELOPER, the caller's own for STAFF). Later: `/qr/scan`, `/cameras`, `/cameras/{id}/start\|stop`, `/detections/stream` |
 | `assistant` | `/assistant/chat` |
 | `users` | `/users` |
 | `activity` | audit endpoints |

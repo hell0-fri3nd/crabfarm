@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Camera, CameraOff, CircleCheck, QrCode, ScanLine } from 'lucide-react';
+import { Camera, CameraOff, CircleCheck, ScanLine } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,17 +11,19 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
-import { barcodeResultsSchema, crabCodeSchema, manualCodeFormSchema } from '../types/scan';
+import type { Batch, Crab } from '@/types/crab-management';
+
+import { barcodeResultsSchema, buildManualCodeFormSchema, buildStickerSchema } from '../types/scan';
 
 import type { ManualCodeFormInput, ManualCodeFormOutput, ScannedSticker } from '../types/scan';
 
 type CameraState = 'off' | 'starting' | 'on' | 'blocked' | 'unavailable';
 
 type CustomScanViewportProps = {
+  batches: Batch[];
+  crabs: Crab[];
   sticker: ScannedSticker | null;
-  testCodes: readonly string[];
   onScan: (sticker: ScannedSticker) => void;
-  onCameraChange: (isOn: boolean) => void;
 };
 
 const DETECT_EVERY_MS = 500;
@@ -42,13 +44,14 @@ const createDetector = () => {
   return typeof Detector === 'function' ? new Detector({ formats: ['qr_code'] }) : null;
 };
 
-const CustomScanViewport = ({ sticker, testCodes, onScan, onCameraChange }: CustomScanViewportProps) => {
+const CustomScanViewport = ({ batches, crabs, sticker, onScan }: CustomScanViewportProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraState, setCameraState] = useState<CameraState>('off');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [canDetect, setCanDetect] = useState(true);
   const [readError, setReadError] = useState<string | null>(null);
-  const [testCodeIndex, setTestCodeIndex] = useState(0);
+  const stickerSchema = useMemo(() => buildStickerSchema(batches, crabs), [batches, crabs]);
+  const manualCodeFormSchema = useMemo(() => buildManualCodeFormSchema(batches, crabs), [batches, crabs]);
   const form = useForm<ManualCodeFormInput, unknown, ManualCodeFormOutput>({
     resolver: zodResolver(manualCodeFormSchema),
     mode: 'onSubmit',
@@ -75,17 +78,17 @@ const CustomScanViewport = ({ sticker, testCodes, onScan, onCameraChange }: Cust
       const results = barcodeResultsSchema.safeParse(await detector.detect(video));
       const rawValue = results.success ? results.data[0]?.rawValue : undefined;
       if (!rawValue) return;
-      const parsed = crabCodeSchema.safeParse(rawValue);
+      const parsed = stickerSchema.safeParse(rawValue);
       if (parsed.success) {
         setReadError(null);
         onScan(parsed.data);
       } else {
-        setReadError("That QR isn't a CrabFarm sticker. Try the sticker on the crab's back.");
+        setReadError(parsed.error.issues[0]?.message ?? "That QR isn't a CrabFarm sticker. Try the sticker on the crab's back.");
       }
     }, DETECT_EVERY_MS);
 
     return () => window.clearInterval(timer);
-  }, [isCameraOn, sticker, onScan]);
+  }, [isCameraOn, sticker, onScan, stickerSchema]);
 
   const handleStartCamera = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -101,7 +104,6 @@ const CustomScanViewport = ({ sticker, testCodes, onScan, onCameraChange }: Cust
       setStream(nextStream);
       setCanDetect(createDetector() !== null);
       setCameraState('on');
-      onCameraChange(true);
     } catch (error) {
       const isBlocked = error instanceof DOMException && error.name === 'NotAllowedError';
       setCameraState(isBlocked ? 'blocked' : 'unavailable');
@@ -111,19 +113,11 @@ const CustomScanViewport = ({ sticker, testCodes, onScan, onCameraChange }: Cust
   const handleStopCamera = () => {
     setStream(null);
     setCameraState('off');
-    onCameraChange(false);
   };
 
   const handleManualCode = ({ code }: ManualCodeFormOutput) => {
     onScan(code);
     form.reset({ code: '' });
-  };
-
-  const handleTestCode = () => {
-    const parsed = crabCodeSchema.safeParse(testCodes[testCodeIndex % testCodes.length]);
-    if (!parsed.success) return;
-    setTestCodeIndex((current) => current + 1);
-    onScan(parsed.data);
   };
 
   return (
@@ -213,7 +207,7 @@ const CustomScanViewport = ({ sticker, testCodes, onScan, onCameraChange }: Cust
                     autoComplete="off"
                     autoCapitalize="characters"
                     spellCheck={false}
-                    placeholder="B3-B-02"
+                    placeholder="B1-A1"
                     aria-invalid={fieldState.invalid}
                     aria-describedby={fieldState.invalid ? 'manual-code-error' : 'manual-code-hint'}
                     className="h-11 bg-card font-mono"
@@ -223,19 +217,12 @@ const CustomScanViewport = ({ sticker, testCodes, onScan, onCameraChange }: Cust
                   </Button>
                 </div>
                 <FieldError id="manual-code-error" errors={[fieldState.error]} />
-                <FieldDescription id="manual-code-hint">Spaces and lowercase are fine.</FieldDescription>
+                <FieldDescription id="manual-code-hint">
+                  Batch, then crab, like B1-A1. Spaces and lowercase are fine.
+                </FieldDescription>
               </Field>
             )}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            className="mt-3 h-11 w-full text-muted-foreground sm:w-auto"
-            onClick={handleTestCode}
-          >
-            <QrCode aria-hidden />
-            Use a test code
-          </Button>
         </form>
       </CardContent>
     </Card>

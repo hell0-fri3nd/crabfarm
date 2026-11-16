@@ -11,35 +11,42 @@ import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 
 import type { Step } from '@/components/custom/custom-stepper';
+import type { Batch, Crab } from '@/types/crab-management';
 
+import CustomRecentLogs from './custom-recent-logs';
 import CustomReviewForm from './custom-review-form';
 import CustomScanViewport from './custom-scan-viewport';
-import CustomSessionLog from './custom-session-log';
-import { getPreviewCameraWidth, getPreviewForecast, getPreviewScaleReading } from '../lib/preview-scan';
+import { createLog } from '../actions/create-log';
+import { RECENT_LOGS, toRecentLog } from '../lib/recent-logs';
 import { measurementSchema } from '../types/scan';
 
-import type { LoggedCrab, MeasurementInput, MeasurementOutput, ScannedSticker } from '../types/scan';
+import type { RecentLogs } from './custom-recent-logs';
+import type { MeasurementInput, MeasurementOutput, ScannedSticker } from '../types/scan';
 
 type CustomScanWorkspaceProps = {
-  loggedToday: number;
-  testCodes: readonly string[];
+  batches: Batch[];
+  crabs: Crab[];
+  initialRecent: RecentLogs;
+  loggedToday: number | null;
   isScaleConnected: boolean;
 };
 
 const STEPS: Step[] = [
   { id: 'scan', title: 'Scan sticker', description: 'Camera reads the QR' },
-  { id: 'weigh', title: 'Weigh and measure', description: 'Scale and camera fill it in' },
+  { id: 'weigh', title: 'Weigh and measure', description: 'Type the weight and width' },
   { id: 'save', title: 'Check and save', description: 'Fix anything that looks off' },
 ];
 
-const EMPTY_MEASUREMENT: MeasurementInput = { weight_g: '', width_cm: '' };
+const EMPTY_MEASUREMENT: MeasurementInput = { weight_g: '', width_mm: '' };
 
-const LOGGED_AT_FORMAT = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
+const MEASUREMENT_FIELDS = { weight_g: 'weight_g', width_mm: 'width_mm' } as const;
 
-const CustomScanWorkspace = ({ loggedToday, testCodes, isScaleConnected }: CustomScanWorkspaceProps) => {
+const isMeasurementField = (field: string): field is keyof typeof MEASUREMENT_FIELDS => field in MEASUREMENT_FIELDS;
+
+const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday, isScaleConnected }: CustomScanWorkspaceProps) => {
   const [sticker, setSticker] = useState<ScannedSticker | null>(null);
-  const [isCameraOn, setIsCameraOn] = useState(false);
-  const [entries, setEntries] = useState<LoggedCrab[]>([]);
+  const [recent, setRecent] = useState(initialRecent);
+  const [savedCount, setSavedCount] = useState(0);
   const form = useForm<MeasurementInput, unknown, MeasurementOutput>({
     resolver: zodResolver(measurementSchema),
     mode: 'onTouched',
@@ -50,18 +57,14 @@ const CustomScanWorkspace = ({ loggedToday, testCodes, isScaleConnected }: Custo
 
   const isMeasured = measurementSchema.safeParse({ ...EMPTY_MEASUREMENT, ...measurement }).success;
   const stepIndex = Math.min(Number(sticker !== null) + Number(sticker !== null && isMeasured), STEPS.length - 1);
-  const forecast = sticker ? getPreviewForecast(sticker.code) : null;
 
   const handleScan = useCallback(
     (scanned: ScannedSticker) => {
       setSticker(scanned);
-      form.reset({
-        weight_g: isScaleConnected ? String(getPreviewScaleReading(scanned.code)) : '',
-        width_cm: isCameraOn ? String(getPreviewCameraWidth(scanned.code)) : '',
-      });
+      form.reset(EMPTY_MEASUREMENT);
       form.setFocus('weight_g');
     },
-    [form, isCameraOn, isScaleConnected],
+    [form],
   );
 
   const handleRescan = () => {
@@ -69,21 +72,31 @@ const CustomScanWorkspace = ({ loggedToday, testCodes, isScaleConnected }: Custo
     form.reset(EMPTY_MEASUREMENT);
   };
 
-  const handleSave = ({ weight_g, width_cm }: MeasurementOutput) => {
+  const handleSave = async ({ weight_g, width_mm }: MeasurementOutput) => {
     if (!sticker) return;
-    const entry: LoggedCrab = {
-      id: crypto.randomUUID(),
-      code: sticker.code,
+
+    const result = await createLog({
+      crab_id: sticker.crab_id,
+      batch_id: sticker.batch_id,
       weight_g,
-      width_cm,
-      logged_at_label: LOGGED_AT_FORMAT.format(new Date()),
-    };
-    setEntries((current) => [entry, ...current]);
+      width_mm,
+    });
+
+    if (!result.ok) {
+      result.errors.forEach(({ field, message }) => {
+        if (isMeasurementField(field)) form.setError(MEASUREMENT_FIELDS[field], { message });
+      });
+      notify.error(`Couldn't save ${sticker.code}`, { description: `${result.message} Nothing was saved.` });
+      return;
+    }
+
+    const record = toRecentLog(result.data, { crabs, loggedAt: new Date().toISOString(), loggedBy: 'You' });
+    setRecent((current) => ({ ...current, records: [record, ...current.records].slice(0, RECENT_LOGS) }));
+    setSavedCount((count) => count + 1);
     setSticker(null);
     form.reset(EMPTY_MEASUREMENT);
-    notify.undo('Log saved · scanner ready for the next crab', {
-      description: `${entry.code} · ${weight_g} g · ${width_cm} cm`,
-      onUndo: () => setEntries((current) => current.filter(({ id }) => id !== entry.id)),
+    notify.success('Log saved · scanner ready for the next crab', {
+      description: `${sticker.code} · ${weight_g} g · ${width_mm} mm`,
     });
   };
 
@@ -93,7 +106,7 @@ const CustomScanWorkspace = ({ loggedToday, testCodes, isScaleConnected }: Custo
         title="Scan crab"
         status={
           <>
-            <span className="tabular-nums">{loggedToday + entries.length} logged today</span>
+            {loggedToday !== null && <span className="tabular-nums">{loggedToday + savedCount} logged today</span>}
             <span className={cn('flex items-center gap-1.5 font-semibold', isScaleConnected ? 'text-primary' : 'text-warning')}>
               <Scale className="size-4" aria-hidden />
               <span aria-hidden className={cn('size-2 rounded-full', isScaleConnected ? 'bg-primary' : 'bg-warning')} />
@@ -106,25 +119,18 @@ const CustomScanWorkspace = ({ loggedToday, testCodes, isScaleConnected }: Custo
 
       <CustomStepper steps={STEPS} currentIndex={stepIndex} label="Scan progress" />
 
-      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
-        <CustomScanViewport
-          sticker={sticker}
-          testCodes={testCodes}
-          onScan={handleScan}
-          onCameraChange={setIsCameraOn}
-        />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+        <CustomScanViewport batches={batches} crabs={crabs} sticker={sticker} onScan={handleScan} />
         <CustomReviewForm
           form={form}
           sticker={sticker}
-          forecast={forecast}
           isScaleConnected={isScaleConnected}
-          isCameraOn={isCameraOn}
           onSave={handleSave}
           onRescan={handleRescan}
         />
       </div>
 
-      <CustomSessionLog entries={entries} />
+      <CustomRecentLogs recent={recent} />
     </div>
   );
 };

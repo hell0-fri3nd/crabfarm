@@ -1,48 +1,31 @@
 'use client';
 
-import { Controller, useWatch } from 'react-hook-form';
+import { Controller } from 'react-hook-form';
 import { Check, Lock, QrCode, RotateCcw, Scale } from 'lucide-react';
 
 import type { UseFormReturn } from 'react-hook-form';
 
 import CustomCardHeading from '@/components/custom/custom-card-heading';
-import CustomSeverityAlert from '@/components/custom/custom-severity-alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 
-import { checkAgainstForecast } from '../lib/forecast-check';
-import { measurementSchema } from '../types/scan';
-
-import type { Forecast, MeasurementInput, MeasurementOutput, ScannedSticker } from '../types/scan';
+import type { MeasurementInput, MeasurementOutput, ScannedSticker } from '../types/scan';
 
 type CustomReviewFormProps = {
   form: UseFormReturn<MeasurementInput, unknown, MeasurementOutput>;
   sticker: ScannedSticker | null;
-  forecast: Forecast | null;
   isScaleConnected: boolean;
-  isCameraOn: boolean;
-  onSave: (values: MeasurementOutput) => void;
+  onSave: (values: MeasurementOutput) => Promise<void>;
   onRescan: () => void;
 };
 
-const CustomReviewForm = ({
-  form,
-  sticker,
-  forecast,
-  isScaleConnected,
-  isCameraOn,
-  onSave,
-  onRescan,
-}: CustomReviewFormProps) => {
-  const weight = useWatch({ control: form.control, name: 'weight_g' });
-  const parsedWeight = measurementSchema.shape.weight_g.safeParse(weight);
-  const forecastGap = forecast && parsedWeight.success ? checkAgainstForecast(parsedWeight.data, forecast) : null;
-
+const CustomReviewForm = ({ form, sticker, isScaleConnected, onSave, onRescan }: CustomReviewFormProps) => {
+  const isSaving = form.formState.isSubmitting;
   const lockedFields = sticker
     ? [
-        { id: 'locked-batch', label: 'Batch', value: sticker.batch_code },
+        { id: 'locked-batch', label: 'Batch', value: sticker.batch_label },
         { id: 'locked-group', label: 'Group', value: sticker.group },
         { id: 'locked-crab', label: 'Crab', value: sticker.code },
       ]
@@ -63,7 +46,7 @@ const CustomReviewForm = ({
         }
       />
       <CardContent className="px-4 sm:px-6">
-        <form noValidate onSubmit={form.handleSubmit(onSave)}>
+        <form noValidate onSubmit={(event) => void form.handleSubmit(onSave)(event)}>
           <FieldGroup className="gap-6">
             {sticker ? (
               <fieldset className="flex flex-col gap-3" aria-describedby="locked-hint">
@@ -110,6 +93,7 @@ const CustomReviewForm = ({
                       {...field}
                       id="weight_g"
                       inputMode="decimal"
+                      readOnly={isSaving}
                       autoComplete="off"
                       aria-invalid={fieldState.invalid}
                       aria-describedby={fieldState.invalid ? 'weight_g-error' : 'weight_g-hint'}
@@ -124,48 +108,37 @@ const CustomReviewForm = ({
                 )}
               />
               <Controller
-                name="width_cm"
+                name="width_mm"
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="width_cm">Width (cm)</FieldLabel>
+                    <FieldLabel htmlFor="width_mm">Width (mm)</FieldLabel>
                     <Input
                       {...field}
-                      id="width_cm"
+                      id="width_mm"
                       inputMode="decimal"
+                      readOnly={isSaving}
                       autoComplete="off"
                       aria-invalid={fieldState.invalid}
-                      aria-describedby={fieldState.invalid ? 'width_cm-error' : 'width_cm-hint'}
+                      aria-describedby={fieldState.invalid ? 'width_mm-error' : 'width_mm-hint'}
                       className="h-11 bg-card tabular-nums"
                     />
-                    <FieldError id="width_cm-error" errors={[fieldState.error]} />
-                    <FieldDescription id="width_cm-hint">
-                      {isCameraOn
-                        ? 'Measured by camera. Check with calipers if it looks off.'
-                        : 'Measure across the shell with calipers.'}
-                    </FieldDescription>
+                    <FieldError id="width_mm-error" errors={[fieldState.error]} />
+                    <FieldDescription id="width_mm-hint">Measure across the shell with calipers, in millimetres.</FieldDescription>
                   </Field>
                 )}
               />
             </div>
 
-            {forecastGap && (
-              <CustomSeverityAlert
-                level={forecastGap.level}
-                title={forecastGap.title}
-                description={forecastGap.description}
-              />
-            )}
-
             <div className="flex flex-col gap-2">
               <Button
                 type="submit"
                 className="h-11 w-full"
-                disabled={!sticker || form.formState.isSubmitting}
+                disabled={!sticker || isSaving}
                 aria-describedby={sticker ? undefined : 'save-disabled-reason'}
               >
                 <Check aria-hidden />
-                {form.formState.isSubmitting ? 'Saving…' : 'Save log'}
+                {isSaving ? 'Saving…' : 'Save log'}
               </Button>
               {!sticker && (
                 <p id="save-disabled-reason" className="text-center text-xs text-muted-foreground">

@@ -43,3 +43,6 @@ export const toTimeAgo = (iso: string, now = Date.now()) => {
 
   return relativeTime.format(Math.round(seconds / unitSeconds), unit);
 };
+
+// Manila has no daylight saving, so its day always starts at +08:00
+export const toFarmDayStart = (now = new Date()) => `${dayKey.format(now)}T00:00:00+08:00`;
