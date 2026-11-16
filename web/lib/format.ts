@@ -24,6 +24,18 @@ const FARM_TIME_ZONE = 'Asia/Manila';
 const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: FARM_TIME_ZONE });
 const timeFormat = new Intl.DateTimeFormat('en-US', { timeZone: FARM_TIME_ZONE, hour: 'numeric', minute: '2-digit' });
 const dateFormat = new Intl.DateTimeFormat('en-US', { timeZone: FARM_TIME_ZONE, month: 'short', day: 'numeric' });
+const fullDateTimeFormat = new Intl.DateTimeFormat('en-GB', {
+  timeZone: FARM_TIME_ZONE,
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true,
+});
+const weekdayFormat = new Intl.DateTimeFormat('en-GB', { timeZone: FARM_TIME_ZONE, weekday: 'long', day: 'numeric', month: 'short' });
 
 // Day words follow the farm's clock, not the server's, so "Today" matches what the user sees on the wall
 export const toDayTimeLabel = (iso: string, now = new Date()) => {
@@ -46,3 +58,16 @@ export const toTimeAgo = (iso: string, now = Date.now()) => {
 
 // Manila has no daylight saving, so its day always starts at +08:00
 export const toFarmDayStart = (now = new Date()) => `${dayKey.format(now)}T00:00:00+08:00`;
+
+export const toFarmDayKey = (iso: string) => dayKey.format(new Date(iso));
+
+export const toFarmTime = (iso: string) => timeFormat.format(new Date(iso));
+
+export const toFarmDateTime = (iso: string) => fullDateTimeFormat.format(new Date(iso));
+
+export const toFarmDayLabel = (iso: string, now = new Date()) => {
+  const day = toFarmDayKey(iso);
+  if (day === dayKey.format(now)) return 'Today';
+  if (day === dayKey.format(new Date(now.getTime() - 24 * 60 * 60 * 1000))) return 'Yesterday';
+  return weekdayFormat.format(new Date(iso));
+};

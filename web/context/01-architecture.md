@@ -206,7 +206,7 @@ Schemas live in the domain `types/` (or global `types/` once shared), and the ty
 | `scan` | `/batches` + `/crabs` (a scanned or typed code `B<batch>-<crab>` must name an existing batch and crab; zod rejects it otherwise, e.g. "There's no Batch 3 yet"), `POST /logs` (Save log: `weight_g` and `width_mm` sent exactly as typed, no unit conversion; weight is typed until the scale is wired), `GET /logs?from=<farm day start>&size=1` (logged-today count), `GET /audit-events?action=log.create&outcome=SUCCESS&size=5` (recent logs: everyone's for ADMIN/DEVELOPER, the caller's own for STAFF). Later: `/qr/scan`, `/cameras`, `/cameras/{id}/start\|stop`, `/detections/stream` |
 | `assistant` | `/assistant/chat` |
 | `users` | `/users` |
-| `activity` | audit endpoints |
+| `activity` | `GET /audit-events` with `action=` repeated for the chosen type (Sign-ins `auth.*` writes, Crab logs `log.create`, Batches `batch.create`, QR stickers `crab.sticker_download`, Users `user.*` writes, Security `auth.role_denied` + token rejections; reads like `log.list` are left out), `outcome=` (succeeded / failed / denied), `from` (today, 7 days, 30 days, 12 months on the farm clock), `q`, `mine` / `actor_id` (Person filter, ADMIN/DEVELOPER only), `size` 20 → 100 via **Load older**. STAFF always get only their own events (the API enforces it). `/users` names the actors for ADMIN/DEVELOPER; `/crabs` names crabs in log events |
 | `profile` | `/auth/me`, `/auth/change-password`, `/auth/change-pin` |
 
 ## 10. Checklist: Adding a Portal Domain

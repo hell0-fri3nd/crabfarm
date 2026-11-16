@@ -4,7 +4,8 @@ import type { DownloadRecord, StickerDownloadEvent } from '../types/qr-stickers'
 
 export const RECENT_DOWNLOADS = 5;
 
-export const ACTIVITY_DOWNLOADS_HREF = `/activity?${new URLSearchParams({ q: 'sticker' })}`;
+// Same slice as the history card (successful downloads, the whole audit window), so "See all N" lands on N events
+export const ACTIVITY_DOWNLOADS_HREF = `/activity?${new URLSearchParams({ type: 'stickers', range: '12m', result: 'success' })}`;
 
 const DOWNLOADED_AT_FORMAT = new Intl.DateTimeFormat('en-US', {
   weekday: 'short',

@@ -311,7 +311,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | **QR stickers** | Download stickers | Select, ToggleGroup, Button, Table, Sonner | `custom-qr-sticker`, `custom-sticker-sheet`, `custom-print-bar` | Plus, Download, QrCode |
 | **Scan** | Save log | Card, Input, Button, Alert, Sonner | `custom-stepper`, `custom-scan-viewport`, `custom-severity-alert` | Scale, Camera, CameraOff, ScanLine, RotateCcw, Check, TriangleAlert, CircleCheck |
 | **Logs** | Export CSV | Tabs, Input, Select, Popover, Calendar, Table, Pagination | `custom-severity-badge`, `custom-empty-state` | Search, Calendar, FileDown, OctagonAlert, TriangleAlert, Info |
-| **Activity** | — (read-only) | ToggleGroup, Input, Table, Badge | `custom-empty-state` | Search, History, ChevronDown |
+| **Activity** | — (read-only) | ToggleGroup, Select, Input, Table, Badge | `custom-empty-state` | Search, History, ChevronDown, CircleX, ShieldAlert |
 | **Users** | Add user | Table, Avatar, Select, Dialog, AlertDialog, Sonner | `custom-status-pill` | UserPlus, Search, KeyRound, UserX, UserCheck |
 | **My profile** | Save | Card, Avatar, Form, Input, InputOTP, AlertDialog, Sonner | `custom-password-rules`, `custom-theme-switch` | Pencil, Mail, LogOut, Sun, Moon, Check, Save |
 | **Assistant** | Send | ScrollArea, Textarea, Button, Card, Alert, AlertDialog | `custom-chat-message`, `custom-source-chip`, `custom-action-proposal` | Bot, Plus, Info, ScrollText, ThumbsUp, ThumbsDown, Send, Square |

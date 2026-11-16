@@ -1,8 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
-import { toActorInitials, toActorLabel } from '../lib/activity-filters';
-
 import type { ActivityEntry } from '../types/activity';
 
 type CustomActivityActorProps = {
@@ -18,10 +16,12 @@ const CustomActivityActor = ({ entry }: CustomActivityActorProps) => (
           entry.actor_kind === 'person' ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
         )}
       >
-        {toActorInitials(entry)}
+        {entry.actor_initials}
       </AvatarFallback>
     </Avatar>
-    <span className="min-w-0 text-sm font-medium">{toActorLabel(entry)}</span>
+    <span className="min-w-0 truncate text-sm font-medium" title={entry.actor_name}>
+      {entry.actor_name}
+    </span>
   </span>
 );
 
