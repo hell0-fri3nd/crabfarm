@@ -1,4 +1,4 @@
-import { PAPER, SHEET_MARGIN_MM, STICKER_GAP_MM, getSheetLayout, toSizeMm } from './sticker-sheet';
+import { CUT_LINE, PAPER, SHEET_MARGIN_MM, STICKER_GAP_MM, getSheetLayout, toPages, toSizeMm } from './sticker-sheet';
 
 import type { Paper, Sticker, StickerSize } from '../types/qr-stickers';
 
@@ -15,18 +15,36 @@ type RenderSheetOptions = {
 const PX_PER_MM = 12;
 const INK = '#0a1f15';
 const MUTED_INK = '#3d5a4a';
-const BRAND_INK = '#0a7652';
-const CUT_LINE = '#c9d6ce';
+const CUT_INK = '#d4d4d4';
+
+const PNG_SIGNATURE_BYTES = 8;
+const IHDR_CHUNK_BYTES = 25;
+
+const CRC_TABLE = Array.from({ length: 256 }, (_, index) =>
+  Array.from({ length: 8 }).reduce<number>((crc) => (crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1), index),
+);
+
+const crc32 = (bytes: Uint8Array) =>
+  (bytes.reduce((crc, byte) => (CRC_TABLE[(crc ^ byte) & 0xff] ?? 0) ^ (crc >>> 8), 0xffffffff) ^ 0xffffffff) >>> 0;
+
+// Canvas PNGs carry no resolution, so viewers assume 72–96 dpi; a pHYs chunk makes "print at 100%" true size
+const withPrintResolution = async (blob: Blob) => {
+  const pixelsPerMetre = PX_PER_MM * 1000;
+  const chunk = new Uint8Array(21);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, 9);
+  chunk.set([0x70, 0x48, 0x59, 0x73], 4);
+  view.setUint32(8, pixelsPerMetre);
+  view.setUint32(12, pixelsPerMetre);
+  chunk[16] = 1;
+  view.setUint32(17, crc32(chunk.subarray(4, 17)));
+
+  const png = new Uint8Array(await blob.arrayBuffer());
+  const headerEnd = PNG_SIGNATURE_BYTES + IHDR_CHUNK_BYTES;
+  return new Blob([png.subarray(0, headerEnd), chunk, png.subarray(headerEnd)], { type: 'image/png' });
+};
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-const loadImage = (src: string) =>
-  new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(`Couldn't load ${src}`));
-    image.src = src;
-  });
 
 const getMonoFamily = () =>
   getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim() || 'ui-monospace, monospace';
@@ -35,89 +53,87 @@ const drawSticker = (
   context: CanvasRenderingContext2D,
   sticker: Sticker,
   qrCanvas: HTMLCanvasElement,
-  mark: HTMLImageElement,
   x: number,
   y: number,
   side: number,
   monoFamily: string,
 ) => {
   context.save();
-  context.strokeStyle = CUT_LINE;
-  context.lineWidth = 2;
-  context.setLineDash([10, 8]);
+  const unit = side / 100;
+  const inset = (CUT_LINE.width * unit) / 2;
+  context.strokeStyle = CUT_INK;
+  context.lineWidth = CUT_LINE.width * unit;
+  context.setLineDash([CUT_LINE.dash * unit, CUT_LINE.gap * unit]);
   context.beginPath();
-  context.roundRect(x, y, side, side, side * 0.06);
+  context.roundRect(x + inset, y + inset, side - inset * 2, side - inset * 2, CUT_LINE.radius * unit);
   context.stroke();
   context.restore();
 
-  const qrSide = side * 0.58;
+  const qrSide = side * 0.62;
   context.imageSmoothingEnabled = false;
-  context.drawImage(qrCanvas, x + (side - qrSide) / 2, y + side * 0.07, qrSide, qrSide);
+  context.drawImage(qrCanvas, x + (side - qrSide) / 2, y + side * 0.08, qrSide, qrSide);
 
   context.textAlign = 'center';
   context.textBaseline = 'alphabetic';
   const centerX = x + side / 2;
 
   context.fillStyle = INK;
-  context.font = `700 ${side * 0.1}px ${monoFamily}`;
-  context.fillText(sticker.code, centerX, y + side * 0.78);
+  context.font = `700 ${side * 0.11}px ${monoFamily}`;
+  context.fillText(sticker.code, centerX, y + side * 0.83);
 
   context.fillStyle = MUTED_INK;
-  context.font = `500 ${side * 0.062}px ${monoFamily}`;
-  context.fillText(`${sticker.batch_code} · Group ${sticker.group}`, centerX, y + side * 0.87);
-
-  const markSide = side * 0.07;
-  context.fillStyle = BRAND_INK;
-  context.font = `700 ${side * 0.058}px sans-serif`;
-  const brandWidth = context.measureText('CrabFarm').width;
-  const brandX = centerX - (brandWidth + markSide * 1.3) / 2;
-  context.drawImage(mark, brandX, y + side * 0.9, markSide, markSide);
-  context.textAlign = 'left';
-  context.fillText('CrabFarm', brandX + markSide * 1.3, y + side * 0.955);
+  context.font = `500 ${side * 0.065}px ${monoFamily}`;
+  context.fillText(`${sticker.batch_label} · Group ${sticker.group}`, centerX, y + side * 0.92);
 };
 
 export const renderSheetPng = async ({ stickers, qrCanvases, size, paper, onProgress, signal }: RenderSheetOptions) => {
   const { columns, perPage } = getSheetLayout(size, paper);
   const { widthMm, heightMm } = PAPER[paper];
-  const pageCount = Math.max(Math.ceil(stickers.length / perPage), 1);
-  const pageWidth = widthMm * PX_PER_MM;
-  const pageHeight = heightMm * PX_PER_MM;
   const side = toSizeMm(size) * PX_PER_MM;
   const gap = STICKER_GAP_MM * PX_PER_MM;
   const margin = SHEET_MARGIN_MM * PX_PER_MM;
 
-  const canvas = document.createElement('canvas');
-  canvas.width = pageWidth;
-  canvas.height = pageHeight * pageCount;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error("This browser can't draw images.");
-
-  context.fillStyle = '#ffffff';
-  context.fillRect(0, 0, canvas.width, canvas.height);
-
-  const mark = await loadImage('/brand/crabfarm-mark.svg');
   const monoFamily = getMonoFamily();
+  const pages: Blob[] = [];
+  let drawn = 0;
 
-  for (const [index, sticker] of stickers.entries()) {
-    if (signal.aborted) throw new DOMException('Download cancelled', 'AbortError');
+  for (const pageStickers of toPages(stickers, perPage)) {
+    const canvas = document.createElement('canvas');
+    canvas.width = widthMm * PX_PER_MM;
+    canvas.height = heightMm * PX_PER_MM;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error("This browser can't draw images.");
 
-    const qrCanvas = qrCanvases.get(sticker.code);
-    if (!qrCanvas) throw new Error(`The QR for ${sticker.code} isn't ready yet.`);
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
 
-    const page = Math.floor(index / perPage);
-    const slot = index % perPage;
-    const x = margin + (slot % columns) * (side + gap);
-    const y = page * pageHeight + margin + Math.floor(slot / columns) * (side + gap);
+    for (const [slot, sticker] of pageStickers.entries()) {
+      if (signal.aborted) throw new DOMException('Download cancelled', 'AbortError');
 
-    drawSticker(context, sticker, qrCanvas, mark, x, y, side, monoFamily);
-    onProgress(index + 1, stickers.length);
-    await nextFrame();
+      const qrCanvas = qrCanvases.get(sticker.code);
+      if (!qrCanvas) throw new Error(`The QR for ${sticker.code} isn't ready yet.`);
+
+      const x = margin + (slot % columns) * (side + gap);
+      const y = margin + Math.floor(slot / columns) * (side + gap);
+      drawSticker(context, sticker, qrCanvas, x, y, side, monoFamily);
+      drawn += 1;
+      onProgress(drawn, stickers.length);
+      await nextFrame();
+    }
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error("A page couldn't be turned into a PNG.");
+    pages.push(await withPrintResolution(blob));
   }
 
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) throw new Error("The sheet couldn't be turned into a PNG.");
-  return blob;
+  return pages;
 };
+
+// Browsers drop or block downloads fired in the same tick, so each page waits its turn
+const DOWNLOAD_SPACING_MS = 400;
+const REVOKE_AFTER_MS = 10_000;
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export const downloadBlob = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob);
@@ -125,5 +141,12 @@ export const downloadBlob = (blob: Blob, fileName: string) => {
   link.href = url;
   link.download = fileName;
   link.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
+};
+
+export const downloadBlobs = async (files: { blob: Blob; fileName: string }[]) => {
+  for (const [index, { blob, fileName }] of files.entries()) {
+    if (index > 0) await wait(DOWNLOAD_SPACING_MS);
+    downloadBlob(blob, fileName);
+  }
 };

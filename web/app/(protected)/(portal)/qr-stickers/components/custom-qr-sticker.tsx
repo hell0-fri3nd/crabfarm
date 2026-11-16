@@ -1,9 +1,10 @@
-import Image from 'next/image';
 import { QRCodeSVG } from 'qrcode.react';
 
 import type { CSSProperties } from 'react';
 
 import { cn } from '@/lib/utils';
+
+import { CUT_LINE, QR_LEVEL, toQrLogo } from '../lib/sticker-sheet';
 
 import type { Sticker } from '../types/qr-stickers';
 
@@ -13,32 +14,45 @@ type CustomQrStickerProps = {
   className?: string;
 };
 
-// Printed on white vinyl, so the sticker keeps print colours and scales its type with the sticker (03 §7 exception)
+const QR_SVG_SIZE = 256;
+
+// Printed on white vinyl, so the sticker keeps print colours and sizes everything from its own width (03 §7 exception).
+// The box has no padding or radius of its own: those would resolve against the parent container, not the sticker.
 const CustomQrSticker = ({ sticker, style, className }: CustomQrStickerProps) => (
   <figure
     style={style}
-    className={cn(
-      '@container flex aspect-square w-full flex-col items-center justify-center rounded-[6cqw] border border-dashed border-neutral-300 bg-white p-[5cqw] text-neutral-950 print:break-inside-avoid',
-      className,
-    )}
+    className={cn('@container relative aspect-square w-full bg-white text-neutral-950 print:break-inside-avoid', className)}
   >
-    <QRCodeSVG
-      value={sticker.code}
-      level="M"
-      marginSize={0}
-      title={`QR code for crab ${sticker.code}`}
-      className="h-auto w-[58cqw]"
-    />
-    <figcaption className="mt-[5cqw] flex flex-col items-center gap-[2cqw]">
-      <span className="font-mono text-[10cqw] leading-none font-bold tracking-wider">{sticker.code}</span>
-      <span className="text-[6cqw] leading-none text-neutral-600">
-        {sticker.batch_code} · Group {sticker.group}
-      </span>
-      <span className="flex items-center gap-[1.5cqw] text-[5.5cqw] leading-none font-bold text-emerald-800">
-        <Image src="/brand/crabfarm-mark.svg" alt="" width={12} height={12} className="h-[6cqw] w-auto" />
-        CrabFarm
-      </span>
-    </figcaption>
+    <svg aria-hidden viewBox="0 0 100 100" className="absolute inset-0 size-full text-neutral-300">
+      <rect
+        x={CUT_LINE.width / 2}
+        y={CUT_LINE.width / 2}
+        width={100 - CUT_LINE.width}
+        height={100 - CUT_LINE.width}
+        rx={CUT_LINE.radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={CUT_LINE.width}
+        strokeDasharray={`${CUT_LINE.dash} ${CUT_LINE.gap}`}
+      />
+    </svg>
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-[3cqw]">
+      <QRCodeSVG
+        value={sticker.code}
+        size={QR_SVG_SIZE}
+        level={QR_LEVEL}
+        marginSize={0}
+        imageSettings={toQrLogo(QR_SVG_SIZE)}
+        title={`QR code for crab ${sticker.code}`}
+        className="h-auto w-[62cqw]"
+      />
+      <figcaption className="flex flex-col items-center gap-[2cqw]">
+        <span className="font-mono text-[11cqw] leading-none font-bold tracking-wider">{sticker.code}</span>
+        <span className="text-[6.5cqw] leading-none text-neutral-600">
+          {sticker.batch_label} · Group {sticker.group}
+        </span>
+      </figcaption>
+    </div>
   </figure>
 );
 

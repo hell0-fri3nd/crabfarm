@@ -202,7 +202,7 @@ Schemas live in the domain `types/` (or global `types/` once shared), and the ty
 | `dashboard` | `/sensors`, `/sensors/stream`, `/forecasts`, `/forecasts/stream` |
 | `logs` | `/logs`, `/crabs`, `/batches`, `/sensors/{id}/readings` |
 | `feeding` | `/devices`, `/devices/{id}/commands`, `/devices/stream` (schedules: API resource to add) |
-| `qr-stickers` | `/crabs`, `/batches` |
+| `qr-stickers` | `/batches` (list, create), `/crabs` (groups and crabs for every batch), `POST /crabs/sticker-downloads` (called before each PDF/PNG download; the file is only made when it succeeds, so the API's role check and audit decide), `GET /audit-events?action=crab.sticker_download&outcome=SUCCESS&size=5` (recent downloads: the API returns everyone's for ADMIN/DEVELOPER and only the caller's for STAFF; **See all** opens `/activity?q=sticker`) |
 | `scan` | `/qr/scan`, `/cameras`, `/cameras/{id}/start\|stop`, `/detections/stream`, `POST /crabs/{id}/logs` |
 | `assistant` | `/assistant/chat` |
 | `users` | `/users` |

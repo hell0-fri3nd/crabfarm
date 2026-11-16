@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
 import CustomQrSticker from './custom-qr-sticker';
-import { PAPER, SHEET_MARGIN_MM, STICKER_GAP_MM, getSheetLayout, toSizeMm } from '../lib/sticker-sheet';
+import { PAPER, SHEET_MARGIN_MM, STICKER_GAP_MM, getSheetLayout, toPages, toSizeMm } from '../lib/sticker-sheet';
 
 import type { Paper, Sticker, StickerSize } from '../types/qr-stickers';
 
@@ -19,9 +19,6 @@ const PRINT_SHEET_ID = 'qr-print-sheet';
 const subscribe = () => () => undefined;
 const getIsMounted = () => true;
 const getServerIsMounted = () => false;
-
-const chunk = <T,>(items: T[], size: number) =>
-  Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, index * size + size));
 
 const CustomPrintSheet = ({ stickers, size, paper }: CustomPrintSheetProps) => {
   const isMounted = useSyncExternalStore(subscribe, getIsMounted, getServerIsMounted);
@@ -42,7 +39,7 @@ const CustomPrintSheet = ({ stickers, size, paper }: CustomPrintSheetProps) => {
   return createPortal(
     <div id={PRINT_SHEET_ID} aria-hidden className="hidden print:block">
       <style>{printCss}</style>
-      {chunk(stickers, perPage).map((page) => (
+      {toPages(stickers, perPage).map((page) => (
         <section
           key={page[0]?.code}
           className="box-border break-after-page bg-white"

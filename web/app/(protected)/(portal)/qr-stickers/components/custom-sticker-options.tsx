@@ -7,28 +7,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
-import {
-  FILE_TYPE_HINTS,
-  PAPER,
-  STICKER_SIZE_HINTS,
-  getCrabNumbers,
-  toPaperDescription,
-} from '../lib/sticker-sheet';
+import CustomCrabPicker from './custom-crab-picker';
+import { FILE_TYPE_HINTS, PAPER, STICKER_SIZE_HINTS, toBatchLabel, toPaperDescription } from '../lib/sticker-sheet';
 import { fileTypeSchema, paperSchema, stickerSizeSchema } from '../types/qr-stickers';
 
-import type { Batch, FileType, Paper, StickerSize } from '../types/qr-stickers';
+import type { CrabSelection } from './custom-crab-picker';
+import type { Batch, Crab, FileType, Paper, StickerSize } from '../types/qr-stickers';
 
 type CustomStickerOptionsProps = {
   batches: Batch[];
   batch: Batch;
-  group: string;
-  crabNumbers: number[];
+  crabs: Crab[];
+  groups: string[];
+  selection: CrabSelection;
   size: StickerSize;
   paper: Paper;
   fileType: FileType;
-  onBatchChange: (code: string) => void;
-  onGroupChange: (group: string) => void;
-  onCrabNumbersChange: (numbers: number[]) => void;
+  onBatchChange: (batchId: number) => void;
+  onSelectionChange: (selection: CrabSelection) => void;
   onSizeChange: (size: StickerSize) => void;
   onPaperChange: (paper: Paper) => void;
   onFileTypeChange: (fileType: FileType) => void;
@@ -36,17 +32,19 @@ type CustomStickerOptionsProps = {
 
 const SEGMENT_ITEM_CLASS = 'h-11 flex-1 text-sm data-[state=on]:bg-accent data-[state=on]:font-semibold';
 
+const CREATED_FORMAT = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+
 const CustomStickerOptions = ({
   batches,
   batch,
-  group,
-  crabNumbers,
+  crabs,
+  groups,
+  selection,
   size,
   paper,
   fileType,
   onBatchChange,
-  onGroupChange,
-  onCrabNumbersChange,
+  onSelectionChange,
   onSizeChange,
   onPaperChange,
   onFileTypeChange,
@@ -66,11 +64,7 @@ const CustomStickerOptions = ({
     if (parsed.success) onFileTypeChange(parsed.data);
   };
 
-  const handleGroupChange = (value: string) => {
-    if (value) onGroupChange(value);
-  };
-
-  const handleCrabsChange = (values: string[]) => onCrabNumbersChange(values.map(Number));
+  const handleBatchChange = (value: string) => onBatchChange(Number(value));
 
   return (
     <Card className="gap-5 rounded-2xl py-5 sm:py-6">
@@ -83,66 +77,24 @@ const CustomStickerOptions = ({
           <FieldGroup className="gap-6">
             <Field>
               <FieldLabel htmlFor="sticker-batch">Batch</FieldLabel>
-              <Select value={batch.code} onValueChange={onBatchChange}>
+              <Select value={String(batch.id)} onValueChange={handleBatchChange}>
                 <SelectTrigger id="sticker-batch" className="h-11 w-full bg-card">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {batches.map(({ code, tagged_count }) => (
-                    <SelectItem key={code} value={code}>
-                      {code}
-                      <span className="text-muted-foreground">· {tagged_count} tagged</span>
+                  {batches.map((option) => (
+                    <SelectItem key={option.id} value={String(option.id)}>
+                      {toBatchLabel(option)}
+                      <span className="text-muted-foreground">
+                        · started {CREATED_FORMAT.format(new Date(option.created_at))}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
 
-            <Field>
-              <FieldLabel id="sticker-group-label">Group</FieldLabel>
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                value={group}
-                onValueChange={handleGroupChange}
-                aria-labelledby="sticker-group-label"
-                className="w-full bg-card"
-              >
-                {batch.groups.map((option) => (
-                  <ToggleGroupItem key={option} value={option} className={SEGMENT_ITEM_CLASS}>
-                    {option}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </Field>
-
-            <Field>
-              <FieldLabel id="sticker-crabs-label">Crabs</FieldLabel>
-              <ToggleGroup
-                type="multiple"
-                variant="outline"
-                spacing={2}
-                value={crabNumbers.map(String)}
-                onValueChange={handleCrabsChange}
-                aria-labelledby="sticker-crabs-label"
-                aria-describedby="sticker-crabs-hint"
-                className="flex-wrap justify-start"
-              >
-                {getCrabNumbers(batch).map((crabNumber) => (
-                  <ToggleGroupItem
-                    key={crabNumber}
-                    value={String(crabNumber)}
-                    className="h-11 min-w-13 rounded-full border-border bg-card px-4 font-mono text-sm font-semibold text-muted-foreground shadow-none data-[state=on]:border-primary/60 data-[state=on]:bg-primary/10 data-[state=on]:text-primary"
-                  >
-                    {group}
-                    {crabNumber}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-              <FieldDescription id="sticker-crabs-hint">
-                {crabNumbers.length} of {batch.crabs_per_group} picked. Tap a crab to leave it out.
-              </FieldDescription>
-            </Field>
+            <CustomCrabPicker crabs={crabs} groups={groups} selection={selection} onSelectionChange={onSelectionChange} />
           </FieldGroup>
         </section>
 

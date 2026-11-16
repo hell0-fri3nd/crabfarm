@@ -18,11 +18,20 @@ type CustomPrintBarProps = {
   pageSummary: string;
   fileType: FileType;
   progress: DownloadProgress | null;
+  isChecking: boolean;
   onDownload: () => void;
   onCancel: () => void;
 };
 
-const CustomPrintBar = ({ stickerCount, pageSummary, fileType, progress, onDownload, onCancel }: CustomPrintBarProps) => {
+const CustomPrintBar = ({
+  stickerCount,
+  pageSummary,
+  fileType,
+  progress,
+  isChecking,
+  onDownload,
+  onCancel,
+}: CustomPrintBarProps) => {
   const isEmpty = stickerCount === 0;
 
   return (
@@ -55,12 +64,13 @@ const CustomPrintBar = ({ stickerCount, pageSummary, fileType, progress, onDownl
           <Button
             type="button"
             className="h-11 w-full px-5 sm:w-auto"
-            disabled={isEmpty}
+            disabled={isEmpty || isChecking}
+            aria-busy={isChecking}
             aria-describedby="print-bar-summary"
             onClick={onDownload}
           >
             <Download aria-hidden />
-            Download {fileType.toUpperCase()}
+            {isChecking ? 'Checking…' : `Download ${fileType.toUpperCase()}`}
           </Button>
         </div>
       )}
