@@ -129,6 +129,11 @@ class AuditServices:
         changes: dict[str, Any] | None = None,
     ) -> AuditEvents | None:
         """Records a code against a resource row, e.g. `batch.create` on a Batches row."""
+        target_id = getattr(target, "id", None)
+        # crab_management still has serial ids (04 §6 #6) and target_id is a uuid column
+        if target_id is not None and not isinstance(target_id, UUID):
+            target_label, target_id = target_label or str(target_id), None
+
         return self.record_code(
             action,
             code,
@@ -136,7 +141,7 @@ class AuditServices:
             actor=actor,
             session_token=getattr(request.state, "access_token", None) if request else None,
             target_type=target_type if target else None,
-            target_id=getattr(target, "id", None),
+            target_id=target_id,
             target_label=target_label,
             changes=changes,
         )
