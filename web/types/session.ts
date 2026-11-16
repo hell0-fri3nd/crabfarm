@@ -12,9 +12,9 @@ export const currentUserSchema = z.object({
 export type CurrentUser = z.infer<typeof currentUserSchema>;
 
 const ROLE_LABELS: Record<string, string> = {
-  DEVELOPER: 'Admin',
+  DEVELOPER: 'Developer',
+  ADMIN: 'Admin',
   STAFF: 'Staff',
-  USER: 'User',
 };
 
 export const toRoleLabel = (role: string) => ROLE_LABELS[role] ?? role;

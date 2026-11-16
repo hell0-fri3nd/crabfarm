@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '../lib/role-meta';
-import { ADMIN_ROLE, inviteUserSchema, roleSchema } from '../types/users';
+import { DEVELOPER_ROLE, inviteUserSchema, roleSchema } from '../types/users';
 
 import type { FieldError as ApiFieldError } from '@/types/api';
 
@@ -29,7 +29,7 @@ type CustomInviteUserDialogProps = {
   isOpen: boolean;
   takenEmails: string[];
   onOpenChange: (isOpen: boolean) => void;
-  canManageAdmins: boolean;
+  canManageDevelopers: boolean;
   onInvite: (values: InviteUserInput) => Promise<ApiFieldError[]>;
 };
 
@@ -40,11 +40,11 @@ const DEFAULT_VALUES: InviteUserInput = { name: '', email: '', role: 'STAFF' };
 const CustomInviteUserDialog = ({
   isOpen,
   takenEmails,
-  canManageAdmins,
+  canManageDevelopers,
   onOpenChange,
   onInvite,
 }: CustomInviteUserDialogProps) => {
-  const roleOptions = roleSchema.options.filter((role) => canManageAdmins || role !== ADMIN_ROLE);
+  const roleOptions = roleSchema.options.filter((role) => canManageDevelopers || role !== DEVELOPER_ROLE);
   const form = useForm<InviteUserInput>({
     resolver: zodResolver(inviteUserSchema),
     mode: 'onTouched',

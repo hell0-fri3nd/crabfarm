@@ -4,27 +4,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 
 import { ROLE_LABELS } from '../lib/role-meta';
-import { ADMIN_ROLE, roleSchema } from '../types/users';
+import { DEVELOPER_ROLE, roleSchema } from '../types/users';
 
 import type { FarmUser, Role } from '../types/users';
 
 type CustomRoleSelectProps = {
   user: FarmUser;
-  canManageAdmins: boolean;
+  canManageDevelopers: boolean;
   onChange: (role: Role) => void;
   className?: string;
 };
 
-const toLockReason = (user: FarmUser, canManageAdmins: boolean) => {
+const toLockReason = (user: FarmUser, canManageDevelopers: boolean) => {
   if (user.is_self) return "You can't change your own role";
   if (user.status === 'deactivated') return 'Reactivate them first';
-  if (user.role === ADMIN_ROLE && !canManageAdmins) return 'Only an admin can change an admin';
+  if (user.role === DEVELOPER_ROLE && !canManageDevelopers) return 'Only a developer can change a developer';
   return undefined;
 };
 
-const CustomRoleSelect = ({ user, canManageAdmins, onChange, className }: CustomRoleSelectProps) => {
-  const lockReason = toLockReason(user, canManageAdmins);
-  const options = roleSchema.options.filter((role) => canManageAdmins || role !== ADMIN_ROLE || role === user.role);
+const CustomRoleSelect = ({ user, canManageDevelopers, onChange, className }: CustomRoleSelectProps) => {
+  const lockReason = toLockReason(user, canManageDevelopers);
+  const options = roleSchema.options.filter((role) => canManageDevelopers || role !== DEVELOPER_ROLE || role === user.role);
 
   const handleChange = (value: string) => {
     const parsed = roleSchema.safeParse(value);

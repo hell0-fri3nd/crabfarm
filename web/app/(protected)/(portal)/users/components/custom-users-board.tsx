@@ -29,10 +29,10 @@ import type { ApiUser, FarmUser, InviteUserInput, Role, UserAction, UserStatus }
 
 type CustomUsersBoardProps = {
   initialUsers: FarmUser[];
-  canManageAdmins: boolean;
+  canManageDevelopers: boolean;
 };
 
-const CustomUsersBoard = ({ initialUsers, canManageAdmins }: CustomUsersBoardProps) => {
+const CustomUsersBoard = ({ initialUsers, canManageDevelopers }: CustomUsersBoardProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -200,7 +200,7 @@ const CustomUsersBoard = ({ initialUsers, canManageAdmins }: CustomUsersBoardPro
                       <CustomUserIdentity user={user} />
                     </TableCell>
                     <TableCell className="py-3">
-                      <CustomRoleSelect user={user} canManageAdmins={canManageAdmins} onChange={(role) => handleRoleChange(user, role)} />
+                      <CustomRoleSelect user={user} canManageDevelopers={canManageDevelopers} onChange={(role) => handleRoleChange(user, role)} />
                     </TableCell>
                     <TableCell className="py-3">
                       <CustomStatusPill status={user.status} className="text-sm" />
@@ -226,7 +226,7 @@ const CustomUsersBoard = ({ initialUsers, canManageAdmins }: CustomUsersBoardPro
                     <CustomStatusPill status={user.status} className="mt-1 shrink-0" />
                   </div>
                   <p className="text-xs text-muted-foreground">Last active · {user.last_active_label}</p>
-                  <CustomRoleSelect user={user} canManageAdmins={canManageAdmins} onChange={(role) => handleRoleChange(user, role)} />
+                  <CustomRoleSelect user={user} canManageDevelopers={canManageDevelopers} onChange={(role) => handleRoleChange(user, role)} />
                   <CustomUserActions user={user} {...actionHandlers} className="[&>*]:flex-1" />
                 </Card>
               </li>
@@ -239,7 +239,7 @@ const CustomUsersBoard = ({ initialUsers, canManageAdmins }: CustomUsersBoardPro
         isOpen={isInviteOpen}
         takenEmails={users.map(({ email }) => email)}
         onOpenChange={setIsInviteOpen}
-        canManageAdmins={canManageAdmins}
+        canManageDevelopers={canManageDevelopers}
         onInvite={handleInvite}
       />
       <CustomUserConfirmDialog action={pendingAction} onConfirm={handleConfirm} onCancel={() => setPendingAction(null)} />

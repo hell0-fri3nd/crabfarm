@@ -1,23 +1,21 @@
 import { toDayTimeLabel } from '@/lib/format';
 
-import { ADMIN_ROLE } from '../types/users';
-
 import type { ApiUser, FarmUser, Role } from '../types/users';
 
 export const ROLE_LABELS = {
-  DEVELOPER: 'Admin',
-  USER: 'User',
+  DEVELOPER: 'Developer',
+  ADMIN: 'Admin',
   STAFF: 'Staff',
 } as const satisfies Record<Role, string>;
 
-// Mirrors ROLE_PERMISSIONS in api/app/core/security/permissions.py
+// Mirrors the role table in api/context/02-api-design.md §11
 export const ROLE_DESCRIPTIONS = {
-  DEVELOPER: 'Everything, including adding, editing and resetting other admins.',
-  USER: "Manages the team (add, edit, deactivate, reset non-admins) and views crabs, batches and live readings. Can't log crabs.",
-  STAFF: "Logs crabs, creates batches, reads logs and watches live readings. Can't manage users.",
+  DEVELOPER: 'Everything, including adding, editing and resetting other developers.',
+  ADMIN: 'Manages the team (add, edit, deactivate, reset non-developers), creates batches, logs crabs and watches live readings.',
+  STAFF: "Logs crabs, views batches and logs, and watches live readings. Can't create batches or manage users.",
 } as const satisfies Record<Role, string>;
 
-export const toRoleArticle = (role: Role) => (role === ADMIN_ROLE ? 'an' : 'a');
+export const toRoleArticle = (role: Role) => (role === 'ADMIN' ? 'an' : 'a');
 
 export const toStatus = ({ is_active, needs_onboarding }: ApiUser): FarmUser['status'] =>
   !is_active ? 'deactivated' : needs_onboarding ? 'invited' : 'active';

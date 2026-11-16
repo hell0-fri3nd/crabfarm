@@ -12,7 +12,7 @@ import CustomRoleGuide from './components/custom-role-guide';
 import CustomUsersBoard from './components/custom-users-board';
 import { toFarmUser } from './lib/role-meta';
 import UsersLoading from './loading';
-import { ADMIN_ROLE } from './types/users';
+import { DEVELOPER_ROLE } from './types/users';
 
 export const metadata: Metadata = { title: 'Users' };
 
@@ -37,7 +37,7 @@ const UsersBoardLoader = async () => {
   return (
     <CustomUsersBoard
       initialUsers={result.data.items.map((user) => toFarmUser(user, self.id, now))}
-      canManageAdmins={self.role === ADMIN_ROLE}
+      canManageDevelopers={self.role === DEVELOPER_ROLE}
     />
   );
 };
