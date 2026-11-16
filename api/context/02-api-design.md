@@ -305,6 +305,14 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 | GET | `/detections/stream` (`?camera_id=`) | 200 SSE `detection.created` (live only, not stored) | — |
 | POST | `/qr/scan` (multipart image) | 200 `QR_DECODED` + linked crab/batch | 413, 415, 404 no QR found in image, 404 code not linked to a crab/batch |
 
+### audit
+
+| Method | Path | Success | Notable errors |
+|---|---|---|---|
+| GET | `/audit-events` (`AnyRole`; `?page=&size=` (size defaults to **7**, max 100) `&mine=&actor_id=&actor_role=&action=&resource=&outcome=&severity=&target_type=&from=&to=&q=&sort=`; `action`, `resource`, `outcome` and `severity` repeat for several values; `resource` is the action's first segment (`log` matches `log.list` and `log.create`); `q` searches actor email, action, target label, path and reason; `sort` ∈ `±occurred_at`, `±action`, `±actor_email`, `±outcome`, default `-occurred_at`) | 200 `AUDIT_EVENTS_LISTED` (a page of `AuditEventRead`: every column except `session_hash`; audited as `audit.list`) | 403 `others_activity_forbidden` (`actor_id`): a `STAFF` caller asked for another user, 422 bad filter, `from ≥ to`, or `mine` with `actor_id` |
+
+Who sees what: `STAFF` always gets only their own events (the service forces `actor_id` to the caller). `ADMIN` and `DEVELOPER` get everyone's, and `mine=true` narrows them to their own. `/auth/me/activity` stays as the short "recent activity" card on the profile.
+
 ### system
 
 | Method | Path | Success | Notable errors |

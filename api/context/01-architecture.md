@@ -113,6 +113,9 @@ api/app/
 │   ├── api.py
 │   ├── detection/          # camera start/stop, live SSE stream of results (no tables)
 │   └── qr/                 # QR scan
+├── audit/                  # reads the audit trail that core.audit writes (no tables of its own)
+│   ├── api.py
+│   └── events/             # GET /audit-events: filtered, paginated, scoped by role
 ├── system/                 # cross-cutting live channel (no tables)
 │   ├── api.py
 │   └── events/             # GET /events/stream: system.<type> events over SSE
@@ -129,7 +132,9 @@ api/ml/                     # OUTSIDE app/: offline training only, never importe
 └── models/                 # saved artifacts (gitignored), e.g. growth_v3.joblib
 ```
 
-Domains: `authentication`, `crab_management`, `monitoring`, `vision`, `assistant`, `system`.
+Domains: `authentication`, `crab_management`, `monitoring`, `vision`, `assistant`, `audit`, `system`.
+
+`audit/events` has no `models` layer: `core.audit` owns `audit.audit_events` and writes it, and this domain only reads it (through `core.audit`'s `AuditEvents`). A STAFF caller only ever sees their own events; the service enforces it, because the rule depends on the query (01 §13).
 
 `system/events` has no `models` layer (like `vision` and `assistant/chat`). It's the reference stream: copy its router/services/dependencies when a domain adds its own `/<resource>/stream`.
 To add a domain, update this file first.
