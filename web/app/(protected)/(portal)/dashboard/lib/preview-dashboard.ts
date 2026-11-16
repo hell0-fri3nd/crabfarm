@@ -1,12 +1,11 @@
 import {
   dashboardAlertSchema,
-  growthPointSchema,
   sensorReadingSchema,
   sensorSeriesSchema,
   summaryStatSchema,
 } from '../types/dashboard';
 
-import type { GrowthMetric, SensorReading, SensorSeries, TrendRange } from '../types/dashboard';
+import type { SensorReading, SensorSeries, TrendRange } from '../types/dashboard';
 
 // Preview data shaped like the API until the dashboard reads /sensors, /forecasts and the alerts feed
 
@@ -107,23 +106,3 @@ const toSeries = (reading: SensorReading, range: TrendRange): SensorSeries => {
 };
 
 export const getPreviewSeries = (range: TrendRange) => PREVIEW_READINGS.map((reading) => toSeries(reading, range));
-
-const WEEKS = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10'];
-
-const GROWTH_CURVES = {
-  weight: { actual: [38, 55, 70, 90, 110, 122, 146, 162, 182, null], predicted: [36, 54, 68, 86, 106, 124, 144, 160, 176, 192] },
-  width: { actual: [4.2, 4.8, 5.3, 5.9, 6.4, 6.8, 7.4, 7.9, 8.7, null], predicted: [4.1, 4.7, 5.2, 5.8, 6.3, 6.9, 7.3, 7.9, 8.5, 9.0] },
-} as const satisfies Record<GrowthMetric, { actual: (number | null)[]; predicted: number[] }>;
-
-export const GROWTH_UNITS = { weight: 'g', width: 'cm' } as const satisfies Record<GrowthMetric, string>;
-
-export const PREVIEW_BATCHES = ['BATCH-3', 'BATCH-2', 'BATCH-1'] as const;
-
-export const getPreviewGrowth = (metric: GrowthMetric) =>
-  growthPointSchema.array().parse(
-    WEEKS.map((week, index) => ({
-      week,
-      actual: GROWTH_CURVES[metric].actual[index] ?? null,
-      predicted: GROWTH_CURVES[metric].predicted[index] ?? null,
-    })),
-  );

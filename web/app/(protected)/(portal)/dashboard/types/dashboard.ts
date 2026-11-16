@@ -73,8 +73,28 @@ export const sensorSeriesSchema = z.object({
 export type SensorSeries = z.infer<typeof sensorSeriesSchema>;
 
 export const growthPointSchema = z.object({
-  week: z.string(),
+  label: z.string(),
   actual: z.number().nullable(),
   predicted: z.number().nullable(),
 });
 export type GrowthPoint = z.infer<typeof growthPointSchema>;
+
+export const growthDaySchema = z.object({ key: z.string(), label: z.string() });
+export type GrowthDay = z.infer<typeof growthDaySchema>;
+
+export const growthLogSchema = z.object({
+  batch_id: z.number().int().nullable(),
+  log_type: z.enum(['actual', 'prediction']),
+  weight_g: z.number().nullable(),
+  width_mm: z.number().nullable(),
+  day_key: z.string(),
+});
+export type GrowthLog = z.infer<typeof growthLogSchema>;
+
+export const growthDataSchema = z.object({
+  days: z.array(growthDaySchema),
+  logs: z.array(growthLogSchema),
+  batches: z.array(z.number().int()),
+  isPartial: z.boolean(),
+});
+export type GrowthData = z.infer<typeof growthDataSchema>;

@@ -10,21 +10,32 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 import CustomGrowthChart from './custom-growth-chart';
-import { GROWTH_UNITS, PREVIEW_BATCHES, getPreviewGrowth } from '../lib/preview-dashboard';
+import { ALL_BATCHES, GROWTH_UNITS, toGrowthPoints } from '../lib/growth-points';
 import { growthMetricSchema } from '../types/dashboard';
 
-import type { GrowthMetric } from '../types/dashboard';
+import type { GrowthData, GrowthMetric } from '../types/dashboard';
+
+type CustomGrowthCardProps = {
+  data: GrowthData;
+};
 
 const METRIC_LABELS = { weight: 'Weight', width: 'Width' } as const satisfies Record<GrowthMetric, string>;
 
-const CustomGrowthCard = () => {
-  const [batch, setBatch] = useState<string>(PREVIEW_BATCHES[0]);
+const NUMBER_FORMAT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+
+const formatValue = (value: number | null | undefined, unit: string) =>
+  value === null || value === undefined ? '—' : `${NUMBER_FORMAT.format(value)} ${unit}`;
+
+const CustomGrowthCard = ({ data: { days, logs, batches, isPartial } }: CustomGrowthCardProps) => {
+  const [batch, setBatch] = useState(ALL_BATCHES);
   const [metric, setMetric] = useState<GrowthMetric>('weight');
-  const points = getPreviewGrowth(metric);
+  const points = toGrowthPoints(days, logs, batch, metric);
   const unit = GROWTH_UNITS[metric];
-  const latestActual = points.findLast(({ actual }) => actual !== null)?.actual;
-  const nextPredicted = points.at(-1)?.predicted;
-  const batchNumber = batch.replace(/\D/g, '');
+  const latestActual = points.findLast(({ actual }) => actual !== null);
+  const latestPredicted = points.findLast(({ predicted }) => predicted !== null);
+  const hasAny = Boolean(latestActual ?? latestPredicted);
+  const scope = batch === ALL_BATCHES ? 'All batches' : `Batch ${batch}`;
+  const range = `${days[0]?.label ?? ''} – ${days.at(-1)?.label ?? ''}`;
 
   const handleMetricChange = (value: string) => {
     const parsed = growthMetricSchema.safeParse(value);
@@ -35,7 +46,7 @@ const CustomGrowthCard = () => {
     <Card className="gap-5 rounded-2xl py-5 sm:py-6">
       <CustomCardHeading
         title="Predicted vs actual growth"
-        description={`Batch ${batchNumber} · average of logged crabs per week`}
+        description={`${scope} · last 7 days, ${range} · daily average of logged crabs${isPartial ? ' (newest 500 logs)' : ''}`}
         actions={
           <>
             <Select value={batch} onValueChange={setBatch}>
@@ -43,9 +54,10 @@ const CustomGrowthCard = () => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PREVIEW_BATCHES.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
+                <SelectItem value={ALL_BATCHES}>All batches</SelectItem>
+                {batches.map((id) => (
+                  <SelectItem key={id} value={String(id)}>
+                    Batch {id}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -84,12 +96,22 @@ const CustomGrowthCard = () => {
               Predicted (model)
             </li>
           </ul>
-          <p className="font-medium tabular-nums">
-            Actual {latestActual ?? '—'} {unit} · Predicted {nextPredicted ?? '—'} {unit} next week
-          </p>
+          {hasAny && (
+            <p className="font-medium tabular-nums">
+              Actual {formatValue(latestActual?.actual, unit)}
+              {latestActual && ` on ${latestActual.label}`} · Predicted {formatValue(latestPredicted?.predicted, unit)}
+              {latestPredicted && ` on ${latestPredicted.label}`}
+            </p>
+          )}
         </div>
 
-        <CustomGrowthChart points={points} unit={unit} />
+        {hasAny ? (
+          <CustomGrowthChart points={points} unit={unit} />
+        ) : (
+          <div className="flex h-72 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-6 text-center text-sm text-muted-foreground md:h-80">
+            No crab logs for {scope.toLowerCase()} in the last 7 days. Logs saved on Scan crab show up here.
+          </div>
+        )}
 
         <details className="group">
           <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-md text-sm font-semibold text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
@@ -99,17 +121,19 @@ const CustomGrowthCard = () => {
           <Table className="mt-3">
             <TableHeader>
               <TableRow>
-                <TableHead>Week</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead className="text-right">Actual ({unit})</TableHead>
                 <TableHead className="text-right">Predicted ({unit})</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {points.map(({ week, actual, predicted }) => (
-                <TableRow key={week}>
-                  <TableCell className="font-medium">{week}</TableCell>
-                  <TableCell className="text-right tabular-nums">{actual ?? '—'}</TableCell>
-                  <TableCell className="text-right tabular-nums">{predicted ?? '—'}</TableCell>
+              {points.map(({ label, actual, predicted }) => (
+                <TableRow key={label}>
+                  <TableCell className="font-medium">{label}</TableCell>
+                  <TableCell className="text-right tabular-nums">{actual === null ? '—' : NUMBER_FORMAT.format(actual)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {predicted === null ? '—' : NUMBER_FORMAT.format(predicted)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

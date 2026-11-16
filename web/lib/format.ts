@@ -63,6 +63,8 @@ export const toFarmDayKey = (iso: string) => dayKey.format(new Date(iso));
 
 export const toFarmTime = (iso: string) => timeFormat.format(new Date(iso));
 
+export const toFarmShortDate = (iso: string) => dateFormat.format(new Date(iso));
+
 export const toFarmDateTime = (iso: string) => fullDateTimeFormat.format(new Date(iso));
 
 export const toFarmDayLabel = (iso: string, now = new Date()) => {

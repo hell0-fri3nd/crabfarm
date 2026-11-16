@@ -100,7 +100,7 @@ The web app reads the same rules from `web/lib/permissions.ts` to hide what a ro
 
 | Page | Data | Developer | Admin | Staff |
 |---|---|:-:|:-:|:-:|
-| Dashboard | Sample data | Yes | Yes | Yes |
+| Dashboard | Live growth card (last 7 days of crab logs) · the rest is sample data | Yes | Yes | Yes |
 | Logs | Live (crab logs) · sample (sensor logs) | Yes | Yes | Yes ¹⁰ |
 | Feeding | Sample data | Yes | Yes | Yes |
 | QR stickers | Live | Yes | Yes | Yes ⁶ |

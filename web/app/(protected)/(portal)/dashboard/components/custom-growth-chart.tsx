@@ -22,7 +22,7 @@ const CustomGrowthChart = ({ points, unit }: CustomGrowthChartProps) => (
   <ChartContainer config={CHART_CONFIG} className="aspect-auto h-72 w-full md:h-80">
     <LineChart data={points} margin={{ top: 12, right: 16, bottom: 4, left: 4 }}>
       <CartesianGrid vertical={false} strokeDasharray="0" />
-      <XAxis dataKey="week" tickLine={false} axisLine={false} tickMargin={10} />
+      <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} />
       <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={(value: number) => `${value} ${unit}`} />
       <ChartTooltip content={<ChartTooltipContent />} />
       <Line
@@ -32,6 +32,7 @@ const CustomGrowthChart = ({ points, unit }: CustomGrowthChartProps) => (
         strokeWidth={2}
         strokeDasharray="6 5"
         dot={false}
+        connectNulls
         isAnimationActive={false}
       />
       <Line
@@ -41,7 +42,7 @@ const CustomGrowthChart = ({ points, unit }: CustomGrowthChartProps) => (
         strokeWidth={2.5}
         dot={{ r: 4, fill: 'var(--color-actual)', strokeWidth: 0 }}
         activeDot={{ r: 5 }}
-        connectNulls={false}
+        connectNulls
         isAnimationActive={false}
       />
     </LineChart>
