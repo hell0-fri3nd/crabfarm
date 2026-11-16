@@ -36,6 +36,9 @@ class BatchServices:
         self.audit.record_target(action, code, request, actor, target_type="batch")
         return Response(success=False, message=FAILURE_MESSAGES[code], code=code)
 
+    def find(self, batch_id: int) -> Batches | None:
+        return self.db.get(Batches, batch_id)
+
     def list(self, actor: Actor, request: Request | None = None) -> Response[list[Batches]]:
         action = "batch.list"
         try:

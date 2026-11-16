@@ -13,8 +13,13 @@ from app.core import (
     ValidationErrorResponse
 )
 from app.core.exceptions import AUDIT_ACTION_KEY
-from .dependencies import AnyRole, CrabServicesDep
+from .dependencies import (
+    AnyRole,
+    CrabServicesDep,
+    DeveloperOrAdmin,
+)
 from .models import Crabs
+from .schemas import RecordStickerDownloadRequest
 from .services import CRAB_OUTCOMES,CRAB_ERRORS
 
 
@@ -44,4 +49,28 @@ def list_crabs(
 ):
     result = services.list(actor, request)
     raise_for(result, "crab.list")
+    return result
+
+
+@router.post(
+    "/sticker-downloads",
+    response_model=Response[None],
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "crab.sticker_download"},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Only DEVELOPER and ADMIN roles"},
+        status.HTTP_404_NOT_FOUND: {"model": ValidationErrorResponse, "description": "Batch or crabs not found"},
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ValidationErrorResponse, "description": "Invalid download fields"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error recording the download"},
+    },
+)
+def record_sticker_download(
+    payload: RecordStickerDownloadRequest,
+    request: Request,
+    actor: DeveloperOrAdmin,
+    services: CrabServicesDep,
+):
+    result = services.record_sticker_download(payload, actor, request)
+    raise_for(result, "crab.sticker_download")
     return result
