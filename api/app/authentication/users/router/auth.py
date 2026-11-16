@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Query,
     Request,
     status,
@@ -15,7 +14,9 @@ from app.core.exceptions import AUDIT_ACTION_KEY
 from app.core import (
     get_db,
     JwtManager,
-    FieldException,
+    ErrorResponse,
+    RaiseFor,
+    Response,
     ValidationErrorResponse,
 )
 from app.core.security import rate_limit
@@ -37,15 +38,16 @@ from ..schemas import (
     ChangePinRequest,
     OnboardingRequest,
     AuthResponse,
-    ErrorResponse,
-    Response,
     UpdateMeRequest,
     UserRead,
 )
 from ..services import AuthServices, PasswordServices
+from ..services.audit_services import ERRORS, OUTCOMES
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+raise_for = RaiseFor(OUTCOMES, ERRORS)
 
 TOO_MANY_ATTEMPTS = {
     status.HTTP_429_TOO_MANY_REQUESTS: {
@@ -103,22 +105,7 @@ def complete_onboarding(
     credentials: HTTPAuthorizationCredentials = Depends(bearer),
 ) -> AuthResponse:
     result = services.complete_onboarding(user, payload, request=http_request, access_token=credentials.credentials)
-
-    if result.code == "ONBOARDING_FAILED":
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.message)
-    if result.code == "ALREADY_ONBOARDED":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.message)
-    if result.code in ("DEFAULT_PASSWORD", "DEFAULT_PIN"):
-        field = "new_password" if result.code == "DEFAULT_PASSWORD" else "new_pin"
-        raise FieldException(
-            status_code=status.HTTP_409_CONFLICT,
-            field=field,
-            message=result.message,
-            type=result.code.lower(),
-            detail=result.message,
-            action="auth.onboarding",
-        )
-
+    raise_for(result, "auth.onboarding")
     return result
 
 
@@ -163,8 +150,7 @@ def my_activity(query: Annotated[ActivityQuery, Query()], user: CurrentUser, ser
 )
 def update_me(payload: UpdateMeRequest, request: Request, user: AccountUser, services: AuthServicesDep):
     result = services.update_me(user, payload, request=request)
-    if result.code == "USER_UPDATE_FAILED":
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.message)
+    raise_for(result, "auth.update_me")
     return result
 
 
@@ -218,40 +204,7 @@ async def sign_in(
         remember_me=request.remember_me,
         request=http_request,
     )
-
-    if result.code == "EMAIL_NOT_FOUND":
-        raise FieldException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            field="email",
-            message=result.message,
-            type="email_not_found",
-            action="auth.sign_in",
-        )
-
-    if result.code == "INCORRECT_PASSWORD":
-        raise FieldException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            field="password",
-            message=result.message,
-            type="incorrect_password",
-            action="auth.sign_in",
-        )
-
-    if result.code == "USER_INACTIVE":
-        raise FieldException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            field="email",
-            message=result.message,
-            type="user_inactive",
-            action="auth.sign_in",
-        )
-
-    if result.code == "SIGN_IN_FAILED":
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.message,
-        )
-
+    raise_for(result, "auth.sign_in")
     return result
 
 
@@ -296,22 +249,7 @@ async def pin(
         pin=request.pin,
         request=http_request,
     )
-
-    if result.code == "INVALID_PIN":
-        raise FieldException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            field="pin",
-            message=result.message,
-            type="invalid_pin",
-            action="auth.sign_in.pin",
-        )
-
-    if result.code == "PIN_VERIFICATION_FAILED":
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.message,
-        )
-
+    raise_for(result, "auth.sign_in.pin")
     return result
 
 
@@ -377,31 +315,7 @@ async def change_password(
         request=http_request,
         access_token=credentials.credentials,
     )
-
-    if result.code == "INCORRECT_CURRENT_PASSWORD":
-        raise FieldException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            field="current_password",
-            message=result.message,
-            type="invalid_current_password",
-            action="auth.change_password",
-        )
-
-    if result.code == "SAME_PASSWORD":
-        raise FieldException(
-            status_code=status.HTTP_409_CONFLICT,
-            field="new_password",
-            message=result.message,
-            type="same_password",
-            action="auth.change_password",
-        )
-
-    if result.code == "CHANGE_PASSWORD_FAILED":
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.message,
-        )
-
+    raise_for(result, "auth.change_password")
     return result
 
 
@@ -447,29 +361,5 @@ async def change_pin(
         request=http_request,
         access_token=credentials.credentials,
     )
-
-    if result.code == "INCORRECT_CURRENT_PIN":
-        raise FieldException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            field="current_pin",
-            message=result.message,
-            type="invalid_current_pin",
-            action="auth.change_pin",
-        )
-
-    if result.code == "SAME_PIN":
-        raise FieldException(
-            status_code=status.HTTP_409_CONFLICT,
-            field="new_pin",
-            message=result.message,
-            type="same_pin",
-            action="auth.change_pin",
-        )
-
-    if result.code == "CHANGE_PIN_FAILED":
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.message,
-        )
-
+    raise_for(result, "auth.change_pin")
     return result

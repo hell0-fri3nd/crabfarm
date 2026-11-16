@@ -50,7 +50,7 @@ Architecture and layering rules are in `01-architecture.md`.
 
 ### Success: the envelope (same as `AuthResponse`)
 
-Every success uses the common `Response` schema (`general_schemas.Response`):
+Every success uses the common `Response` schema (`app.core.Response`):
 
 ```json
 {
@@ -139,7 +139,7 @@ To keep OpenAPI typed, make `Response` generic: `Response[BatchRead]`, `Response
 | `502 Bad Gateway` | An upstream provider failed | DeepInfra error or timeout |
 | `503 Service Unavailable` | A dependency is down; include `Retry-After` | RabbitMQ unreachable, worker not consuming |
 
-**How the router chooses the status** (same as `auth.py`): the service returns `Response(success=False, code=...)`, and the router maps each failure `code` to one row above. Every code the service can return must have a mapping in the router **and** an entry in the decorator's `responses={...}`.
+**How the router chooses the status:** the service returns `Response(success=False, code=...)`, and the router calls `raise_for(result, action)`, a `core.RaiseFor(<RESOURCE>_OUTCOMES, <RESOURCE>_ERRORS)` instance built once per router from the service's own maps. The status comes from the outcome map; a 4xx answers `{detail, errors[]}` with the field from the error map and `type` = the code in lowercase; a 5xx answers a plain `{detail}`. Every code the service can return must be in its outcome map (and, for a 4xx, its error map) **and** in the decorator's `responses={...}`. Don't write a per-router `match` on codes.
 
 ## 7. Collections: Pagination, Filtering, Sorting
 

@@ -78,6 +78,8 @@ ERRORS = {
     "PIN_VERIFICATION_FAILED": ("server",   "Unable to verify pin right now"),
     "SAME_PASSWORD":           ("new_password", "New password must be different from current password"),
     "CHANGE_PASSWORD_FAILED":  ("server",   "Unable to change password right now"),
+    "SAME_PIN":                ("new_pin",  "New pin must be different from current pin"),
+    "CHANGE_PIN_FAILED":       ("server",   "Unable to change pin right now"),
     "ALREADY_ONBOARDED":       ("server",   "This account is already set up"),
     "DEFAULT_PASSWORD":        ("new_password", "Pick a password other than the one you were given"),
     "DEFAULT_PIN":             ("new_pin",  "Pick a pin other than the one you were given"),

@@ -6,10 +6,9 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from app.core import get_current_user
+from app.core import ErrorResponse, get_current_user
 from app.core.exceptions import AUDIT_ACTION_KEY
 from .dependencies import StreamHubDep, TokenExpiry
-from .schemas import ErrorResponse
 from .services import EventStreamServices
 
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}

@@ -133,7 +133,7 @@ Every private function or method starts with **two** underscores: `__default_cre
 | Request body | `*Request` | `CreateBatchRequest`, `SignInRequest` |
 | Query params | `*Query` | `ListLogsQuery` |
 | Read model (only when the table has fields to hide) | `*Read` | `UserRead` |
-| Envelope / error | `*Response` | `Response`, `AuthResponse`, `ErrorResponse` |
+| Envelope / error | `*Response` | `Response`, `ErrorResponse` (both shared from `app.core`), `AuthResponse` |
 | Broker / SSE payload | `*Event` | `SensorReadingEvent`, `ForecastCompletedEvent` |
 | Service | `*Services` | `AuthServices`, `BatchServices` |
 | Infrastructure client | `*Client` / `*Manager` | `RabbitClient`, `JwtManager` |

@@ -12,6 +12,7 @@ from sqlmodel import (
 from app.core import (
     AuthUser,
     Page,
+    Response,
     Role,
     settings,
 )
@@ -22,7 +23,6 @@ from ..models import Users
 from ..schemas import (
     CreateUserRequest,
     ListUsersQuery,
-    Response,
     UpdateUserRequest,
     UserRead,
 )

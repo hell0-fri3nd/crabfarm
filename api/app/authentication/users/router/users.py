@@ -4,15 +4,16 @@ from uuid import UUID
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Query,
     Request,
     status,
 )
 
 from app.core import (
-    FieldException,
+    ErrorResponse,
     Page,
+    RaiseFor,
+    Response,
     ValidationErrorResponse,
 )
 from app.core.exceptions import AUDIT_ACTION_KEY
@@ -24,12 +25,11 @@ from ..dependencies import (
 )
 from ..schemas import (
     CreateUserRequest,
-    ErrorResponse,
     ListUsersQuery,
-    Response,
     UpdateUserRequest,
     UserRead,
 )
+from ..services.audit_services import ERRORS, OUTCOMES
 
 
 router = APIRouter(prefix="/users", tags=["Users"], dependencies=[Depends(get_current_user)])
@@ -40,24 +40,7 @@ DEVELOPER_REQUIRED = {"model": ValidationErrorResponse, "description": "Only DEV
 INVALID = {"model": ValidationErrorResponse, "description": "Invalid request fields"}
 
 
-def __raise_for(result: Response, action: str) -> None:
-    """Maps a failed service code to its HTTP error (02 §6)."""
-    if result:
-        return None
-
-    match result.code:
-        case "USER_NOT_FOUND":
-            raise FieldException(status.HTTP_404_NOT_FOUND, "path.user_id", result.message, "user_not_found", detail=result.message, action=action)
-        case "EMAIL_ALREADY_EXISTS":
-            raise FieldException(status.HTTP_409_CONFLICT, "email", result.message, "email_already_exists", detail=result.message, action=action)
-        case "DEVELOPER_ROLE_REQUIRED":
-            raise FieldException(status.HTTP_403_FORBIDDEN, "role", result.message, "developer_role_required", detail=result.message, action=action)
-        case "CANNOT_DEACTIVATE_SELF":
-            raise FieldException(status.HTTP_409_CONFLICT, "path.user_id", result.message, "cannot_deactivate_self", detail=result.message, action=action)
-        case "CANNOT_RESET_OWN_CREDENTIALS":
-            raise FieldException(status.HTTP_409_CONFLICT, "path.user_id", result.message, "cannot_reset_own_credentials", detail=result.message, action=action)
-        case _:
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.message)
+raise_for = RaiseFor(OUTCOMES, ERRORS)
 
 
 @router.post(
@@ -80,7 +63,7 @@ def create_user(
     services: UserServicesDep,
 ):
     result = services.create(payload, actor=actor, request=request)
-    __raise_for(result, "user.create")
+    raise_for(result, "user.create")
     return result
 
 
@@ -103,7 +86,7 @@ def list_users(
     services: UserServicesDep,
 ):
     result = services.list(query, actor=actor, request=request)
-    __raise_for(result, "user.list")
+    raise_for(result, "user.list")
     return result
 
 
@@ -122,7 +105,7 @@ def list_users(
 )
 def get_user(user_id: UUID, request: Request, actor: DeveloperOrAdmin, services: UserServicesDep):
     result = services.get(user_id, actor=actor, request=request)
-    __raise_for(result, "user.get")
+    raise_for(result, "user.get")
     return result
 
 
@@ -148,7 +131,7 @@ def update_user(
     services: UserServicesDep,
 ):
     result = services.update(user_id, payload, actor=actor, request=request)
-    __raise_for(result, "user.update")
+    raise_for(result, "user.update")
     return result
 
 
@@ -168,7 +151,7 @@ def update_user(
 )
 def deactivate_user(user_id: UUID, request: Request, actor: DeveloperOrAdmin, services: UserServicesDep):
     result = services.deactivate(user_id, actor=actor, request=request)
-    __raise_for(result, "user.deactivate")
+    raise_for(result, "user.deactivate")
     return result
 
 
@@ -187,7 +170,7 @@ def deactivate_user(user_id: UUID, request: Request, actor: DeveloperOrAdmin, se
 )
 def reactivate_user(user_id: UUID, request: Request, actor: DeveloperOrAdmin, services: UserServicesDep):
     result = services.reactivate(user_id, actor=actor, request=request)
-    __raise_for(result, "user.reactivate")
+    raise_for(result, "user.reactivate")
     return result
 
 
@@ -208,5 +191,5 @@ def reactivate_user(user_id: UUID, request: Request, actor: DeveloperOrAdmin, se
 )
 def reset_user_credentials(user_id: UUID, request: Request, actor: DeveloperOrAdmin, services: UserServicesDep):
     result = services.reset_credentials(user_id, actor=actor, request=request)
-    __raise_for(result, "user.reset_credentials")
+    raise_for(result, "user.reset_credentials")
     return result

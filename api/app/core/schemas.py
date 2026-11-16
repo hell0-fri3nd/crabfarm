@@ -25,6 +25,22 @@ class Page[T](BaseModel):
         return len(self.items)
 
 
+class Response[T](BaseModel):
+    """The success envelope every endpoint returns (02 §4)."""
+
+    success: bool
+    message: str
+    code: str | None
+    details: T | None = None
+
+    def __bool__(self) -> bool:
+        return self.success
+
+
+class ErrorResponse(BaseModel):
+    detail: str
+
+
 class AuthUser(BaseModel):
     """The signed-in user as the access token states it. Every domain gets this as `actor`."""
 

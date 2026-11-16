@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import Request
 from sqlmodel import Session, select
 
-from app.core import AuthUser, JwtManager, settings
+from app.core import AuthUser, JwtManager, Response, settings
 from app.core.audit import AuditEvents, Outcome
 from .audit_services import AuthAuditServices
 from .password_services import PasswordServices
@@ -15,7 +15,6 @@ from ..schemas import (
     ActivityRead,
     AuthResponse,
     OnboardingRequest,
-    Response,
     UpdateMeRequest,
     UserRead,
 )

@@ -13,6 +13,3 @@ class SystemEvent(BaseModel):
     message: str = Field(min_length=1, max_length=500)
     occurred_at: datetime
 
-
-class ErrorResponse(BaseModel):
-    detail: str

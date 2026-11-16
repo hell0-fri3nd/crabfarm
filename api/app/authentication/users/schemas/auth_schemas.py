@@ -123,6 +123,6 @@ class AuthResponse(BaseModel):
     message: str
     code: str | None
     details: dict | None
-    
-class ErrorResponse(BaseModel):
-    detail: str
+
+    def __bool__(self) -> bool:
+        return self.success

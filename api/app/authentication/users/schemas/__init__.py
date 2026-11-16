@@ -7,7 +7,6 @@ from .auth_schemas import (
     ChangePinRequest,
     OnboardingRequest,
     AuthResponse,
-    ErrorResponse,
 )
 from .user_schemas import (
     CreateUserRequest,
@@ -16,16 +15,13 @@ from .user_schemas import (
     ListUsersQuery,
     UserRead,
 )
-from .general_schemas import Response
 
 __all__ = [
-    "Response",
     "PinRequest",
     "SignInRequest",
     "ChangePasswordRequest",
     "ChangePinRequest",
     "AuthResponse",
-    "ErrorResponse",
     "CreateUserRequest",
     "UpdateUserRequest",
     "ListUsersQuery",
