@@ -1,11 +1,14 @@
 'use client';
 
 import CustomSearchInput from '@/components/custom/custom-search-input';
+import { ChartLine, Rows3 } from 'lucide-react';
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 import CustomDateRangeFilter from './custom-date-range-filter';
 import { LEVEL_FILTER_LABELS, LOG_TYPE_FILTER_LABELS } from '../lib/log-filters';
-import { levelFilterSchema, logTypeFilterSchema } from '../types/logs';
+import { levelFilterSchema, logTypeFilterSchema, logViewSchema } from '../types/logs';
 
 import type { DateRangeWindow } from '../lib/log-filters';
 import type { ParamUpdates } from '../lib/use-logs-search-params';
@@ -34,6 +37,13 @@ const CustomLogFilters = ({ params, batches, dateRange, now, onChange }: CustomL
     if (parsed.success) onChange({ level: parsed.data === 'all' ? null : parsed.data });
   };
 
+  const isChart = isCrabTab && params.view === 'chart';
+
+  const handleViewChange = (value: string) => {
+    const parsed = logViewSchema.safeParse(value);
+    if (parsed.success) onChange({ view: parsed.data === 'table' ? null : parsed.data });
+  };
+
   const handleTypeChange = (value: string) => {
     const parsed = logTypeFilterSchema.safeParse(value);
     if (parsed.success) onChange({ type: parsed.data === 'all' ? null : parsed.data });
@@ -50,7 +60,7 @@ const CustomLogFilters = ({ params, batches, dateRange, now, onChange }: CustomL
       />
       <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
         <CustomDateRangeFilter dateRange={dateRange} preset={params.preset} now={now} onChange={onChange} />
-        {isCrabTab && (
+        {isCrabTab && !isChart && (
           <Select value={params.type} onValueChange={handleTypeChange}>
             <SelectTrigger aria-label="Log type" className="data-[size=default]:h-11 w-full bg-card px-4 sm:w-40">
               <SelectValue />
@@ -91,6 +101,25 @@ const CustomLogFilters = ({ params, batches, dateRange, now, onChange }: CustomL
               ))}
             </SelectContent>
           </Select>
+        )}
+        {isCrabTab && (
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            value={params.view}
+            onValueChange={handleViewChange}
+            aria-label="Show crab logs as"
+            className="col-span-2 h-11 w-full bg-card sm:col-span-1 sm:w-auto"
+          >
+            <ToggleGroupItem value="table" className="h-11 flex-1 px-4 sm:flex-none">
+              <Rows3 aria-hidden />
+              Table
+            </ToggleGroupItem>
+            <ToggleGroupItem value="chart" className="h-11 flex-1 px-4 sm:flex-none">
+              <ChartLine aria-hidden />
+              Chart
+            </ToggleGroupItem>
+          </ToggleGroup>
         )}
       </div>
     </div>

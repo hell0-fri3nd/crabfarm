@@ -6,6 +6,8 @@ import { severitySchema } from '@/types/severity';
 export const logTabSchema = z.enum(['crab', 'sensor']);
 export type LogTab = z.infer<typeof logTabSchema>;
 
+export const logViewSchema = z.enum(['table', 'chart']);
+export type LogView = z.infer<typeof logViewSchema>;
 export const datePresetSchema = z.enum(['today', '7d', '30d']);
 export type DatePreset = z.infer<typeof datePresetSchema>;
 
@@ -65,6 +67,30 @@ export const crabLogPageSchema = z.object({
 });
 export type CrabLogPage = z.infer<typeof crabLogPageSchema>;
 
+export const chartBucketSchema = z.enum(['day', 'hour', 'minute', 'second']);
+export type ChartBucket = z.infer<typeof chartBucketSchema>;
+
+export const chartSeriesSchema = z.enum(['actual', 'prediction']);
+export type ChartSeries = z.infer<typeof chartSeriesSchema>;
+
+export const chartPointSchema = z.object({
+  bucket_key: z.string(),
+  label: z.string(),
+  actual_weight_g: z.number().nullable(),
+  predicted_weight_g: z.number().nullable(),
+  actual_width_mm: z.number().nullable(),
+  predicted_width_mm: z.number().nullable(),
+});
+export type ChartPoint = z.infer<typeof chartPointSchema>;
+
+export const crabLogChartSchema = z.object({
+  bucket: chartBucketSchema,
+  points: z.array(chartPointSchema),
+  plotted: z.number().int(),
+  total: z.number().int(),
+});
+export type CrabLogChart = z.infer<typeof crabLogChartSchema>;
+
 export const sensorLogSchema = z.object({
   id: z.string(),
   sensor: sensorKindSchema,
@@ -90,6 +116,7 @@ export const logsSearchParamsSchema = z.object({
   batch: z.union([z.literal('all'), z.string().regex(/^\d{1,9}$/)]).catch('all'),
   level: levelFilterSchema.catch('all'),
   type: logTypeFilterSchema.catch('all'),
+  view: logViewSchema.catch('table'),
 });
 export type LogsSearchParams = z.infer<typeof logsSearchParamsSchema>;
 

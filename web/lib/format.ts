@@ -20,7 +20,7 @@ const TIME_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 
 const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
-const FARM_TIME_ZONE = 'Asia/Manila';
+export const FARM_TIME_ZONE = 'Asia/Manila';
 const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: FARM_TIME_ZONE });
 const timeFormat = new Intl.DateTimeFormat('en-US', { timeZone: FARM_TIME_ZONE, hour: 'numeric', minute: '2-digit' });
 const dateFormat = new Intl.DateTimeFormat('en-US', { timeZone: FARM_TIME_ZONE, month: 'short', day: 'numeric' });

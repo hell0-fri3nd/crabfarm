@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileDown, ScrollText, SearchX } from 'lucide-react';
+import { ChartLine, FileDown, ScrollText, SearchX } from 'lucide-react';
 import { subDays } from 'date-fns';
 
 import CustomEmptyState from '@/components/custom/custom-empty-state';
@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 
+import CustomCrabLogChart from './custom-crab-log-chart';
 import CustomCrabLogTable from './custom-crab-log-table';
 import CustomLogFilters from './custom-log-filters';
 import CustomLogPagination from './custom-log-pagination';
@@ -22,10 +23,11 @@ import { useLogsSearchParams } from '../lib/use-logs-search-params';
 import { logTabSchema } from '../types/logs';
 
 import type { BatchOption } from './custom-log-filters';
-import type { CrabLogPage, LogTab } from '../types/logs';
+import type { CrabLogChart, CrabLogPage, LogTab } from '../types/logs';
 
 type CustomLogsViewProps = {
   crabPage: CrabLogPage;
+  crabChart: CrabLogChart | null;
   batches: BatchOption[];
   nowIso: string;
 };
@@ -33,6 +35,7 @@ type CustomLogsViewProps = {
 const TAB_LABELS = { crab: 'Crab logs', sensor: 'Sensor logs' } as const satisfies Record<LogTab, string>;
 
 const CLEARED_FILTERS = { q: null, preset: null, from: null, to: null, batch: null, level: null, type: null };
+
 
 const downloadCsv = (filename: string, csv: string) => {
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -43,21 +46,22 @@ const downloadCsv = (filename: string, csv: string) => {
   URL.revokeObjectURL(url);
 };
 
-const CustomLogsView = ({ crabPage, batches, nowIso }: CustomLogsViewProps) => {
+const CustomLogsView = ({ crabPage, crabChart, batches, nowIso }: CustomLogsViewProps) => {
   const { params, rawParams, setParams, isPending } = useLogsSearchParams();
   const [isExporting, setIsExporting] = useState(false);
   const isCrabTab = params.tab === 'crab';
+  const crabTotal = crabChart?.total ?? crabPage.total;
   const now = isCrabTab ? new Date(nowIso) : PREVIEW_NOW;
   const dateRange = resolveDateRange(params, now);
 
   const sensorRows = filterSensorLogs(PREVIEW_SENSOR_LOGS, params, dateRange);
   const sensorPage = paginate(sensorRows, params.page);
-  const visibleCount = isCrabTab ? crabPage.total : sensorRows.length;
+  const visibleCount = isCrabTab ? crabTotal : sensorRows.length;
   const hasFilters = params.q !== '' || dateRange.isCustom || params.preset !== '7d' || params.batch !== 'all' || params.level !== 'all' || params.type !== 'all';
   const rangeText = dateRange.label.toLowerCase();
 
   const status = isCrabTab
-    ? `${crabPage.total} crab ${crabPage.total === 1 ? 'log' : 'logs'} · ${rangeText}`
+    ? `${crabTotal} crab ${crabTotal === 1 ? 'log' : 'logs'} · ${rangeText}`
     : `${PREVIEW_SENSOR_LOGS.length} sensor readings · ${countOutOfRangeSince(PREVIEW_SENSOR_LOGS, subDays(now, 7))} out of range this week`;
 
   const handleTabChange = (value: string) => {
@@ -117,7 +121,12 @@ const CustomLogsView = ({ crabPage, batches, nowIso }: CustomLogsViewProps) => {
     <Tabs value={params.tab} onValueChange={handleTabChange} className="flex w-full flex-col gap-8">
       <CustomPageHeader
         title="Logs"
-        status={<span>{status}</span>}
+        status={
+          <>
+            <span>{status}</span>
+            {isCrabTab && <span id="run-prediction-reason">Predictions aren&apos;t set up yet</span>}
+          </>
+        }
         actions={
           <>
             <TabsList className="h-11 bg-card p-1">
@@ -127,6 +136,12 @@ const CustomLogsView = ({ crabPage, batches, nowIso }: CustomLogsViewProps) => {
                 </TabsTrigger>
               ))}
             </TabsList>
+            {isCrabTab && (
+              <Button type="button" variant="outline" className="h-11 bg-card px-5" disabled aria-describedby="run-prediction-reason">
+                <ChartLine aria-hidden />
+                Run prediction
+              </Button>
+            )}
             <Button
               type="button"
               className="h-11 px-5"
@@ -148,8 +163,18 @@ const CustomLogsView = ({ crabPage, batches, nowIso }: CustomLogsViewProps) => {
           aria-busy={isPending}
           className={cn('flex flex-col gap-5 transition-opacity', isPending && 'opacity-60')}
         >
-          {crabPage.total === 0 ? emptyState : <CustomCrabLogTable logs={crabPage.rows} now={now} />}
-          {crabPage.total > 0 && <CustomLogPagination {...crabPage} noun="crab logs" onPageChange={handlePageChange} />}
+          {crabTotal === 0 && !crabChart && emptyState}
+          {crabChart && (
+            <CustomCrabLogChart
+              chart={crabChart}
+              series={params.type === 'prediction' ? 'prediction' : 'actual'}
+              onSeriesChange={(type) => setParams({ type: type === 'actual' ? null : type })}
+            />
+          )}
+          {crabTotal > 0 && !crabChart && <CustomCrabLogTable logs={crabPage.rows} now={now} />}
+          {crabTotal > 0 && !crabChart && (
+            <CustomLogPagination {...crabPage} noun="crab logs" onPageChange={handlePageChange} />
+          )}
         </TabsContent>
 
         <TabsContent value="sensor" className="flex flex-col gap-5">

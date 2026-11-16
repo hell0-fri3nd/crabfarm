@@ -246,7 +246,7 @@ export default RootLayout;
 | Sensors | `Thermometer` temperature · `Droplet` pH · `Waves` salinity · `FlaskConical` ammonia · `Wind` oxygen |
 | Actions | `Play` start/resume · `Pause` pause · `Square` stop · `Plus` add/new · `Trash` delete · `Download` PNG/PDF · `Camera` / `CameraOff` camera on/off · `Scale` scale connected · `RotateCcw` rescan · `Search` search · `Calendar` date range · `FileDown` export CSV · `Send` send · `ThumbsUp` / `ThumbsDown` feedback |
 | Forms & account | `Mail` email · `Lock` password, PIN locked · `Eye` show password · `KeyRound` reset · `UserPlus` add user · `Pencil` edit |
-| Buttons | `Utensils` feed now · `Save` save · `LogIn` sign in · `ArrowLeft` back · `UserX` deactivate · `UserCheck` reactivate, change role · `ChartLine` see trend · `ChevronDown` load older · `ChevronLeft` previous |
+| Buttons | `Utensils` feed now · `Save` save · `LogIn` sign in · `ArrowLeft` back · `UserX` deactivate · `UserCheck` reactivate, change role · `ChartLine` see trend, chart view · `Rows3` table view · `ChevronDown` load older · `ChevronLeft` previous |
 
 ## 11. Shared Components (component map)
 
@@ -310,7 +310,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | **Feeding** | Feed now | Card, Switch, Button, AlertDialog, ToggleGroup, Input, Sonner | `custom-status-pill`, `custom-feeder-row`, `custom-schedule-form`, `custom-feed-bar-chart` | Utensils, Play, Pause, Square, TriangleAlert, Plus, Trash, CalendarClock, CircleCheck |
 | **QR stickers** | Download stickers | Select, ToggleGroup, Button, Table, Sonner | `custom-qr-sticker`, `custom-sticker-sheet`, `custom-print-bar` | Plus, Download, QrCode |
 | **Scan** | Save log | Card, Input, Button, Alert, Sonner | `custom-stepper`, `custom-scan-viewport`, `custom-severity-alert` | Scale, Camera, CameraOff, ScanLine, RotateCcw, Check, TriangleAlert, CircleCheck |
-| **Logs** | Export CSV | Tabs, Input, Select, Popover, Calendar, Table, Pagination | `custom-severity-badge`, `custom-empty-state` | Search, Calendar, FileDown, OctagonAlert, TriangleAlert, Info |
+| **Logs** | Export CSV | Tabs, Input, Select, Popover, Calendar, Table, Pagination, ToggleGroup, Chart | `custom-severity-badge`, `custom-empty-state`, `custom-crab-log-chart`, `custom-measure-chart` | Search, Calendar, FileDown, OctagonAlert, TriangleAlert, Info, Rows3, ChartLine |
 | **Activity** | — (read-only) | ToggleGroup, Select, Input, Table, Badge | `custom-empty-state` | Search, History, ChevronDown, CircleX, ShieldAlert |
 | **Users** | Add user | Table, Avatar, Select, Dialog, AlertDialog, Sonner | `custom-status-pill` | UserPlus, Search, KeyRound, UserX, UserCheck |
 | **My profile** | Save | Card, Avatar, Form, Input, InputOTP, AlertDialog, Sonner | `custom-password-rules`, `custom-theme-switch` | Pencil, Mail, LogOut, Sun, Moon, Check, Save |
