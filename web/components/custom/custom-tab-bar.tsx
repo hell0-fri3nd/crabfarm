@@ -7,17 +7,18 @@ import { LogOut, Menu, X } from 'lucide-react';
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import {
   DASHBOARD_HREF,
-  MORE_SHEET_ITEMS,
   SCAN_HREF,
   TAB_BAR_ITEMS,
   isActivePath,
   toAlertLabel,
+  toMoreSheetItems,
 } from '@/lib/navigation';
 import { signOut } from '@/app/(protected)/(portal)/profile/actions/sign-out';
 import { cn } from '@/lib/utils';
 
 type CustomTabBarProps = {
   alertCount: number;
+  role?: string;
 };
 
 const TAB_CLASS =
@@ -26,9 +27,10 @@ const TAB_CLASS =
 const SHEET_LINK_CLASS =
   'flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors hover:bg-accent aria-[current=page]:bg-accent aria-[current=page]:font-semibold aria-[current=page]:text-primary';
 
-const CustomTabBar = ({ alertCount }: CustomTabBarProps) => {
+const CustomTabBar = ({ alertCount, role }: CustomTabBarProps) => {
   const pathname = usePathname();
-  const isMoreActive = MORE_SHEET_ITEMS.some(({ href }) => isActivePath(pathname, href));
+  const moreSheetItems = toMoreSheetItems(role);
+  const isMoreActive = moreSheetItems.some(({ href }) => isActivePath(pathname, href));
 
   return (
     <nav
@@ -78,7 +80,7 @@ const CustomTabBar = ({ alertCount }: CustomTabBarProps) => {
               </div>
               <SheetDescription className="sr-only">Other pages and your account</SheetDescription>
               <ul className="flex flex-col gap-1">
-                {MORE_SHEET_ITEMS.map(({ href, label, icon: Icon }) => (
+                {moreSheetItems.map(({ href, label, icon: Icon }) => (
                   <li key={href}>
                     <SheetClose asChild>
                       <Link

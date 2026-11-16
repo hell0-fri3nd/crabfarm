@@ -11,14 +11,14 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toInitials } from '@/lib/format';
-import { DASHBOARD_HREF, NAV_GROUPS, PROFILE_NAV_ITEM, isActivePath, toAlertLabel } from '@/lib/navigation';
+import { DASHBOARD_HREF, PROFILE_NAV_ITEM, isActivePath, toAlertLabel, toNavGroups } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/stores/ui-store';
 
 import type { ReactNode } from 'react';
 
 type CustomAppSidebarProps = {
-  user?: { name: string; role: string };
+  user?: { name: string; role: string; roleLabel: string };
   alertCount: number;
   feeding: { isOn: boolean; nextFeedLabel: string };
 };
@@ -88,7 +88,7 @@ const CustomAppSidebar = ({ user, alertCount, feeding }: CustomAppSidebarProps) 
         </div>
 
         {user ? (
-          <CustomRailTooltip label={`${user.name} · ${user.role}`} isEnabled={isCollapsed}>
+          <CustomRailTooltip label={`${user.name} · ${user.roleLabel}`} isEnabled={isCollapsed}>
             <Link
               href={PROFILE_NAV_ITEM.href}
               aria-current={isActivePath(pathname, PROFILE_NAV_ITEM.href) ? 'page' : undefined}
@@ -101,7 +101,7 @@ const CustomAppSidebar = ({ user, alertCount, feeding }: CustomAppSidebarProps) 
               </Avatar>
               <span className="sr-only sidebar-full:not-sr-only sidebar-full:flex sidebar-full:min-w-0 sidebar-full:flex-1 sidebar-full:flex-col">
                 <span className="truncate text-sm font-semibold">{user.name}</span>
-                <span className="truncate text-xs text-sidebar-foreground/70">{user.role}</span>
+                <span className="truncate text-xs text-sidebar-foreground/70">{user.roleLabel}</span>
               </span>
               <ChevronRight className="hidden size-4 text-sidebar-foreground/60 sidebar-full:block" aria-hidden />
             </Link>
@@ -124,7 +124,7 @@ const CustomAppSidebar = ({ user, alertCount, feeding }: CustomAppSidebarProps) 
         aria-label="Pages"
         className="min-h-0 flex-1 overflow-y-auto px-1.5 [scrollbar-color:var(--sidebar-border)_transparent] [scrollbar-width:none] sidebar-full:[scrollbar-width:thin] sidebar-full:px-4 sidebar-icons:px-3"
       >
-        {NAV_GROUPS.map((group, groupIndex) => (
+        {toNavGroups(user?.role).map((group, groupIndex) => (
           <div key={group[0]?.href ?? groupIndex}>
             {groupIndex > 0 && <hr className="mx-3 my-3 border-sidebar-border sidebar-full:my-4" />}
             <ul className="flex flex-col gap-1">

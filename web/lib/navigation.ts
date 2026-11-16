@@ -2,11 +2,16 @@ import { Bot, CalendarClock, History, LayoutDashboard, QrCode, ScanLine, ScrollT
 
 import type { LucideIcon } from 'lucide-react';
 
+import { can } from '@/lib/permissions';
+
+import type { Permission } from '@/lib/permissions';
+
 export type NavItem = {
   href: string;
   label: string;
   tabLabel?: string;
   icon: LucideIcon;
+  permission?: Permission;
 };
 
 export const NAV_GROUPS: NavItem[][] = [
@@ -21,7 +26,7 @@ export const NAV_GROUPS: NavItem[][] = [
   ],
   [{ href: '/assistant', label: 'Assistant', icon: Bot }],
   [
-    { href: '/users', label: 'Users', icon: Users },
+    { href: '/users', label: 'Users', icon: Users, permission: 'users.manage' },
     { href: '/activity', label: 'Activity', icon: History },
   ],
 ];
@@ -38,7 +43,16 @@ const ALL_NAV_ITEMS = NAV_GROUPS.flat();
 
 export const TAB_BAR_ITEMS = TAB_BAR_HREFS.flatMap((href) => ALL_NAV_ITEMS.filter((item) => item.href === href));
 
-export const MORE_SHEET_ITEMS = [...ALL_NAV_ITEMS.filter(({ href }) => !TAB_BAR_HREFS.includes(href)), PROFILE_NAV_ITEM];
+const isAllowed = (role: string | undefined) => ({ permission }: NavItem) => !permission || can(role, permission);
+
+// Destinations a role can't use are left out; controls they can't use stay visible but disabled (03 §16)
+export const toNavGroups = (role: string | undefined) =>
+  NAV_GROUPS.map((group) => group.filter(isAllowed(role))).filter((group) => group.length > 0);
+
+export const toMoreSheetItems = (role: string | undefined) => [
+  ...ALL_NAV_ITEMS.filter(({ href }) => !TAB_BAR_HREFS.includes(href)).filter(isAllowed(role)),
+  PROFILE_NAV_ITEM,
+];
 
 export const isActivePath = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 

@@ -10,6 +10,7 @@ import CustomTopBar from '@/components/custom/custom-top-bar';
 import { PREVIEW_FEEDING, PREVIEW_HIGH_ALERT_COUNT } from '@/lib/preview';
 
 import CustomPortalSidebar from './components/custom-portal-sidebar';
+import CustomPortalTabBar from './components/custom-portal-tab-bar';
 
 const PortalLayout = ({ children }: LayoutProps<'/'>) => (
   <>
@@ -31,7 +32,9 @@ const PortalLayout = ({ children }: LayoutProps<'/'>) => (
           {children}
         </main>
         <CustomFooter variant="split" className="mb-20 md:mb-0 max-md:[body:has([data-fullscreen])_&]:hidden" />
-        <CustomTabBar alertCount={PREVIEW_HIGH_ALERT_COUNT} />
+        <Suspense fallback={<CustomTabBar alertCount={PREVIEW_HIGH_ALERT_COUNT} />}>
+          <CustomPortalTabBar />
+        </Suspense>
       </div>
     </CustomAppShell>
   </>

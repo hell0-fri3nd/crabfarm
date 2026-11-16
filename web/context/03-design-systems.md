@@ -366,7 +366,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | State | Rule |
 |---|---|
 | Default / hover / focus / active | Visible focus ring (`--ring`, 3:1). Pressed state within 100 ms. |
-| Disabled | Faded, still visible, with the reason nearby ("Connect the scale to save"). Never hide an unavailable control. |
+| Disabled | Faded, still visible, with the reason nearby ("Connect the scale to save"). Never hide an unavailable control. **Exception, by decision:** a control or page a *role* can never use is hidden for that role (Staff don't see **New batch** or **Users**), using `lib/permissions.ts`. Temporary states (scale disconnected, device offline) still disable with a reason. |
 | Loading | Skeletons keep the page's shape (Closure). Buttons keep their width and change the label ("Saving…"). Inline text for one part of a page ("Loading the ammonia readings…"). |
 | Long work (> 3 s) | Determinate progress, estimate, cancel (sticker PDF, CSV export). |
 | Empty | `custom-empty-state`: icon, one-line title, a hint for how to fill it, one action. |

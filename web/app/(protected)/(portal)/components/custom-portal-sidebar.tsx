@@ -8,7 +8,7 @@ const CustomPortalSidebar = async () => {
 
   return (
     <CustomAppSidebar
-      user={{ name, role: toRoleLabel(role) }}
+      user={{ name, role, roleLabel: toRoleLabel(role) }}
       alertCount={PREVIEW_HIGH_ALERT_COUNT}
       feeding={PREVIEW_FEEDING}
     />
