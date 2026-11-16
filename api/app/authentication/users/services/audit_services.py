@@ -1,5 +1,6 @@
 from fastapi import Request, status
 
+from app.core import AuthUser
 from app.core.audit import AuditServices, Outcome
 from ..models import Users
 
@@ -175,7 +176,7 @@ class AuthAuditServices(AuditServices):
         action: str,
         request: Request | None,
         code: str,
-        actor: Users,
+        actor: AuthUser,
         target: Users | None = None,
         changes: dict | None = None,
     ) -> None:

@@ -1,4 +1,9 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from .security import Role
 
 
 class PageQuery(BaseModel):
@@ -18,3 +23,14 @@ class Page[T](BaseModel):
 
     def __len__(self) -> int:
         return len(self.items)
+
+
+class AuthUser(BaseModel):
+    """The signed-in user as the access token states it. Every domain gets this as `actor`."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: UUID
+    role: Role
+    email: str | None = None
+    expires_at: datetime

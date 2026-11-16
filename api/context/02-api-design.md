@@ -243,7 +243,7 @@ Status codes listed are in addition to the defaults every protected endpoint has
 | POST | `/users/{user_id}/reactivate` (no body) | 200 `USER_REACTIVATED` (sets `is_active=true`, idempotent; password and pin unchanged) | 403 non-developer touching a developer, 404 |
 | POST | `/users/{user_id}/reset-credentials` (no body: password **and** pin back to the defaults) | 200 `CREDENTIALS_RESET` | 403, 404, 409 your own account |
 
-Endpoints name their allowed roles with the aliases from `authentication.users` (01 §13):
+Endpoints name their allowed roles with the aliases from `app.core` (01 §13):
 
 | Alias | Roles | Used for |
 |---|---|---|
@@ -253,7 +253,7 @@ Endpoints name their allowed roles with the aliases from `authentication.users` 
 
 `/events/stream` only needs a signed-in user (router-level `get_current_user`).
 
-User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, deactivating or resetting a `DEVELOPER` account is `DEVELOPER` only (`403 DEVELOPER_ROLE_REQUIRED`); the service checks it because the role is in the payload or the DB row. Every role changes its own password and pin through `/auth/change-password` and `/auth/change-pin`. A deactivated user gets `403 USER_INACTIVE` at sign-in and `401` on any token.
+User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, deactivating or resetting a `DEVELOPER` account is `DEVELOPER` only (`403 DEVELOPER_ROLE_REQUIRED`); the service checks it because the role is in the payload or the DB row. Every role changes its own password and pin through `/auth/change-password` and `/auth/change-pin`. A deactivated user gets `403 USER_INACTIVE` at sign-in and `401` on refresh/PIN and on their own-account endpoints; other endpoints accept their access token until it expires (≤ 15 min, 01 §13).
 
 **Tokens are stateless JWTs** (01 §13): nothing tracks them server-side and a token is valid until its `exp`. `/auth/sign-out` exists only for the audit trail; it doesn't invalidate anything. Deactivated users are rejected on every request through `is_active`.
 

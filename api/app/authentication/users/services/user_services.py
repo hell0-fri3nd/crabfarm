@@ -10,6 +10,7 @@ from sqlmodel import (
 )
 
 from app.core import (
+    AuthUser,
     Page,
     Role,
     settings,
@@ -65,7 +66,7 @@ class UserServices:
         self,
         action: str,
         code: str,
-        actor: Users,
+        actor: AuthUser,
         request: Request | None,
         target: Users | None = None,
     ) -> Response:
@@ -73,7 +74,7 @@ class UserServices:
         return Response(success=False, message=FAILURE_MESSAGES[code], code=code)
 
     @staticmethod
-    def __requires_developer(actor: Users, *roles: Role | None) -> bool:
+    def __requires_developer(actor: AuthUser, *roles: Role | None) -> bool:
         # The target/assigned role is only known from the payload or the DB, so this can't be a route dependency
         return Role.DEVELOPER in roles and actor.role != Role.DEVELOPER
 
@@ -90,7 +91,7 @@ class UserServices:
             statement = statement.where(Users.id != exclude_id)
         return self.db.exec(statement).first() is not None
 
-    def create(self, payload: CreateUserRequest, actor: Users, request: Request | None = None) -> Response[UserRead]:
+    def create(self, payload: CreateUserRequest, actor: AuthUser, request: Request | None = None) -> Response[UserRead]:
         action = "user.create"
         try:
             if self.__requires_developer(actor, payload.role):
@@ -118,7 +119,7 @@ class UserServices:
             logger.exception("User creation failed")
             return self.__fail(action, "USER_CREATE_FAILED", actor, request)
 
-    def list(self, query: ListUsersQuery, actor: Users, request: Request | None = None) -> Response[Page[UserRead]]:
+    def list(self, query: ListUsersQuery, actor: AuthUser, request: Request | None = None) -> Response[Page[UserRead]]:
         action = "user.list"
         try:
             statement = select(Users)
@@ -167,7 +168,7 @@ class UserServices:
             logger.exception("User listing failed")
             return self.__fail(action, "USERS_LIST_FAILED", actor, request)
 
-    def get(self, user_id: UUID, actor: Users, request: Request | None = None) -> Response[UserRead]:
+    def get(self, user_id: UUID, actor: AuthUser, request: Request | None = None) -> Response[UserRead]:
         action = "user.get"
         try:
             if not (user := self.db.get(Users, user_id)):
@@ -187,7 +188,7 @@ class UserServices:
         self,
         user_id: UUID,
         payload: UpdateUserRequest,
-        actor: Users,
+        actor: AuthUser,
         request: Request | None = None,
     ) -> Response[UserRead]:
         action = "user.update"
@@ -223,7 +224,7 @@ class UserServices:
             logger.exception("User update failed for %s", user_id)
             return self.__fail(action, "USER_UPDATE_FAILED", actor, request)
 
-    def deactivate(self, user_id: UUID, actor: Users, request: Request | None = None) -> Response[UserRead]:
+    def deactivate(self, user_id: UUID, actor: AuthUser, request: Request | None = None) -> Response[UserRead]:
         action = "user.deactivate"
         try:
             if user_id == actor.id:
@@ -253,7 +254,7 @@ class UserServices:
             logger.exception("User deactivation failed for %s", user_id)
             return self.__fail(action, "USER_DEACTIVATE_FAILED", actor, request)
 
-    def reactivate(self, user_id: UUID, actor: Users, request: Request | None = None) -> Response[UserRead]:
+    def reactivate(self, user_id: UUID, actor: AuthUser, request: Request | None = None) -> Response[UserRead]:
         action = "user.reactivate"
         try:
             if not (user := self.db.get(Users, user_id)):
@@ -281,7 +282,7 @@ class UserServices:
             logger.exception("User reactivation failed for %s", user_id)
             return self.__fail(action, "USER_REACTIVATE_FAILED", actor, request)
 
-    def reset_credentials(self, user_id: UUID, actor: Users, request: Request | None = None) -> Response[UserRead]:
+    def reset_credentials(self, user_id: UUID, actor: AuthUser, request: Request | None = None) -> Response[UserRead]:
         action = "user.reset_credentials"
         try:
             if user_id == actor.id:

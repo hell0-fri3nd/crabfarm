@@ -1,6 +1,5 @@
 from collections.abc import Callable
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import (
     Depends,
@@ -10,10 +9,12 @@ from fastapi import (
 )
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
+from pydantic import ValidationError
 from sqlmodel import Session
 
-from .audit import Actor, AuditServices, Outcome
+from .audit import AuditServices, Outcome
 from .database import get_db
+from .schemas import AuthUser
 from .security import JwtManager, Role
 
 
@@ -24,14 +25,19 @@ bearer = HTTPBearer(auto_error=False)
 
 
 class TokenAuth:
-    """Resolves the `model` row named by a Bearer JWT of the given type ("access" or "refresh").
-    The model is a parameter so core never imports the domain that owns it."""
+    """Validates a Bearer JWT of the given type ("access" or "refresh") and returns the user named in
+    its claims. Nothing is read from the DB, so a role change or deactivation applies once the access
+    token expires; `authentication` loads the row where it must be fresh (refresh, own account)."""
 
-    def __init__(self, token_type: str, model: type):
+    def __init__(self, token_type: str):
         self.token_type = token_type
-        self.model = model
 
-    def __reject(
+    def __session_token(self, request: Request, credentials: HTTPAuthorizationCredentials | None) -> str | None:
+        if self.token_type != "access":
+            return None
+        return credentials.credentials if credentials else getattr(request.state, "access_token", None)
+
+    def reject(
         self,
         request: Request,
         credentials: HTTPAuthorizationCredentials | None,
@@ -43,7 +49,7 @@ class TokenAuth:
             action=f"auth.{self.token_type}_token_rejected",
             outcome=Outcome.FAILURE,
             request=request,
-            session_token=credentials.credentials if credentials and self.token_type == "access" else None,
+            session_token=self.__session_token(request, credentials),
             http_status=status.HTTP_401_UNAUTHORIZED,
             reason=reason,
             changes=audit.build_errors(("authorization", detail, reason.lower())),
@@ -57,33 +63,30 @@ class TokenAuth:
     def __call__(
         self,
         request: Request,
-        db: DbSession,
         credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-    ):
+    ) -> AuthUser:
         if credentials is None:
-            raise self.__reject(request, credentials, "Not authenticated", "NOT_AUTHENTICATED")
+            raise self.reject(request, credentials, "Not authenticated", "NOT_AUTHENTICATED")
 
         try:
             payload = JwtManager().decode_token(credentials.credentials)
         except ExpiredSignatureError:
-            raise self.__reject(request, credentials, "Token expired", "TOKEN_EXPIRED")
+            raise self.reject(request, credentials, "Token expired", "TOKEN_EXPIRED")
         except InvalidTokenError:
-            raise self.__reject(request, credentials, "Invalid token", "INVALID_TOKEN")
+            raise self.reject(request, credentials, "Invalid token", "INVALID_TOKEN")
 
         if payload.get("type") != self.token_type:
-            raise self.__reject(request, credentials, "Invalid token type", "INVALID_TOKEN_TYPE")
+            raise self.reject(request, credentials, "Invalid token type", "INVALID_TOKEN_TYPE")
 
         try:
-            user_id = UUID(payload.get("sub", ""))
-        except ValueError:
-            raise self.__reject(request, credentials, "Invalid token subject", "INVALID_TOKEN_SUBJECT")
-
-        # Role is read from the DB, not the token, so role changes apply immediately
-        user = db.get(self.model, user_id)
-        if not user:
-            raise self.__reject(request, credentials, "User not found", "USER_NOT_FOUND")
-        if not user.is_active:
-            raise self.__reject(request, credentials, "User is deactivated", "USER_INACTIVE")
+            user = AuthUser(
+                id=payload.get("sub"),
+                role=payload.get("role"),
+                email=payload.get("email"),
+                expires_at=payload.get("exp"),
+            )
+        except ValidationError:
+            raise self.reject(request, credentials, "Invalid token claims", "INVALID_TOKEN_CLAIMS")
 
         # Later audit events in this request (e.g. a 422 on the body) use these as the actor
         request.state.user = user
@@ -91,6 +94,9 @@ class TokenAuth:
             request.state.access_token = credentials.credentials
 
         return user
+
+
+get_current_user = TokenAuth("access")
 
 
 class Provide[T]:
@@ -103,11 +109,10 @@ class Provide[T]:
         return self.service_cls(db)
 
 
-def require_roles(current_user: Callable[..., Actor], *roles: Role) -> Callable[..., Actor]:
-    """Ensures the user from `current_user` has one of the listed roles. The user dependency is a
-    parameter because core can't import the authentication domain that loads it."""
+def require_roles(*roles: Role) -> Callable[..., AuthUser]:
+    """Ensures the current user has one of the listed roles."""
 
-    def guard(request: Request, actor: Annotated[Actor, Depends(current_user)]) -> Actor:
+    def guard(request: Request, actor: Annotated[AuthUser, Depends(get_current_user)]) -> AuthUser:
         if actor.role not in roles:
             detail = "Your role can't do this"
             audit.record(
@@ -124,3 +129,9 @@ def require_roles(current_user: Callable[..., Actor], *roles: Role) -> Callable[
         return actor
 
     return guard
+
+
+type CurrentUser = Annotated[AuthUser, Depends(get_current_user)]
+type DeveloperOnly = Annotated[AuthUser, Depends(require_roles(Role.DEVELOPER))]
+type DeveloperOrAdmin = Annotated[AuthUser, Depends(require_roles(Role.DEVELOPER, Role.ADMIN))]
+type AnyRole = Annotated[AuthUser, Depends(require_roles(*Role))]

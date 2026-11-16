@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import (
@@ -8,8 +8,7 @@ from fastapi import (
     status,
 )
 
-from app.authentication.users import get_current_user
-from app.core import JwtManager
+from app.core import CurrentUser
 from app.infrastructure.streaming import StreamHub
 
 RETRY_AFTER_SECONDS = "30"
@@ -32,11 +31,8 @@ class LiveStreamHub:
 class AccessTokenExpiry:
     """When the request's access token expires, so a stream can end with it."""
 
-    def __call__(self, request: Request, _: object = Depends(get_current_user)) -> datetime | None:
-        token: str | None = getattr(request.state, "access_token", None)
-        if token is None:
-            return None
-        return datetime.fromtimestamp(JwtManager().decode_token(token)["exp"], tz=timezone.utc)
+    def __call__(self, actor: CurrentUser) -> datetime:
+        return actor.expires_at
 
 
 get_stream_hub = LiveStreamHub()
@@ -44,4 +40,4 @@ get_access_token_expiry = AccessTokenExpiry()
 
 
 type StreamHubDep = Annotated[StreamHub, Depends(get_stream_hub)]
-type TokenExpiry = Annotated[datetime | None, Depends(get_access_token_expiry)]
+type TokenExpiry = Annotated[datetime, Depends(get_access_token_expiry)]

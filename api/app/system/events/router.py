@@ -6,7 +6,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from app.authentication.users import get_current_user
+from app.core import get_current_user
 from app.core.exceptions import AUDIT_ACTION_KEY
 from .dependencies import StreamHubDep, TokenExpiry
 from .schemas import ErrorResponse

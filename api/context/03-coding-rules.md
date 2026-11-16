@@ -71,7 +71,7 @@ class BatchServices:
 
 ### Dependencies: classes with `__call__`
 
-Configure the class in `__init__`, resolve in `__call__`, and export a ready instance with a snake_case name, as `TokenAuth` does. The one exception is a guard whose **sub-dependency is a parameter**, like `core.require_roles(current_user, *roles)`: FastAPI reads `Depends(...)` from the signature, so it is a factory that returns an inner function.
+Configure the class in `__init__`, resolve in `__call__`, and export a ready instance with a snake_case name, as `TokenAuth` does. The one exception is a guard that is **parameterised per endpoint and has a sub-dependency**, like `core.require_roles(*roles)`: FastAPI reads `Depends(get_current_user)` from the signature, so it is a factory that returns an inner function.
 
 ```python
 class LoadBatch:
@@ -187,7 +187,7 @@ Don't be clever for its own sake. If a one-liner needs a second read, use two li
 | Dunder | Use it for | Example |
 |---|---|---|
 | `__init__` | Inject collaborators and config. No I/O. | `AuthServices(db, password_services, jwt_manager)` |
-| `__call__` | Dependency classes (FastAPI calls the instance) | `TokenAuth("access", Users)`, `Provide(UserServices)` |
+| `__call__` | Dependency classes (FastAPI calls the instance) | `TokenAuth("access")`, `Provide(UserServices)` |
 | `__repr__` | Debug/log view of models and value objects. **Never include secrets** (hashes, tokens, pins). | `Users(id=…, email='a@b.c', role=STAFF)` |
 | `__str__` | A human-readable label when one is natural | `str(batch) → "B-2026-012"` |
 | `__bool__` | Truthiness that reads well | `Response.__bool__ → self.success`, so `if not result:` |
@@ -202,9 +202,9 @@ Don't overload arithmetic or comparison operators on things that aren't values (
 
 - **No comment blocks.** No banners, section dividers or line-by-line narration, and no commented-out code (git keeps the history).
 - **Comment *why*, never *what*.** One line, only when the reason isn't obvious from the code. Good examples from the repo:
-  - `# Role is read from the DB, not the token, so role changes apply immediately`
+  - `# Later audit events in this request (e.g. a 422 on the body) use these as the actor`
   - `# session_hash is only ever an access token; a rejected refresh token is not hashed`
-- **Docstrings:** one line on public classes and on functions whose purpose the name can't carry (`"""Resolves the user from a Bearer JWT of the given type."""`). Don't write parameter-by-parameter docstrings; type hints already document them.
+- **Docstrings:** one line on public classes and on functions whose purpose the name can't carry (`"""Validates a Bearer JWT of the given type and returns the user named in its claims."""`). Don't write parameter-by-parameter docstrings; type hints already document them.
 - A `TODO` needs an owner or ticket: `# TODO(art): …`.
 
 ## 8. Imports

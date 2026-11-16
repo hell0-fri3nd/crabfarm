@@ -21,11 +21,11 @@ from app.core import (
 from app.core.security import rate_limit
 
 from ..dependencies import (
+    AccountUser,
     AuthServicesDep,
     CurrentUser,
     bearer,
     get_refresh_user,
-    get_current_user,
 )
 from ..models import Users
 from ..schemas import (
@@ -67,7 +67,7 @@ TOO_MANY_ATTEMPTS = {
         },
     },
 )
-def me(user: CurrentUser, services: AuthServicesDep):
+def me(user: AccountUser, services: AuthServicesDep):
     return services.me(user)
 
 
@@ -98,7 +98,7 @@ def me(user: CurrentUser, services: AuthServicesDep):
 def complete_onboarding(
     payload: OnboardingRequest,
     http_request: Request,
-    user: CurrentUser,
+    user: AccountUser,
     services: AuthServicesDep,
     credentials: HTTPAuthorizationCredentials = Depends(bearer),
 ) -> AuthResponse:
@@ -161,7 +161,7 @@ def my_activity(query: Annotated[ActivityQuery, Query()], user: CurrentUser, ser
         },
     },
 )
-def update_me(payload: UpdateMeRequest, request: Request, user: CurrentUser, services: AuthServicesDep):
+def update_me(payload: UpdateMeRequest, request: Request, user: AccountUser, services: AuthServicesDep):
     result = services.update_me(user, payload, request=request)
     if result.code == "USER_UPDATE_FAILED":
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.message)
@@ -358,7 +358,7 @@ def sign_out(
 async def change_password(
     request: ChangePasswordRequest,
     http_request: Request,
-    user: Users = Depends(get_current_user),
+    user: AccountUser,
     credentials: HTTPAuthorizationCredentials = Depends(bearer),
     db: Session = Depends(get_db),
 )-> AuthResponse:
@@ -428,7 +428,7 @@ async def change_password(
 async def change_pin(
     request: ChangePinRequest,
     http_request: Request,
-    user: Users = Depends(get_current_user),
+    user: AccountUser,
     credentials: HTTPAuthorizationCredentials = Depends(bearer),
     db: Session = Depends(get_db),
 )-> AuthResponse:

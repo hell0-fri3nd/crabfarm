@@ -23,6 +23,9 @@ class JwtManager:
         )
 
     def create_access_token(self, data: dict) -> str:
+        return self.issue_access_token(data)[0]
+
+    def issue_access_token(self, data: dict) -> tuple[str, datetime]:
         expire = datetime.now(timezone.utc) + timedelta(
             minutes=self.access_token_expire_minutes
         )
@@ -37,7 +40,7 @@ class JwtManager:
             payload,
             self.secret_key,
             algorithm=self.algorithm,
-        )
+        ), expire
 
     def create_refresh_token(self, data: dict, remember_me: bool = False) -> str:
         days = (

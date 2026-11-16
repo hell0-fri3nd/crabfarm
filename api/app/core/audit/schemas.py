@@ -30,5 +30,5 @@ class Actor(Protocol):
     """Who did it, as audit sees it. Lets any module audit the current user without importing auth's Users."""
 
     id: UUID
-    email: str
+    email: str | None
     role: Enum

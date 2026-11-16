@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import Request
 from sqlmodel import Session, select
 
-from app.core import JwtManager, settings
+from app.core import AuthUser, JwtManager, settings
 from app.core.audit import AuditEvents, Outcome
 from .audit_services import AuthAuditServices
 from .password_services import PasswordServices
@@ -80,7 +80,7 @@ class AuthServices:
                 code="ONBOARDING_FAILED", details=None,
             )
 
-    def my_activity(self, user: Users, query: ActivityQuery) -> Response[list[ActivityRead]]:
+    def my_activity(self, user: AuthUser, query: ActivityQuery) -> Response[list[ActivityRead]]:
         # Only what the user actually did: failed attempts and rejected tokens are security noise, not activity
         events = self.db.exec(
             select(AuditEvents)
@@ -177,6 +177,7 @@ class AuthServices:
                 data={
                     "sub": str(user.id),
                     "role": user.role.value,
+                    "email": user.email,
                 }
             )
 
@@ -226,16 +227,13 @@ class AuthServices:
                     details=None
                 )
 
-            access_token = self.jwt_manager.create_access_token(
+            # Re-authentication issues a new access token; record its lifetime, never the token
+            access_token, expires_at = self.jwt_manager.issue_access_token(
                 data={
                     "sub": str(user.id),
                     "role": user.role.value,
+                    "email": user.email,
                 }
-            )
-
-            # Re-authentication issues a new access token; record its lifetime, never the token
-            expires_at = datetime.fromtimestamp(
-                self.jwt_manager.decode_token(access_token)["exp"], tz=timezone.utc
             )
             self.audit.pin(
                 request,
