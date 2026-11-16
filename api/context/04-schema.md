@@ -83,9 +83,9 @@ Indexes: `occurred_at`, `actor_id`, `action`.
 | `batch_id` | `int` | yes | FK → `batches.id`, indexed |
 | `crab_id` | `int` | no | FK → `crabs.id`, indexed |
 | `user_id` | `uuid` | no | refers to `auth.users.id`, indexed, **no FK** (cross-module, §5) |
-| `type` | enum `logs_enum` (`prediction`, `actual`) | no | indexed, stores enum **values** |
-| `width` | `numeric(10,2)` | yes | carapace width |
-| `weight` | `numeric(10,2)` | yes | |
+| `log_type` | enum `crab_management.log_type` (`prediction`, `actual`) | no | indexed, stores enum **values** |
+| `width_mm` | `numeric(10,2)` | yes | carapace width; the API accepts `0 < width_mm ≤ 300` |
+| `weight_g` | `numeric(10,2)` | yes | the API accepts `0 < weight_g ≤ 5000`; a log carries width, weight or both |
 | `created_at` | `timestamptz` | no | default `now()` |
 
 ### Relationships
@@ -176,11 +176,9 @@ Rules for every denormalized column:
 
 | # | Issue | Model says | Migrations / DB say | Fix |
 |---|---|---|---|---|
-| 1 | Logs table name | `crab_management.logs`, enum `logs_enum` | `crab_management.crab_logs`, enum `crab_logs_enum` (never renamed) | Rename migration (table, sequence, PK/FK/index names, enum), as `e8cfd54d53fc` did for batches |
-| 2 | Crab models not in Alembic | — | `migrations/env.py` has the crab model imports commented out, so autogenerate ignores `crab_management` | Import `Crabs`, `Batches`, `Logs` in `env.py` |
 | 3 | Role enum | `auth.user_role`, native | type `role` in the default schema (renamed from `userrole`), values `DEVELOPER/ADMIN/STAFF` (renamed in `f3b8a1d6c2e9`) | Migration to move/rename the type to `auth.user_role` |
 | 5 | `batches.user_id` cross-module FK | `foreign_key="auth.users.id"` | `fk_batches_user_id_users` exists | Remove `foreign_key` from the model and add a migration that drops the constraint (keep the index). `logs.user_id` is already correct (no FK). |
-| 6 | Naming rules | `logs.type`, `crabs.group_by`, `width`/`weight` without units, `serial` ids | — | When the logs/crab endpoints are built: `log_type`, `group_code`, `width_mm`, `weight_g`; decide uuid vs int ids |
+| 6 | Naming rules | `crabs.group_by`, `serial` ids | — | Rename to `group_code`; decide uuid vs int ids. Until then `AuditServices.record_target` writes a non-UUID id into `target_label`, because `audit_events.target_id` is `uuid`. (`logs` was fixed in `5a7d3e9c1b42`: `crab_logs` → `logs`, enum → `crab_management.log_type`, `log_type`/`width_mm`/`weight_g`.) |
 | 7 | Empty revision | — | `d8ce1eff817c` has `pass` in both directions | Leave it (it's in the chain). Don't repeat. |
 | 8 | Base class | models inherit `SQLModel` directly | — | Fine, because the naming convention is set on `SQLModel.metadata`. Use `core.Base` for new models. |
 

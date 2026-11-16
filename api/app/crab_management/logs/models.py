@@ -11,7 +11,7 @@ from sqlmodel import (
 )
 
 
-class Type(str, Enum):
+class LogType(str, Enum):
     PREDICTION = "prediction"
     ACTUAL     = "actual"
 
@@ -24,16 +24,17 @@ class Logs(SQLModel, table=True):
     batch_id: int | None = Field(default=None, foreign_key="crab_management.batches.id", index=True)
     crab_id: int         = Field(foreign_key="crab_management.crabs.id", index=True)
     user_id: UUID        = Field(nullable=False, index=True)
-    type: Type           = Field(
+    log_type: LogType    = Field(
                             index=True,
                             sa_type=SAEnum(
-                                Type,
-                                name="logs_enum",
+                                LogType,
+                                name="log_type",
+                                schema="crab_management",
                                 values_callable=lambda e: [m.value for m in e],
                             ),
                         )
-    width: Decimal | None  = Field(default=None, max_digits=10, decimal_places=2)
-    weight: Decimal | None = Field(default=None, max_digits=10, decimal_places=2)
+    width_mm: Decimal | None = Field(default=None, max_digits=10, decimal_places=2)
+    weight_g: Decimal | None = Field(default=None, max_digits=10, decimal_places=2)
 
     created_at: datetime | None = Field(
         default=None,

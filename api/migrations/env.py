@@ -6,8 +6,9 @@ from app.core import engine
 # before target_metadata is read below. Add new model modules here.
 from app.authentication.users.models import Users
 from app.core.audit.models import AuditEvents
-# from app.crab_management.crab.models import Crabs, Batches
-# from app.crab_management.prediction.models import CrabLogs
+from app.crab_management.batches.models import Batches
+from app.crab_management.crab.models import Crabs
+from app.crab_management.logs.models import Logs
 
 from alembic import context
 
