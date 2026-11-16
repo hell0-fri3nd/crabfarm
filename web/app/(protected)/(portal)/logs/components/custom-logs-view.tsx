@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { FileDown, ScrollText, SearchX } from 'lucide-react';
 import { subDays } from 'date-fns';
 
@@ -8,30 +9,30 @@ import CustomPageHeader from '@/components/custom/custom-page-header';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { notify } from '@/lib/notify';
+import { cn } from '@/lib/utils';
 
 import CustomCrabLogTable from './custom-crab-log-table';
 import CustomLogFilters from './custom-log-filters';
 import CustomLogPagination from './custom-log-pagination';
 import CustomSensorLogTable from './custom-sensor-log-table';
-import {
-  countFlaggedSince,
-  countOutOfRangeSince,
-  crabLogsToCsv,
-  filterCrabLogs,
-  filterSensorLogs,
-  paginate,
-  resolveDateRange,
-  sensorLogsToCsv,
-} from '../lib/log-filters';
-import { PREVIEW_CRAB_LOGS, PREVIEW_NOW, PREVIEW_SENSOR_LOGS } from '../lib/preview-logs';
+import { exportCrabLogs } from '../actions/export-crab-logs';
+import { countOutOfRangeSince, crabLogsToCsv, filterSensorLogs, paginate, resolveDateRange, sensorLogsToCsv } from '../lib/log-filters';
+import { PREVIEW_NOW, PREVIEW_SENSOR_LOGS } from '../lib/preview-logs';
 import { useLogsSearchParams } from '../lib/use-logs-search-params';
 import { logTabSchema } from '../types/logs';
 
-import type { LogTab } from '../types/logs';
+import type { BatchOption } from './custom-log-filters';
+import type { CrabLogPage, LogTab } from '../types/logs';
+
+type CustomLogsViewProps = {
+  crabPage: CrabLogPage;
+  batches: BatchOption[];
+  nowIso: string;
+};
 
 const TAB_LABELS = { crab: 'Crab logs', sensor: 'Sensor logs' } as const satisfies Record<LogTab, string>;
 
-const CLEARED_FILTERS = { q: null, preset: null, from: null, to: null, batch: null, level: null };
+const CLEARED_FILTERS = { q: null, preset: null, from: null, to: null, batch: null, level: null, type: null };
 
 const downloadCsv = (filename: string, csv: string) => {
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -42,34 +43,52 @@ const downloadCsv = (filename: string, csv: string) => {
   URL.revokeObjectURL(url);
 };
 
-const CustomLogsView = () => {
-  const { params, setParams } = useLogsSearchParams();
-  const now = PREVIEW_NOW;
-  const dateRange = resolveDateRange(params, now);
-  const weekStart = subDays(now, 7);
+const CustomLogsView = ({ crabPage, batches, nowIso }: CustomLogsViewProps) => {
+  const { params, rawParams, setParams, isPending } = useLogsSearchParams();
+  const [isExporting, setIsExporting] = useState(false);
   const isCrabTab = params.tab === 'crab';
+  const now = isCrabTab ? new Date(nowIso) : PREVIEW_NOW;
+  const dateRange = resolveDateRange(params, now);
 
-  const crabRows = filterCrabLogs(PREVIEW_CRAB_LOGS, params, dateRange);
   const sensorRows = filterSensorLogs(PREVIEW_SENSOR_LOGS, params, dateRange);
-  const crabPage = paginate(crabRows, params.page);
   const sensorPage = paginate(sensorRows, params.page);
-  const visibleCount = isCrabTab ? crabRows.length : sensorRows.length;
-  const hasFilters = params.q !== '' || dateRange.isCustom || params.preset !== '7d' || params.batch !== 'all' || params.level !== 'all';
+  const visibleCount = isCrabTab ? crabPage.total : sensorRows.length;
+  const hasFilters = params.q !== '' || dateRange.isCustom || params.preset !== '7d' || params.batch !== 'all' || params.level !== 'all' || params.type !== 'all';
+  const rangeText = dateRange.label.toLowerCase();
 
   const status = isCrabTab
-    ? `${PREVIEW_CRAB_LOGS.length} crab logs · ${countFlaggedSince(PREVIEW_CRAB_LOGS, weekStart)} flagged this week`
-    : `${PREVIEW_SENSOR_LOGS.length} sensor readings · ${countOutOfRangeSince(PREVIEW_SENSOR_LOGS, weekStart)} out of range this week`;
+    ? `${crabPage.total} crab ${crabPage.total === 1 ? 'log' : 'logs'} · ${rangeText}`
+    : `${PREVIEW_SENSOR_LOGS.length} sensor readings · ${countOutOfRangeSince(PREVIEW_SENSOR_LOGS, subDays(now, 7))} out of range this week`;
 
   const handleTabChange = (value: string) => {
     const parsed = logTabSchema.safeParse(value);
-    if (parsed.success) setParams({ tab: parsed.data === 'crab' ? null : parsed.data, batch: null, level: null });
+    if (parsed.success) setParams({ tab: parsed.data === 'crab' ? null : parsed.data, batch: null, level: null, type: null });
   };
 
-  const handleExport = () => {
-    const noun = isCrabTab ? 'crab logs' : 'sensor readings';
-    const csv = isCrabTab ? crabLogsToCsv(crabRows) : sensorLogsToCsv(sensorRows);
-    downloadCsv(`crabfarm-${params.tab}-logs-${dateRange.label.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}.csv`, csv);
-    notify.success('CSV exported', { description: `${visibleCount} ${noun}, ${dateRange.label.toLowerCase()}` });
+  const exportFilename = `crabfarm-${params.tab}-logs-${rangeText.replaceAll(/[^a-z0-9]+/g, '-')}.csv`;
+
+  const handleExport = async () => {
+    if (!isCrabTab) {
+      downloadCsv(exportFilename, sensorLogsToCsv(sensorRows));
+      notify.success('CSV exported', { description: `${sensorRows.length} sensor readings, ${rangeText}` });
+      return;
+    }
+
+    setIsExporting(true);
+    const result = await exportCrabLogs(rawParams);
+    setIsExporting(false);
+
+    if (!result.ok) {
+      notify.error("Couldn't export the crab logs", { description: `${result.message} Nothing was downloaded.` });
+      return;
+    }
+
+    const { rows, total } = result.data;
+    downloadCsv(exportFilename, crabLogsToCsv(rows));
+    notify.success('CSV exported', {
+      description:
+        rows.length < total ? `The first ${rows.length} of ${total} crab logs. Narrow the dates for the rest.` : `${rows.length} crab logs, ${rangeText}`,
+    });
   };
 
   const handlePageChange = (page: number) => setParams({ page: page > 1 ? String(page) : null });
@@ -80,7 +99,7 @@ const CustomLogsView = () => {
       title={hasFilters ? 'No logs match these filters' : 'No logs yet'}
       hint={
         hasFilters
-          ? 'Try a wider date range, another batch or a shorter search.'
+          ? 'Try a wider date range, another batch or type, or a crab code like B1-A1.'
           : 'Logs appear here after a crab is scanned and weighed, or a sensor reports.'
       }
       action={
@@ -95,7 +114,7 @@ const CustomLogsView = () => {
   );
 
   return (
-    <Tabs value={params.tab} onValueChange={handleTabChange} className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+    <Tabs value={params.tab} onValueChange={handleTabChange} className="flex w-full flex-col gap-8">
       <CustomPageHeader
         title="Logs"
         status={<span>{status}</span>}
@@ -108,18 +127,27 @@ const CustomLogsView = () => {
                 </TabsTrigger>
               ))}
             </TabsList>
-            <Button type="button" className="h-11 px-5" onClick={handleExport} disabled={visibleCount === 0}>
+            <Button
+              type="button"
+              className="h-11 px-5"
+              onClick={() => void handleExport()}
+              disabled={visibleCount === 0 || isExporting}
+            >
               <FileDown aria-hidden />
-              Export CSV
+              {isExporting ? 'Exporting…' : 'Export CSV'}
             </Button>
           </>
         }
       />
 
       <div className="flex flex-col gap-5">
-        <CustomLogFilters params={params} dateRange={dateRange} now={now} onChange={setParams} />
+        <CustomLogFilters params={params} batches={batches} dateRange={dateRange} now={now} onChange={setParams} />
 
-        <TabsContent value="crab" className="flex flex-col gap-5">
+        <TabsContent
+          value="crab"
+          aria-busy={isPending}
+          className={cn('flex flex-col gap-5 transition-opacity', isPending && 'opacity-60')}
+        >
           {crabPage.total === 0 ? emptyState : <CustomCrabLogTable logs={crabPage.rows} now={now} />}
           {crabPage.total > 0 && <CustomLogPagination {...crabPage} noun="crab logs" onPageChange={handlePageChange} />}
         </TabsContent>

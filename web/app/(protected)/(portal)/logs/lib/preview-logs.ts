@@ -1,57 +1,10 @@
-import { crabLogSchema, sensorKindSchema, sensorLogSchema } from '../types/logs';
+import { sensorKindSchema, sensorLogSchema } from '../types/logs';
 
-import type { CrabLog, SensorKind, SensorLog } from '../types/logs';
+import type { SensorKind, SensorLog } from '../types/logs';
 
-// Stand-in for GET /logs and /sensors/{id}/readings until the BFF is wired up
+// Stand-in for /sensors/{id}/readings until the monitoring API exists
 
 export const PREVIEW_NOW = new Date(2026, 10, 9, 21, 45);
-
-const at = (daysAgo: number, hour: number, minute: number) =>
-  new Date(2026, 10, 9 - daysAgo, hour, minute).toISOString();
-
-const REFERENCE_CRAB_LOGS = [
-  ['B3-B-02', 'BATCH-3', 182, 8.7, 3.4, null, 'Art Lisboa', at(0, 21, 42)],
-  ['B3-B-03', 'BATCH-3', 141, 7.9, -19.9, 'medium', 'Art Lisboa', at(0, 21, 40)],
-  ['B3-A-01', 'BATCH-3', 179, 8.6, 1.7, null, 'Maria Santos', at(0, 16, 12)],
-  ['B3-A-02', 'BATCH-3', 170, 8.4, -3.4, null, 'Maria Santos', at(0, 16, 10)],
-  ['B3-C-05', 'BATCH-3', 188, 8.9, 6.8, null, 'Jun Reyes', at(0, 7, 55)],
-  ['B3-D-03', 'BATCH-3', 165, 8.2, -6.3, null, 'Jun Reyes', at(0, 7, 51)],
-  ['B2-E-02', 'BATCH-2', 251, 10.2, 2, null, 'Maria Santos', at(6, 17, 20)],
-  ['B2-E-04', 'BATCH-2', 236, 9.8, -4.1, null, 'Maria Santos', at(6, 17, 18)],
-] as const;
-
-const LOGGERS = ['Art Lisboa', 'Maria Santos', 'Jun Reyes'];
-const ROWS = ['A', 'B', 'C', 'D', 'E'];
-export const PREVIEW_BATCHES = ['BATCH-3', 'BATCH-2', 'BATCH-1'] as const;
-const BATCH_BASE_WEIGHT = { 'BATCH-3': 170, 'BATCH-2': 240, 'BATCH-1': 310 } as const satisfies Record<(typeof PREVIEW_BATCHES)[number], number>;
-
-const generatedCrabLog = (index: number) => {
-  const batch = PREVIEW_BATCHES[index % PREVIEW_BATCHES.length] ?? 'BATCH-3';
-  const drift = ((index * 37) % 23) - 11;
-  const vsPredicted = Number((((index * 53) % 170) / 10 - 8).toFixed(1));
-  return [
-    `${batch.replace('BATCH-', 'B')}-${ROWS[index % ROWS.length]}-${String((index % 9) + 1).padStart(2, '0')}`,
-    batch,
-    BATCH_BASE_WEIGHT[batch] + drift,
-    Number((8 + (BATCH_BASE_WEIGHT[batch] + drift - 170) / 40).toFixed(1)),
-    vsPredicted,
-    vsPredicted <= -15 ? 'medium' : null,
-    LOGGERS[index % LOGGERS.length] ?? 'Art Lisboa',
-    at(1 + Math.floor(index / 3), 7 + ((index * 5) % 12), (index * 17) % 60),
-  ] as const;
-};
-
-const toCrabLog = (
-  [crab_code, batch_code, weight_g, width_cm, vs_predicted_pct, flag, logged_by, logged_at]:
-    | (typeof REFERENCE_CRAB_LOGS)[number]
-    | ReturnType<typeof generatedCrabLog>,
-  index: number,
-) => ({ id: `crab-log-${index}`, crab_code, batch_code, weight_g, width_cm, vs_predicted_pct, flag, logged_by, logged_at });
-
-export const PREVIEW_CRAB_LOGS: CrabLog[] = crabLogSchema
-  .array()
-  .parse([...REFERENCE_CRAB_LOGS, ...Array.from({ length: 70 }, (_, index) => generatedCrabLog(index))].map(toCrabLog))
-  .toSorted((first, second) => second.logged_at.localeCompare(first.logged_at));
 
 type SensorShape = {
   label: string;

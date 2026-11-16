@@ -1,8 +1,12 @@
 import { endOfDay, format, isSameDay, isWithinInterval, parseISO, startOfDay, subDays } from 'date-fns';
 
-import type { CrabLog, DatePreset, LevelFilter, LogsSearchParams, SensorLog } from '../types/logs';
+import type { CrabLog, DatePreset, LevelFilter, LogType, LogTypeFilter, LogsSearchParams, SensorLog } from '../types/logs';
 
 export const PAGE_SIZE = 7;
+
+export const LOG_TYPE_LABELS = { actual: 'Actual', prediction: 'Prediction' } as const satisfies Record<LogType, string>;
+
+export const LOG_TYPE_FILTER_LABELS = { all: 'All types', ...LOG_TYPE_LABELS } as const satisfies Record<LogTypeFilter, string>;
 
 export const DATE_PRESET_LABELS = {
   today: 'Today',
@@ -51,14 +55,6 @@ const matchesQuery = (query: string, ...fields: string[]) => {
   return needle === '' || fields.some((field) => field.toLowerCase().replace(/\s+/g, '').includes(needle));
 };
 
-export const filterCrabLogs = (logs: CrabLog[], params: LogsSearchParams, dateRange: DateRangeWindow) =>
-  logs.filter(
-    (log) =>
-      isInWindow(log.logged_at, dateRange) &&
-      (params.batch === 'all' || log.batch_code === params.batch) &&
-      matchesQuery(params.q, log.crab_code, log.logged_by, log.batch_code),
-  );
-
 const matchesLevel = (level: LevelFilter, { severity }: SensorLog) => {
   if (level === 'all') return true;
   if (level === 'normal') return severity === null;
@@ -103,13 +99,6 @@ export const formatLogTime = (iso: string, now: Date) => {
   return `${format(date, 'EEE d MMM')}, ${time}`;
 };
 
-export const formatSignedPercent = (value: number) => {
-  const magnitude = `${Math.abs(value).toFixed(1)}%`;
-  if (value > 0) return `+${magnitude}`;
-  if (value < 0) return `−${magnitude}`;
-  return magnitude;
-};
-
 export const formatReading = ({ value, decimals, unit }: SensorLog) =>
   unit ? `${value.toFixed(decimals)} ${unit}` : value.toFixed(decimals);
 
@@ -121,16 +110,17 @@ const escapeCsvCell = (cell: string | number) => {
 export const toCsv = (headers: string[], rows: (string | number)[][]) =>
   [headers, ...rows].map((row) => row.map(escapeCsvCell).join(',')).join('\n');
 
+const toCsvNumber = (value: number | null) => value ?? '';
+
 export const crabLogsToCsv = (logs: CrabLog[]) =>
   toCsv(
-    ['crab', 'batch', 'weight_g', 'width_cm', 'vs_predicted_pct', 'flag', 'logged_by', 'logged_at'],
+    ['crab', 'batch', 'log_type', 'width_mm', 'weight_g', 'logged_by', 'created_at'],
     logs.map((log) => [
       log.crab_code,
-      log.batch_code,
-      log.weight_g,
-      log.width_cm,
-      log.vs_predicted_pct,
-      log.flag ?? '',
+      log.batch_label,
+      log.log_type,
+      toCsvNumber(log.width_mm),
+      toCsvNumber(log.weight_g),
       log.logged_by,
       log.logged_at,
     ]),
@@ -141,9 +131,6 @@ export const sensorLogsToCsv = (logs: SensorLog[]) =>
     ['sensor', 'value', 'unit', 'safe_range', 'severity', 'measured_at'],
     logs.map((log) => [log.sensor_label, log.value, log.unit, log.safe_label, log.severity ?? 'in range', log.measured_at]),
   );
-
-export const countFlaggedSince = (logs: CrabLog[], since: Date) =>
-  logs.filter(({ flag, logged_at }) => flag !== null && parseISO(logged_at) >= since).length;
 
 export const countOutOfRangeSince = (logs: SensorLog[], since: Date) =>
   logs.filter(({ severity, measured_at }) => severity === 'high' && parseISO(measured_at) >= since).length;

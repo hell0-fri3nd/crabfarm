@@ -1,3 +1,4 @@
+import { useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { logsSearchParamsSchema } from '../types/logs';
@@ -10,6 +11,7 @@ export const useLogsSearchParams = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
   const params = logsSearchParamsSchema.parse(Object.fromEntries(searchParams));
 
   const setParams = (updates: ParamUpdates) => {
@@ -20,8 +22,8 @@ export const useLogsSearchParams = () => {
     });
     if (!('page' in updates)) next.delete('page');
     const query = next.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }));
   };
 
-  return { params, setParams };
+  return { params, rawParams: Object.fromEntries(searchParams), setParams, isPending };
 };

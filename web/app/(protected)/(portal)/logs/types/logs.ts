@@ -15,18 +15,55 @@ export type LevelFilter = z.infer<typeof levelFilterSchema>;
 export { sensorKindSchema };
 export type { SensorKind } from '@/types/sensor';
 
+export const logTypeSchema = z.enum(['actual', 'prediction']);
+export type LogType = z.infer<typeof logTypeSchema>;
+
+export const logTypeFilterSchema = z.enum(['all', ...logTypeSchema.options]);
+export type LogTypeFilter = z.infer<typeof logTypeFilterSchema>;
+
+const apiDecimalSchema = z.union([z.string(), z.number()]).pipe(z.coerce.number());
+
+export const apiLogSchema = z.object({
+  id: z.number().int().positive(),
+  batch_id: z.number().int().positive().nullable(),
+  crab_id: z.number().int().positive(),
+  user_id: z.uuid(),
+  log_type: logTypeSchema,
+  width_mm: apiDecimalSchema.nullable(),
+  weight_g: apiDecimalSchema.nullable(),
+  created_at: z.iso.datetime({ offset: true }),
+});
+export type ApiLog = z.infer<typeof apiLogSchema>;
+
+export const logsPageSchema = z.object({
+  items: z.array(apiLogSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int(),
+  size: z.number().int(),
+});
+export type LogsPage = z.infer<typeof logsPageSchema>;
+
 export const crabLogSchema = z.object({
   id: z.string(),
   crab_code: z.string(),
-  batch_code: z.string(),
-  weight_g: z.number().positive(),
-  width_cm: z.number().positive(),
-  vs_predicted_pct: z.number(),
-  flag: severitySchema.nullable(),
+  batch_label: z.string(),
+  log_type: logTypeSchema,
+  width_mm: z.number().nullable(),
+  weight_g: z.number().nullable(),
   logged_by: z.string(),
-  logged_at: z.iso.datetime(),
+  logged_at: z.iso.datetime({ offset: true }),
 });
 export type CrabLog = z.infer<typeof crabLogSchema>;
+
+export const crabLogPageSchema = z.object({
+  rows: z.array(crabLogSchema),
+  page: z.number().int(),
+  pageCount: z.number().int(),
+  start: z.number().int(),
+  end: z.number().int(),
+  total: z.number().int(),
+});
+export type CrabLogPage = z.infer<typeof crabLogPageSchema>;
 
 export const sensorLogSchema = z.object({
   id: z.string(),
@@ -50,8 +87,9 @@ export const logsSearchParamsSchema = z.object({
   preset: datePresetSchema.catch('7d'),
   from: dateParamSchema.optional().catch(undefined),
   to: dateParamSchema.optional().catch(undefined),
-  batch: z.string().trim().min(1).catch('all'),
+  batch: z.union([z.literal('all'), z.string().regex(/^\d{1,9}$/)]).catch('all'),
   level: levelFilterSchema.catch('all'),
+  type: logTypeFilterSchema.catch('all'),
 });
 export type LogsSearchParams = z.infer<typeof logsSearchParamsSchema>;
 
