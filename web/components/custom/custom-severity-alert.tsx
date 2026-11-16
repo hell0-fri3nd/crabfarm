@@ -17,21 +17,25 @@ type CustomSeverityAlertProps = {
   title: string;
   description: string;
   actions?: ReactNode;
+  className?: string;
 };
 
-const CustomSeverityAlert = ({ level, title, description, actions }: CustomSeverityAlertProps) => {
+const CustomSeverityAlert = ({ level, title, description, actions, className }: CustomSeverityAlertProps) => {
   const { icon: Icon } = SEVERITY_LOOK[level];
 
   return (
-    <Alert role="status" className={cn('rounded-xl px-4 py-4 text-foreground sm:px-6 sm:py-5', ALERT_TINT[level])}>
+    <Alert
+      role="status"
+      className={cn('rounded-xl px-4 py-4 text-foreground sm:px-6 sm:py-5', ALERT_TINT[level], className)}
+    >
       <Icon aria-hidden />
       <AlertTitle className="flex flex-wrap items-center gap-2 font-semibold">
         <CustomSeverityBadge level={level} />
         {title}
       </AlertTitle>
-      <AlertDescription className="text-muted-foreground">
+      <AlertDescription className="flex h-full flex-col text-muted-foreground">
         <p>{description}</p>
-        {actions && <div className="mt-3 flex flex-wrap items-center gap-2">{actions}</div>}
+        {actions && <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">{actions}</div>}
       </AlertDescription>
     </Alert>
   );

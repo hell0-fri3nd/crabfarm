@@ -38,7 +38,7 @@ const CustomAlertList = ({ alerts }: CustomAlertListProps) => {
   }
 
   return (
-    <section aria-label="Alerts" className="flex flex-col gap-4">
+    <section aria-label="Alerts" className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
       {openAlerts.map((alert) => {
         const ActionIcon = alert.action ? ACTION_ICONS[alert.action.kind] : null;
 
@@ -48,6 +48,7 @@ const CustomAlertList = ({ alerts }: CustomAlertListProps) => {
             level={alert.severity}
             title={alert.title}
             description={alert.description}
+            className="h-full grid-rows-[auto_1fr]"
             actions={
               <>
                 {alert.action && ActionIcon && (
