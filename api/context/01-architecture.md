@@ -22,7 +22,7 @@ If code and this document disagree, the code is wrong unless this document is up
 | Validation / DTOs | Pydantic v2 |
 | ORM / tables | SQLModel (sync `Session`) on PostgreSQL via psycopg 3 |
 | Migrations | Alembic (`api/migrations`) |
-| Auth | JWT (PyJWT) + role/permission checks (`core/security`) |
+| Auth | JWT (PyJWT) + role checks (`core/dependencies.py`) |
 | Broker | RabbitMQ with the MQTT plugin (devices speak MQTT, the backend speaks AMQP) |
 | Realtime to browser | Server-Sent Events (SSE) |
 | Computer vision | YOLOv8 (crab detection + carapace width), QR decoding |
@@ -89,7 +89,7 @@ api/app/
 │   ├── config.py           # Settings (pydantic-settings)
 │   ├── database.py         # engine, SessionFactory, get_db, Base
 │   ├── exceptions.py       # FieldException, handlers
-│   ├── security/           # jwt_manager, roles, permissions
+│   ├── security/           # jwt_manager, roles, rate_limit
 │   └── audit/              # audit trail
 ├── infrastructure/         # technical clients only, no business rules, no routers
 │   ├── messaging/          # RabbitMQ connection, publisher, consumer, topics.py
@@ -142,10 +142,10 @@ Every resource (`<domain>/<resource>/`) has these parts:
 |---|---|---|
 | `__init__.py` | The resource's public surface. Re-exports router, services, schemas and dependencies through `__all__`, so callers import the **package**, never a file inside it. | contain logic |
 | `router` | HTTP only: declare the endpoint, inject dependencies, call **one** service method, return a schema. | query the DB, hold business rules, touch the broker |
-| `schemas` | Pydantic v2 request/response/event models (`*Request`, `*Response`, `*Read`, `*Event`). | import models or services |
+| `schemas` | Pydantic v2 request/response/event models (`*Request`, `*Response`, `*Read`, `*Event`). A resource with nothing to hide returns its own table model instead of a `*Read` (02 §5). | import services, or another domain's models |
 | `models` | SQLModel `table=True` classes, inheriting `core.Base`. Leave it out **only** when the resource owns no tables (e.g. `assistant/chat`, §11). | contain business logic or import schemas |
 | `services` | Business logic: queries, transactions, rules, publishing via `infrastructure`, audit. Class with methods (`CrabServices`). | import `fastapi` (except `HTTPException`-free domain errors), know about request objects |
-| `dependencies` | `Depends()` providers: current user, permission guards, "load resource or 404". | contain business rules |
+| `dependencies` | `Depends()` providers: current user, role guards, "load resource or 404". The guards live in `core.dependencies` and take the domain pieces as parameters, so core never imports a domain: `TokenAuth(token_type, model)` loads the given model (it needs `id`, `email`, `role`, `is_active`), and `require_roles(current_user, *roles)` takes the user dependency. `authentication.users` (`dependencies.py`) binds them once: `get_current_user`, `get_refresh_user`, and the role aliases `DeveloperOnly`, `DeveloperOrAdmin`, `AnyRole`. Every domain imports those aliases from the `app.authentication.users` package and uses them as `actor: DeveloperOrAdmin`. Never copy a guard into another domain. | contain business rules |
 
 Each **domain** also has:
 
@@ -171,7 +171,7 @@ Inside a folder, name files by entity or concern: `crab_services.py`, `batch_ser
 
 - One `APIRouter(prefix="/<resource-plural>", tags=["<Domain> - <Resource>"])` per resource.
 - `main.py` adds `settings.api_prefix`. Routers never hard-code it.
-- Every endpoint declares `response_model`, `status_code` and its permission dependency.
+- Every endpoint declares `response_model`, `status_code` and its role dependency.
 - Every endpoint input (body, path, query, header, upload) and output is validated by Pydantic. Full rules and status codes are in `02-api-design.md`.
 
 ## 6. Dependency Direction
@@ -218,12 +218,12 @@ Never call a sync `Session` directly inside an `async def`.
 - Filtering (by device, pond or camera) happens in the hub, not in RabbitMQ bindings per client.
 - **Built:** `infrastructure/messaging` (`RabbitClient`, `publish()`, `topics.py`) and `infrastructure/streaming` (`StreamHub`, `event_stream()`, `format_event()`). The FastAPI `lifespan` connects the client, declares `crabfarm.events` and starts one hub bound to the keys streams need (today `system.#`); add a domain's keys there. If RabbitMQ is down at startup the API still starts, and stream endpoints answer `503` + `Retry-After` until a restart.
 - **Per client:** a bounded queue (`sse_client_queue_size`, oldest dropped when full), a `retry: 5000` frame first, `: ping` every `sse_heartbeat_seconds`, every broker body validated by the stream's `*Event` schema (invalid ones are logged and dropped), and the stream **ends when the access token expires**, so the client reconnects with a fresh token.
-- **Auth:** the browser never calls FastAPI; the Next.js BFF (`/api/stream/...`) sends the access token as `Authorization: Bearer`, so stream endpoints use the normal `get_current_user` + `require_permissions`. Cookie or `?token=` auth is only needed if a non-BFF client ever streams directly.
+- **Auth:** the browser never calls FastAPI; the Next.js BFF (`/api/stream/...`) sends the access token as `Authorization: Bearer`, so stream endpoints use the normal `get_current_user` + `require_roles`. Cookie or `?token=` auth is only needed if a non-BFF client ever streams directly.
 - SSE is one-way. All client actions go through normal `POST` endpoints.
 
 ## 9. Device Commands
 
-- `POST /devices/{device_id}/commands` validates the command against the device's allowed commands and checks permissions. It then publishes to `farm.{device_id}.cmd`, writes an audit row and returns `202 Accepted` with a `command_id`.
+- `POST /devices/{device_id}/commands` validates the command against the device's allowed commands and checks the caller's role. It then publishes to `farm.{device_id}.cmd`, writes an audit row and returns `202 Accepted` with a `command_id`.
 - The device reports back on `farm.{device_id}.status`. The result reaches the UI through SSE, not through the POST response.
 
 ## 10. Worker
@@ -244,7 +244,7 @@ assistant/chat/
 ├── router.py          # POST /assistant/chat (SSE stream) — the ONLY assistant endpoint
 ├── schemas.py         # ChatRequest {thread_id, message}, stream event schemas
 ├── services.py        # builds graph input + config {thread_id, user}, streams graph output
-├── dependencies.py    # current user, permission, compiled graph provider
+├── dependencies.py    # current user, role guard, compiled graph provider
 └── graph/
     ├── state.py       # AssistantState (TypedDict)
     ├── builder.py     # StateGraph wiring + compile(); compiled once at startup
@@ -327,12 +327,17 @@ Predicts **carapace width and weight for each of the next 7 days**, based on the
 - Services raise domain errors (`FieldException` or domain-specific exceptions in `core/exceptions.py`). `register_exception_handlers` maps them to HTTP responses. Routers don't build error responses by hand.
 - **Authentication and authorization (two layers, both from `authentication.users`):**
   1. **Router level: who are you.** Every protected router declares `APIRouter(..., dependencies=[Depends(get_current_user)])`. It validates the access token (present, signed, unexpired, type `access`), loads the user and rejects deactivated users with `401`. A router that mixes public, refresh-token and access-token routes (only `/auth`) puts the dependency on each endpoint instead.
-  2. **Endpoint level: what may you do.** Every protected endpoint adds `require_permissions(Permission.X)` (through an alias such as `CanCreateUsers`). It checks the user's role (`ADMIN`, `USER`, `STAFF`) against `ROLE_PERMISSIONS` in `core/security/permissions.py` and returns `403` when it's missing. FastAPI resolves `get_current_user` once per request, so the two layers don't repeat the lookup.
+  2. **Endpoint level: which roles may call it.** Every protected endpoint names its allowed roles with a role alias (`DeveloperOnly` = `DEVELOPER`; `DeveloperOrAdmin` = `DEVELOPER`, `ADMIN`; `AnyRole` = every `Role`, so a new role is included automatically). Endpoints that don't use the actor put `Depends(require_roles(get_current_user, ...))` in `dependencies=[...]`. A wrong role gets `403` and is audited as `auth.role_denied` by core's `AuditServices`. This is the **only** place an endpoint's access is checked. FastAPI resolves `get_current_user` once per request, so the two layers don't repeat the lookup.
+  - Roles: `DEVELOPER` (everything), `ADMIN` (the farm admin), `STAFF`. The member name, the stored value and the API value are the same string. New users default to `STAFF`, the least-privileged role. Which endpoints each may call is in the endpoint catalog (02 §11).
   - The role is read from the DB row, not the token claim, so role changes and deactivation apply immediately.
   - **Tokens are stateless JWTs, by decision.** Neither access nor refresh tokens are stored server-side: there's no session table, no revocation list, no rotation. A token stays valid until its `exp`; sign-out deletes the client's cookies, and `POST /auth/sign-out` only records the `auth.sign_out` audit event. Deactivation still takes effect on the next request because `TokenAuth` reloads the user and rejects `is_active = false`. Keep access tokens short (`jwt_access_token_expire_minutes`) since that's the only bound on a stolen one.
   - Brute-force protection is `core/security/rate_limit.py` (`rate_limit("<scope>")` as an endpoint dependency, per client IP, in-process).
-  - **Never compare roles in code** (`user.role == Role.ADMIN`). Access is decided only by permissions. When the rule depends on request data or a DB row (the role being assigned, the target user's role), the service checks it with `has_permission(actor.role, Permission.X)` and returns a failure code that the router maps to `403` (for example `Permission.USER_MANAGE_ADMINS`).
+  - **Role checks inside a service only when the router can't decide.** When the rule depends on request data or a DB row (the role being assigned, the target user's role), the service compares roles (`actor.role != Role.DEVELOPER`) and returns a failure code that the router maps to `403` (for example `DEVELOPER_ROLE_REQUIRED` when a non-`DEVELOPER` touches a `DEVELOPER` account).
 - State-changing actions (create/update/delete, device commands, worker control) write an audit entry through `core.audit`.
+- **Audit is one unified writer: `core.audit.AuditServices`.** It writes every `audit.audit_events` row (`record`), records service result codes (`record_code`: `code → (Outcome, http_status)` from `outcomes`, a failure in `errors` becomes the `{"errors": [...]}` `changes` payload), and records a code against a resource row (`record_target`).
+  - **Nothing resource-specific → no audit file.** The service builds the core class with its own maps: `self.audit = audit or AuditServices(outcomes=BATCH_OUTCOMES, errors=BATCH_ERRORS)`, then `self.audit.record_target("batch.create", code, request, actor, target_type="batch", target=batch)`.
+  - **Resource-specific events → `<resource>/services/audit_services.py`** with a subclass named `<Resource>AuditServices(AuditServices)` that passes its maps to `super().__init__` and adds only the named events no other module needs. Today only `authentication.users` has one: `AuthAuditServices` (sign-in, PIN, onboarding). Token-rejected and role-denied events are recorded by core's `AuditServices` inside the core guards.
+  - Never copy outcome maps, error builders or the writer into a resource. If two resources need the same helper, it moves into `core.audit`.
 
 ## 14. Configuration
 

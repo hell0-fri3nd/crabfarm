@@ -1,4 +1,6 @@
 from enum import Enum
+from typing import Protocol
+from uuid import UUID
 
 
 class Outcome(str, Enum):
@@ -22,3 +24,11 @@ class ActorType(str, Enum):
     USER      = "USER"
     ANONYMOUS = "ANONYMOUS"
     SYSTEM    = "SYSTEM"
+
+
+class Actor(Protocol):
+    """Who did it, as audit sees it. Lets any module audit the current user without importing auth's Users."""
+
+    id: UUID
+    email: str
+    role: Enum

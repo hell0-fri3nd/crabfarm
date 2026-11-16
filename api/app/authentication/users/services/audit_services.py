@@ -1,6 +1,6 @@
 from fastapi import Request, status
 
-from app.core.audit import AuditService as CoreAuditServices, Outcome
+from app.core.audit import AuditServices, Outcome
 from ..models import Users
 
 # result code -> (audit outcome, HTTP status the router sends for it)
@@ -48,7 +48,7 @@ USER_OUTCOMES = {
     "EMAIL_ALREADY_EXISTS":      (Outcome.FAILURE, status.HTTP_409_CONFLICT),
     "CANNOT_DEACTIVATE_SELF":    (Outcome.FAILURE, status.HTTP_409_CONFLICT),
     "CANNOT_RESET_OWN_CREDENTIALS": (Outcome.FAILURE, status.HTTP_409_CONFLICT),
-    "ADMIN_ROLE_REQUIRED":       (Outcome.DENIED,  status.HTTP_403_FORBIDDEN),
+    "DEVELOPER_ROLE_REQUIRED":       (Outcome.DENIED,  status.HTTP_403_FORBIDDEN),
     "USER_CREATE_FAILED":        (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
     "USERS_LIST_FAILED":         (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
     "USER_GET_FAILED":           (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
@@ -86,27 +86,25 @@ ERRORS = {
     "EMAIL_ALREADY_EXISTS":    ("email",    "Email already exists"),
     "CANNOT_DEACTIVATE_SELF":  ("path.user_id", "You cannot deactivate your own account"),
     "CANNOT_RESET_OWN_CREDENTIALS": ("path.user_id", "Use change-password and change-pin for your own account"),
-    "ADMIN_ROLE_REQUIRED":     ("role",     "Only an admin can manage admin accounts"),
+    "DEVELOPER_ROLE_REQUIRED":     ("role",     "Only a developer can manage developer accounts"),
 }
 
+OUTCOMES = (
+    SIGN_IN_OUTCOMES
+    | PIN_OUTCOMES
+    | SIGN_OUT_OUTCOMES
+    | CHANGE_PIN_OUTCOMES
+    | CHANGE_PASSWORD_OUTCOMES
+    | USER_OUTCOMES
+    | ONBOARDING_OUTCOMES
+)
 
-class AuditServices:
-    """Every audit event the auth module writes, in one place."""
 
-    def __init__(self, audit: CoreAuditServices | None = None):
-        self.audit = audit or CoreAuditServices()
+class AuthAuditServices(AuditServices):
+    """The audit events only the auth module writes; recording itself is core's AuditServices."""
 
-    @staticmethod
-    def __errors(*errors: tuple[str, str, str]) -> dict:
-        """changes payload in the same shape as 422 rows: {"errors": [{field, message, type}]}."""
-        return {"errors": [{"field": f, "message": m, "type": t} for f, m, t in errors]}
-
-    @classmethod
-    def __code_errors(cls, code: str) -> dict | None:
-        if code not in ERRORS:
-            return None
-        field, message = ERRORS[code]
-        return cls.__errors((field, message, code.lower()))
+    def __init__(self, **kwargs):
+        super().__init__(outcomes=OUTCOMES, errors=ERRORS, **kwargs)
 
     def sign_in(
         self,
@@ -116,17 +114,13 @@ class AuditServices:
         user: Users | None = None,
         access_token: str | None = None,
     ) -> None:
-        outcome, http_status = SIGN_IN_OUTCOMES[code]
-        self.audit.record(
-            action="auth.sign_in",
-            outcome=outcome,
+        self.record_code(
+            "auth.sign_in",
+            code,
             request=request,
             actor=user,
             actor_email=email,
             session_token=access_token,
-            http_status=http_status,
-            reason=None if outcome == Outcome.SUCCESS else code,
-            changes=self.__code_errors(code),
         )
 
     def pin(
@@ -137,27 +131,17 @@ class AuditServices:
         access_token: str | None = None,
         changes: dict | None = None,
     ) -> None:
-        outcome, http_status = PIN_OUTCOMES[code]
-        self.audit.record(
-            action="auth.sign_in.pin",
-            outcome=outcome,
+        self.record_code(
+            "auth.sign_in.pin",
+            code,
             request=request,
             actor=user,
             session_token=access_token,
-            http_status=http_status,
-            reason=None if outcome == Outcome.SUCCESS else code,
-            changes=changes or self.__code_errors(code),
+            changes=changes,
         )
 
     def sign_out(self, request: Request | None, code: str, user: Users) -> None:
-        outcome, http_status = SIGN_OUT_OUTCOMES[code]
-        self.audit.record(
-            action="auth.sign_out",
-            outcome=outcome,
-            request=request,
-            actor=user,
-            http_status=http_status,
-        )
+        self.record_code("auth.sign_out", code, request=request, actor=user)
 
     def change_password(
         self,
@@ -166,40 +150,7 @@ class AuditServices:
         user: Users | None = None,
         access_token: str | None = None,
     ) -> None:
-        outcome, http_status = CHANGE_PASSWORD_OUTCOMES[code]
-        self.audit.record(
-            action="auth.change_password",
-            outcome=outcome,
-            request=request,
-            actor=user,
-            session_token=access_token,
-            http_status=http_status,
-            reason=None if outcome == Outcome.SUCCESS else code,
-            changes=self.__code_errors(code),
-        )
-
-    def onboarding(
-        self,
-        request: Request | None,
-        code: str,
-        user: Users,
-        access_token: str | None = None,
-    ) -> None:
-        outcome, http_status = ONBOARDING_OUTCOMES[code]
-        self.audit.record(
-            action="auth.onboarding",
-            outcome=outcome,
-            request=request,
-            actor=user,
-            session_token=access_token,
-            http_status=http_status,
-            reason=None if outcome == Outcome.SUCCESS else code,
-            changes=self.__code_errors(code),
-        )
-
-    @staticmethod
-    def error_for(code: str) -> tuple[str, str]:
-        return ERRORS[code]
+        self.record_code("auth.change_password", code, request=request, actor=user, session_token=access_token)
 
     def change_pin(
         self,
@@ -208,17 +159,16 @@ class AuditServices:
         user: Users | None = None,
         access_token: str | None = None,
     ) -> None:
-        outcome, http_status = CHANGE_PIN_OUTCOMES[code]
-        self.audit.record(
-            action="auth.change_pin",
-            outcome=outcome,
-            request=request,
-            actor=user,
-            session_token=access_token,
-            http_status=http_status,
-            reason=None if outcome == Outcome.SUCCESS else code,
-            changes=self.__code_errors(code),
-        )
+        self.record_code("auth.change_pin", code, request=request, actor=user, session_token=access_token)
+
+    def onboarding(
+        self,
+        request: Request | None,
+        code: str,
+        user: Users,
+        access_token: str | None = None,
+    ) -> None:
+        self.record_code("auth.onboarding", code, request=request, actor=user, session_token=access_token)
 
     def user(
         self,
@@ -229,55 +179,13 @@ class AuditServices:
         target: Users | None = None,
         changes: dict | None = None,
     ) -> None:
-        outcome, http_status = USER_OUTCOMES[code]
-        self.audit.record(
-            action=action,
-            outcome=outcome,
-            request=request,
-            actor=actor,
-            session_token=getattr(request.state, "access_token", None) if request else None,
-            target_type="user" if target else None,
-            target_id=target.id if target else None,
+        self.record_target(
+            action,
+            code,
+            request,
+            actor,
+            target_type="user",
+            target=target,
             target_label=target.email if target else None,
-            http_status=http_status,
-            reason=None if outcome == Outcome.SUCCESS else code,
-            changes=changes or self.__code_errors(code),
-        )
-
-    def token_rejected(
-        self,
-        request: Request | None,
-        token_type: str,
-        reason: str,
-        message: str,
-        access_token: str | None = None,
-    ) -> None:
-        self.audit.record(
-            action=f"auth.{token_type}_token_rejected",
-            outcome=Outcome.FAILURE,
-            request=request,
-            session_token=access_token,
-            http_status=status.HTTP_401_UNAUTHORIZED,
-            reason=reason,
-            changes=self.__errors(("authorization", message, reason.lower())),
-        )
-
-    def permission_denied(
-        self,
-        request: Request | None,
-        user: Users,
-        missing: list[str],
-        access_token: str | None = None,
-    ) -> None:
-        self.audit.record(
-            action="auth.permission_denied",
-            outcome=Outcome.DENIED,
-            request=request,
-            actor=user,
-            session_token=access_token,
-            http_status=status.HTTP_403_FORBIDDEN,
-            reason=f"Missing permission(s): {', '.join(missing)}",
-            changes=self.__errors(*[
-                ("permission", f"Missing permission: {p}", "permission_denied") for p in missing
-            ]),
+            changes=changes,
         )

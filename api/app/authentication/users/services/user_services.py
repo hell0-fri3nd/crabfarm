@@ -11,13 +11,11 @@ from sqlmodel import (
 
 from app.core import (
     Page,
-    Permission,
     Role,
-    has_permission,
     settings,
 )
 from app.core.audit import AuditEvents, Outcome
-from .audit_services import AuditServices
+from .audit_services import AuthAuditServices
 from .password_services import PasswordServices
 from ..models import Users
 from ..schemas import (
@@ -39,7 +37,7 @@ SORT_COLUMNS = {
 FAILURE_MESSAGES = {
     "USER_NOT_FOUND": "User not found",
     "EMAIL_ALREADY_EXISTS": "Email already exists",
-    "ADMIN_ROLE_REQUIRED": "Only an admin can manage admin accounts",
+    "DEVELOPER_ROLE_REQUIRED": "Only a developer can manage developer accounts",
     "CANNOT_DEACTIVATE_SELF": "You cannot deactivate your own account",
     "CANNOT_RESET_OWN_CREDENTIALS": "Use change-password and change-pin for your own account",
     "USER_CREATE_FAILED": "Unable to create user right now",
@@ -57,11 +55,11 @@ class UserServices:
         self,
         db: Session,
         password_services: PasswordServices | None = None,
-        audit: AuditServices | None = None,
+        audit: AuthAuditServices | None = None,
     ):
         self.db = db
         self.password_services = password_services or PasswordServices()
-        self.audit = audit or AuditServices()
+        self.audit = audit or AuthAuditServices()
 
     def __fail(
         self,
@@ -75,9 +73,9 @@ class UserServices:
         return Response(success=False, message=FAILURE_MESSAGES[code], code=code)
 
     @staticmethod
-    def __requires_admin(actor: Users, *roles: Role | None) -> bool:
+    def __requires_developer(actor: Users, *roles: Role | None) -> bool:
         # The target/assigned role is only known from the payload or the DB, so this can't be a route dependency
-        return Role.ADMIN in roles and not has_permission(actor.role, Permission.USER_MANAGE_ADMINS)
+        return Role.DEVELOPER in roles and actor.role != Role.DEVELOPER
 
     def __default_credentials(self) -> dict:
         return {
@@ -95,8 +93,8 @@ class UserServices:
     def create(self, payload: CreateUserRequest, actor: Users, request: Request | None = None) -> Response[UserRead]:
         action = "user.create"
         try:
-            if self.__requires_admin(actor, payload.role):
-                return self.__fail(action, "ADMIN_ROLE_REQUIRED", actor, request)
+            if self.__requires_developer(actor, payload.role):
+                return self.__fail(action, "DEVELOPER_ROLE_REQUIRED", actor, request)
             if self.__email_taken(payload.email):
                 return self.__fail(action, "EMAIL_ALREADY_EXISTS", actor, request)
 
@@ -196,8 +194,8 @@ class UserServices:
         try:
             if not (user := self.db.get(Users, user_id)):
                 return self.__fail(action, "USER_NOT_FOUND", actor, request)
-            if self.__requires_admin(actor, user.role, payload.role):
-                return self.__fail(action, "ADMIN_ROLE_REQUIRED", actor, request, target=user)
+            if self.__requires_developer(actor, user.role, payload.role):
+                return self.__fail(action, "DEVELOPER_ROLE_REQUIRED", actor, request, target=user)
             if payload.email and self.__email_taken(payload.email, exclude_id=user.id):
                 return self.__fail(action, "EMAIL_ALREADY_EXISTS", actor, request, target=user)
 
@@ -232,8 +230,8 @@ class UserServices:
                 return self.__fail(action, "CANNOT_DEACTIVATE_SELF", actor, request, target=actor)
             if not (user := self.db.get(Users, user_id)):
                 return self.__fail(action, "USER_NOT_FOUND", actor, request)
-            if self.__requires_admin(actor, user.role):
-                return self.__fail(action, "ADMIN_ROLE_REQUIRED", actor, request, target=user)
+            if self.__requires_developer(actor, user.role):
+                return self.__fail(action, "DEVELOPER_ROLE_REQUIRED", actor, request, target=user)
 
             was_active = user.is_active
             user.is_active = False
@@ -260,8 +258,8 @@ class UserServices:
         try:
             if not (user := self.db.get(Users, user_id)):
                 return self.__fail(action, "USER_NOT_FOUND", actor, request)
-            if self.__requires_admin(actor, user.role):
-                return self.__fail(action, "ADMIN_ROLE_REQUIRED", actor, request, target=user)
+            if self.__requires_developer(actor, user.role):
+                return self.__fail(action, "DEVELOPER_ROLE_REQUIRED", actor, request, target=user)
 
             was_active = user.is_active
             user.is_active = True
@@ -290,8 +288,8 @@ class UserServices:
                 return self.__fail(action, "CANNOT_RESET_OWN_CREDENTIALS", actor, request, target=actor)
             if not (user := self.db.get(Users, user_id)):
                 return self.__fail(action, "USER_NOT_FOUND", actor, request)
-            if self.__requires_admin(actor, user.role):
-                return self.__fail(action, "ADMIN_ROLE_REQUIRED", actor, request, target=user)
+            if self.__requires_developer(actor, user.role):
+                return self.__fail(action, "DEVELOPER_ROLE_REQUIRED", actor, request, target=user)
 
             for field, value in self.__default_credentials().items():
                 setattr(user, field, value)

@@ -4,14 +4,15 @@ from .database import (
     engine,
     get_db,
 )
-from .dependencies import DbSession, Provide
-from .schemas import Page, PageQuery
-from .security import (
-    JwtManager,
-    Role,
-    Permission,
-    has_permission,
+from .dependencies import (
+    DbSession,
+    Provide,
+    TokenAuth,
+    bearer,
+    require_roles,
 )
+from .schemas import Page, PageQuery
+from .security import JwtManager, Role
 from .exceptions import (
     FieldException,
     ValidationErrorResponse,
@@ -23,12 +24,13 @@ __all__ = [
     "Base",
     "JwtManager",
     "Role",
-    "Permission",
-    "has_permission",
     "get_db",
     "engine",
     "DbSession",
     "Provide",
+    "TokenAuth",
+    "bearer",
+    "require_roles",
     "Page",
     "PageQuery",
     "FieldException",

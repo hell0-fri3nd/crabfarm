@@ -9,13 +9,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .audit import (
-    AuditService,
+    AuditServices,
     Outcome,
     Severity,
 )
 
 
-audit = AuditService()
+audit = AuditServices()
 
 # Routes name their audit action with openapi_extra={AUDIT_ACTION_KEY: "auth.sign_in"}
 AUDIT_ACTION_KEY = "x-audit-action"

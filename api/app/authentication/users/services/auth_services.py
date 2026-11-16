@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 
 from app.core import JwtManager, settings
 from app.core.audit import AuditEvents, Outcome
-from .audit_services import AuditServices
+from .audit_services import AuthAuditServices
 from .password_services import PasswordServices
 from ..models import Users
 from ..schemas import (
@@ -29,12 +29,12 @@ class AuthServices:
         db: Session,
         password_services: PasswordServices | None = None,
         jwt_manager: JwtManager | None = None,
-        audit: AuditServices | None = None,
+        audit: AuthAuditServices | None = None,
     ):
         self.db = db
         self.password_services = password_services or PasswordServices()
         self.jwt_manager = jwt_manager or JwtManager()
-        self.audit = audit or AuditServices()
+        self.audit = audit or AuthAuditServices()
 
     def me(self, user: Users) -> Response[UserRead]:
         return Response(

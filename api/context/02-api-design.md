@@ -66,7 +66,7 @@ Every success uses the common `Response` schema (`general_schemas.Response`):
 | `success` | Always `true` on 2xx |
 | `message` | A short, human-readable sentence the UI can show as a toast |
 | `code` | `UPPER_SNAKE`, `<ENTITY>_<OUTCOME>`: `BATCH_CREATED`, `BATCH_FOUND`, `BATCHES_LISTED`, `BATCH_UPDATED`, `BATCH_DELETED`, `COMMAND_ACCEPTED`, `LOGIN_SUCCESS` |
-| `details` | The payload: one resource (`*Read`), a page (below), or `null` |
+| `details` | The payload: one resource (its table model, or a `*Read`, see §5), a page (below), or `null` |
 
 To keep OpenAPI typed, make `Response` generic: `Response[BatchRead]`, `Response[Page[BatchRead]]`.
 
@@ -82,7 +82,7 @@ To keep OpenAPI typed, make `Response` generic: `Response[BatchRead]`, `Response
 |---|---|---|
 | Field/business error tied to an input | `FieldException(status_code, field, message, type, action)` | `{ "detail": "...", "errors": [{ "field": "email", "message": "Email not found", "type": "email_not_found" }] }` |
 | Pydantic validation (§5) | automatic (`RequestValidationError`) → `422` | same `{detail, errors[]}` shape, one entry per field |
-| Not tied to a field (auth token, permission, 404 by path, 5xx) | `HTTPException(status_code, detail)` | `{ "detail": "..." }` |
+| Not tied to a field (auth token, role, 404 by path, 5xx) | `HTTPException(status_code, detail)` | `{ "detail": "..." }` |
 
 - Use `type` in `lower_snake` for error entries (`email_not_found`, `same_password`, `device_offline`). The Next.js side switches on it.
 - Use `field` with the request field name, or `"body"`, `"path.<param>"` or `"query.<param>"` when it isn't a body field.
@@ -106,7 +106,7 @@ To keep OpenAPI typed, make `Response` generic: `Response[BatchRead]`, `Response
 | Output | How it is validated |
 |---|---|
 | Every response | `response_model=Response[...]` on the decorator. FastAPI validates and filters the output, so extra ORM fields (hashes, internal flags) never leak. |
-| Read models | `*Read` with `ConfigDict(from_attributes=True)` to build from SQLModel rows |
+| Read models | A resource returns **its own** SQLModel table class directly (`Response[Batches]`). Write a `*Read` (`ConfigDict(from_attributes=True)`) only when the table has columns that must not leak (hashes, pins, internal flags), as `UserRead` does, or the response needs another shape. Never return another domain's model. |
 | SSE events | Each event's data is a `*Event` model, serialized with `model_dump_json()` |
 
 **Rules**
@@ -128,7 +128,7 @@ To keep OpenAPI typed, make `Response` generic: `Response[BatchRead]`, `Response
 | `202 Accepted` | Work was queued; the result arrives later through SSE or polling | `POST /devices/{id}/commands`, `POST /forecasts` |
 | `400 Bad Request` | Well-formed request rejected by a business rule | incorrect current password/pin, a log date before the batch's stocking date |
 | `401 Unauthorized` | Missing, invalid or expired token, or wrong sign-in credentials; include `WWW-Authenticate: Bearer` for token errors | `/auth/sign-in` wrong password |
-| `403 Forbidden` | Authenticated but missing the permission or role | non-admin `POST /users` |
+| `403 Forbidden` | Authenticated but the role isn't allowed | `STAFF` calling `POST /users` |
 | `404 Not Found` | The resource in the path doesn't exist (or is soft-deleted) | `GET /crabs/{unknown}`, sign-in email not found (existing) |
 | `409 Conflict` | Duplicate unique value or a state conflict | email already used, new password same as current, device offline, camera already running |
 | `413 Content Too Large` | Upload over the limit | QR image > `settings.max_upload_mb` |
@@ -163,7 +163,7 @@ Time-series reads (sensor readings) also accept `interval=1m|5m|1h|1d` for serve
     openapi_extra={AUDIT_ACTION_KEY: "batch.create"},
     responses={
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid token"},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Missing batch:create permission"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Role not allowed"},
         status.HTTP_409_CONFLICT: {"model": ValidationErrorResponse, "description": "Batch code already exists"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ValidationErrorResponse, "description": "Invalid batch fields"},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error creating batch"},
@@ -171,7 +171,7 @@ Time-series reads (sensor readings) also accept `interval=1m|5m|1h|1d` for serve
 )
 def create_batch(                                   # plain def: sync Session (01 §7)
     payload: CreateBatchRequest,
-    user: Users = Depends(require_permissions(Permission.BATCH_CREATE)),
+    user: DeveloperOrAdmin,
     db: Session = Depends(get_db),
 ):
     result = BatchServices(db).create(payload, actor=user)
@@ -190,7 +190,7 @@ def create_batch(                                   # plain def: sync Session (0
 
 Checklist for every endpoint:
 - `response_model`, `status_code`, `openapi_extra={AUDIT_ACTION_KEY: "<resource>.<action>"}` and `responses={...}` for **every** non-2xx status it can return.
-- The router declares `dependencies=[Depends(get_current_user)]` and the endpoint declares `require_permissions(...)` (01 §13), unless the endpoint is public by design (`/auth/sign-in`, `/health`). Data-dependent access rules use `has_permission(...)` in the service, never a role comparison.
+- The router declares `dependencies=[Depends(get_current_user)]` and the endpoint declares a role alias (`DeveloperOnly`, `DeveloperOrAdmin`, `AnyRole`) (01 §13), unless the endpoint is public by design (`/auth/sign-in`, `/health`). Data-dependent access rules (the role being assigned, the target's role) are role checks in the service.
 - Every input (body, path, query, header, upload) is a typed Pydantic model or annotation (§5). Request schemas use `ConfigDict(extra="forbid", str_strip_whitespace=True)` and a `json_schema_extra` example (as in `CreateUserRequest`).
 - Response models never include secrets (password/pin hashes, tokens other than on auth endpoints).
 - Audit action names are `<resource>.<action>` in `lower_snake`: `batch.create`, `device.command`, `auth.sign_in`.
@@ -235,15 +235,25 @@ Status codes listed are in addition to the defaults every protected endpoint has
 | POST | `/auth/onboarding` (`{new_password, new_pin}`, access token; only while `needs_onboarding`) | 200 `ONBOARDED` (sets both in one commit, `has_default_credentials=false`) | 409 already set up (plain detail), 409 `default_password` / `default_pin` field errors, 422 |
 | GET | `/auth/me/activity` (`?limit=` 1–50, default 5) | 200 `ACTIVITY_LISTED`: the caller's own **successful** audit events, newest first (`id, action, target_label, occurred_at`) | 401, 422 bad `limit` |
 | PATCH | `/auth/me` (`{name}` only; any role edits their own name, never email or role) | 200 `USER_UPDATED` (audited as `auth.update_me`) | 401, 422 name not 2–150 chars or extra fields |
-| GET | `/users` (`?page=&size=&q=&role=&is_active=&sort=`) | 200 `USERS_LISTED` | 403 without `user:read` |
-| POST | `/users` (`{name, email, role}`, gets the default password and pin) | 201 `USER_CREATED` | 403 non-admin assigning `ADMIN`, 409 email exists |
+| GET | `/users` (`?page=&size=&q=&role=&is_active=&sort=`) | 200 `USERS_LISTED` | 403 `STAFF` |
+| POST | `/users` (`{name, email, role}`, `role` defaults to `STAFF`, gets the default password and pin) | 201 `USER_CREATED` | 403 `STAFF`, or non-developer assigning `DEVELOPER`, 409 email exists |
 | GET | `/users/{user_id}` | 200 `USER_FOUND` | 404 |
-| PATCH | `/users/{user_id}` | 200 `USER_UPDATED` | 403 non-admin touching an admin, 404, 409 email exists |
+| PATCH | `/users/{user_id}` | 200 `USER_UPDATED` | 403 non-developer touching a developer, 404, 409 email exists |
 | DELETE | `/users/{user_id}` | 200 `USER_DEACTIVATED` (sets `is_active=false`, idempotent) | 403, 404, 409 deactivating yourself |
-| POST | `/users/{user_id}/reactivate` (no body, `user:deactivate`) | 200 `USER_REACTIVATED` (sets `is_active=true`, idempotent; password and pin unchanged) | 403 non-admin touching an admin, 404 |
+| POST | `/users/{user_id}/reactivate` (no body) | 200 `USER_REACTIVATED` (sets `is_active=true`, idempotent; password and pin unchanged) | 403 non-developer touching a developer, 404 |
 | POST | `/users/{user_id}/reset-credentials` (no body: password **and** pin back to the defaults) | 200 `CREDENTIALS_RESET` | 403, 404, 409 your own account |
 
-User management (`user:read`, `user:create`, `user:update`, `user:deactivate`, `user:reset_credentials`) is granted to `ADMIN` and `USER`, not `STAFF`. Creating, editing, deactivating or resetting an `ADMIN` account also needs `user:manage_admins` (only `ADMIN` has it). Every role changes its own password and pin through `/auth/change-password` and `/auth/change-pin`. A deactivated user gets `403 USER_INACTIVE` at sign-in and `401` on any token.
+Endpoints name their allowed roles with the aliases from `authentication.users` (01 §13):
+
+| Alias | Roles | Used for |
+|---|---|---|
+| `DeveloperOnly` | `DEVELOPER` | nothing yet |
+| `DeveloperOrAdmin` | `DEVELOPER`, `ADMIN` (the farm admin) | every `/users` endpoint, `POST /batches` |
+| `AnyRole` | every role | `GET /batches`, crabs, logs |
+
+`/events/stream` only needs a signed-in user (router-level `get_current_user`).
+
+User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, deactivating or resetting a `DEVELOPER` account is `DEVELOPER` only (`403 DEVELOPER_ROLE_REQUIRED`); the service checks it because the role is in the payload or the DB row. Every role changes its own password and pin through `/auth/change-password` and `/auth/change-pin`. A deactivated user gets `403 USER_INACTIVE` at sign-in and `401` on any token.
 
 **Tokens are stateless JWTs** (01 §13): nothing tracks them server-side and a token is valid until its `exp`. `/auth/sign-out` exists only for the audit trail; it doesn't invalidate anything. Deactivated users are rejected on every request through `is_active`.
 
@@ -255,8 +265,8 @@ User management (`user:read`, `user:create`, `user:update`, `user:deactivate`, `
 
 | Method | Path | Success | Notable errors |
 |---|---|---|---|
-| GET | `/batches` | 200 | — |
-| POST | `/batches` | 201 | 409 code exists |
+| GET | `/batches` (`AnyRole`) | 200 `BATCHES_LISTED` | 401 |
+| POST | `/batches` (`DeveloperOrAdmin`) | 201 `BATCH_CREATED` | 403 `STAFF`, 409 code exists |
 | GET / PATCH / DELETE | `/batches/{batch_id}` | 200 | 404, 409 batch has crabs (delete) |
 | GET | `/crabs` (`?batch_id=&q=`) | 200 | — |
 | POST | `/crabs` | 201 | 404 batch, 409 tag/QR exists |
@@ -297,7 +307,7 @@ User management (`user:read`, `user:create`, `user:update`, `user:deactivate`, `
 
 | Method | Path | Success | Notable errors |
 |---|---|---|---|
-| GET | `/events/stream` (`events:read`, every role) | 200 SSE `system.announcement`, `system.test` (data: `SystemEvent {type, message, occurred_at}`), ends at the access token's expiry | 503 broker unreachable (`Retry-After`) |
+| GET | `/events/stream` (every role) | 200 SSE `system.announcement`, `system.test` (data: `SystemEvent {type, message, occurred_at}`), ends at the access token's expiry | 503 broker unreachable (`Retry-After`) |
 
 ### assistant
 

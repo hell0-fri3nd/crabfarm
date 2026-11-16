@@ -1,14 +1,22 @@
 from .models import AuditEvents
 from .schemas import (
+    Actor,
     ActorType,
     Outcome,
     Severity,
 )
-from .services import AuditService
+from .services import (
+    AuditServices,
+    CodeErrors,
+    CodeOutcomes,
+)
 
 __all__ = [
     "AuditEvents",
-    "AuditService",
+    "AuditServices",
+    "CodeErrors",
+    "CodeOutcomes",
+    "Actor",
     "ActorType",
     "Outcome",
     "Severity",

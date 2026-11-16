@@ -46,15 +46,9 @@ class CreateBatchRequest(BaseModel):
     pond_id: UUID
     stocked_at: date
     count: int = Field(gt=0)
-
-
-class BatchRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    code: str
-    stocked_at: date
 ```
+
+Responses return the resource's own table model (`Response[Batches]`). Add a `*Read` only when the table has columns that must not leak, as `UserRead` does (02 §5).
 
 ### Services: one class per entity, collaborators injected
 
@@ -62,12 +56,12 @@ class BatchRead(BaseModel):
 class BatchServices:
     def __init__(self, db: Session, audit: AuditServices | None = None):
         self.db = db
-        self.audit = audit or AuditServices()
+        self.audit = audit or AuditServices(outcomes=BATCH_OUTCOMES)
 
-    def get(self, batch_id: UUID) -> Response[BatchRead]: ...
-    def list(self, query: ListBatchesQuery) -> Response[Page[BatchRead]]: ...
-    def create(self, payload: CreateBatchRequest, actor: Users) -> Response[BatchRead]: ...
-    def update(self, batch_id: UUID, payload: UpdateBatchRequest, actor: Users) -> Response[BatchRead]: ...
+    def get(self, batch_id: UUID) -> Response[Batches]: ...
+    def list(self, query: ListBatchesQuery) -> Response[Page[Batches]]: ...
+    def create(self, payload: CreateBatchRequest, actor: Users) -> Response[Batches]: ...
+    def update(self, batch_id: UUID, payload: UpdateBatchRequest, actor: Users) -> Response[Batches]: ...
     def delete(self, batch_id: UUID, actor: Users) -> Response[None]: ...
 ```
 
@@ -77,7 +71,7 @@ class BatchServices:
 
 ### Dependencies: classes with `__call__`
 
-Configure the class in `__init__`, resolve in `__call__`, and export a ready instance with a snake_case name, as `TokenAuth` and `RequirePermissions` do:
+Configure the class in `__init__`, resolve in `__call__`, and export a ready instance with a snake_case name, as `TokenAuth` does. The one exception is a guard whose **sub-dependency is a parameter**, like `core.require_roles(current_user, *roles)`: FastAPI reads `Depends(...)` from the signature, so it is a factory that returns an inner function.
 
 ```python
 class LoadBatch:
@@ -114,11 +108,11 @@ type BatchServicesDep = Annotated[BatchServices, Depends(Provide(BatchServices))
 | Class | `PascalCase` | `TokenAuth`, `JwtManager` |
 | Function / method / variable | `snake_case`, functions start with a verb | `verify_password`, `build_features` |
 | Constant | `UPPER_SNAKE` at module level | `AUDIT_ACTION_KEY`, `FORECAST_HORIZON_DAYS` |
-| Enum | `PascalCase` class, `UPPER_SNAKE` members, `(str, Enum)` | `Role.ADMIN`, `Permission.BATCH_CREATE` |
+| Enum | `PascalCase` class, `UPPER_SNAKE` members, `(str, Enum)` | `Role.ADMIN`, `Outcome.SUCCESS` |
 | Private function / method | **double** leading underscore (§4.1) | `__reject()`, `__default_credentials()`, `__raise_for()` |
 | Private attribute | single leading underscore | `_hasher` |
-| Boolean | `is_` / `has_` / `can_` prefix | `is_active`, `has_permission` |
-| Dependency instance | `snake_case` noun or `get_` | `get_current_user`, `require_permissions` |
+| Boolean | `is_` / `has_` / `can_` prefix | `is_active`, `has_default_credentials` |
+| Dependency instance | `snake_case` noun or `get_` | `get_current_user`, `require_roles` |
 | `Annotated` dependency alias | `PascalCase` + `Dep` or a plain noun | `DbSession`, `CurrentUser`, `BatchServicesDep` |
 
 ### 4.1 Private functions use `__`
@@ -126,7 +120,7 @@ type BatchServicesDep = Annotated[BatchServices, Depends(Provide(BatchServices))
 Every private function or method starts with **two** underscores: `__default_credentials`, not `_default_credentials`.
 
 - **In a class:** `def __fail(self, ...)`, called as `self.__fail(...)` or `cls.__errors(...)`. Python name-mangles it (`_UserServices__fail`), so subclasses and callers outside the class can't reach it by accident.
-- **At module level:** `def __raise_for(...)` is fine **only when no class body or method calls it**, because a `__name` written inside a class is mangled to `_ClassName__name` and raises `NameError`. If a class needs the helper, make it a private `@staticmethod` / `@classmethod` of that class (as `AuditServices.__errors` is), or replace it with a public reusable type (as `NormalizedEmail` replaced `_lower_email`).
+- **At module level:** `def __raise_for(...)` is fine **only when no class body or method calls it**, because a `__name` written inside a class is mangled to `_ClassName__name` and raises `NameError`. If a class needs the helper, make it a private `@staticmethod` / `@classmethod` of that class (as `AuditServices.__role` is), or replace it with a public reusable type (as `NormalizedEmail` replaced `_lower_email`).
 - **Never** use a trailing `__` as well. `__name__` is a dunder and belongs to Python (§6).
 - Attributes keep a single underscore (`self._hasher`).
 - Applied migrations keep their old names (AGENT.md: never edit an applied migration).
@@ -138,7 +132,7 @@ Every private function or method starts with **two** underscores: `__default_cre
 | SQLModel table | plural noun = table name | `Users`, `Batches`, `Crabs`, `Logs` |
 | Request body | `*Request` | `CreateBatchRequest`, `SignInRequest` |
 | Query params | `*Query` | `ListLogsQuery` |
-| Read model | `*Read` | `UserRead`, `BatchRead` |
+| Read model (only when the table has fields to hide) | `*Read` | `UserRead` |
 | Envelope / error | `*Response` | `Response`, `AuthResponse`, `ErrorResponse` |
 | Broker / SSE payload | `*Event` | `SensorReadingEvent`, `ForecastCompletedEvent` |
 | Service | `*Services` | `AuthServices`, `BatchServices` |
@@ -152,7 +146,7 @@ Prefer the right-hand column.
 
 | Instead of | Write |
 |---|---|
-| a loop that builds a list | a comprehension: `[p.value for p in permissions if not has_permission(role, p)]` |
+| a loop that builds a list | a comprehension: `[r.name for r in roles if r is not Role.STAFF]` |
 | assign, then test | walrus: `if user := db.get(Users, user_id):` |
 | long `if/elif` on a value | `match result.code:` with `case` arms |
 | nested `if`s | guard clauses + early `return` / `raise` |
@@ -173,8 +167,8 @@ Prefer the right-hand column.
 Router mapping, written with `match` and aliases:
 
 ```python
-@router.post("", response_model=Response[BatchRead], status_code=status.HTTP_201_CREATED, ...)
-def create_batch(payload: CreateBatchRequest, user: CanCreateBatch, services: BatchServicesDep):
+@router.post("", response_model=Response[Batches], status_code=status.HTTP_201_CREATED, ...)
+def create_batch(payload: CreateBatchRequest, user: DeveloperOrAdmin, services: BatchServicesDep):
     result = services.create(payload, actor=user)
 
     match result.code:
@@ -193,7 +187,7 @@ Don't be clever for its own sake. If a one-liner needs a second read, use two li
 | Dunder | Use it for | Example |
 |---|---|---|
 | `__init__` | Inject collaborators and config. No I/O. | `AuthServices(db, password_services, jwt_manager)` |
-| `__call__` | Dependency classes (FastAPI calls the instance) | `TokenAuth("access")`, `RequirePermissions(...)` |
+| `__call__` | Dependency classes (FastAPI calls the instance) | `TokenAuth("access", Users)`, `Provide(UserServices)` |
 | `__repr__` | Debug/log view of models and value objects. **Never include secrets** (hashes, tokens, pins). | `Users(id=…, email='a@b.c', role=STAFF)` |
 | `__str__` | A human-readable label when one is natural | `str(batch) → "B-2026-012"` |
 | `__bool__` | Truthiness that reads well | `Response.__bool__ → self.success`, so `if not result:` |
@@ -242,7 +236,6 @@ Don't overload arithmetic or comparison operators on things that aren't values (
       "auth_router",
       "users_router",
       "get_current_user",
-      "require_permissions",
       "UserServices",
   ]
   ```

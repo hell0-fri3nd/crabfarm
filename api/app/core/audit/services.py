@@ -24,12 +24,26 @@ DEFAULT_SEVERITY = {
     Outcome.ERROR:   Severity.ERROR,
 }
 
+type CodeOutcomes = dict[str, tuple[Outcome, int]]
+type CodeErrors = dict[str, tuple[str, str]]
 
-class AuditService:
-    """Writes audit_events rows. Best-effort: a failed write is logged, never raised,
-    and each row is committed in its own session so it survives a request rollback."""
 
-    def __init__(self, service: str = "api", session_factory=SessionFactory):
+class AuditServices:
+    """The one audit writer for every module. Resources with events of their own subclass it
+    in `services/audit_services.py`; the rest use it directly with their code maps.
+
+    Best-effort: a failed write is logged, never raised, and each row is committed in its
+    own session so it survives a request rollback."""
+
+    def __init__(
+        self,
+        outcomes: CodeOutcomes | None = None,
+        errors: CodeErrors | None = None,
+        service: str = "api",
+        session_factory=SessionFactory,
+    ):
+        self.outcomes = outcomes or {}
+        self.errors = errors or {}
         self.service = service
         self.session_factory = session_factory
 
@@ -83,6 +97,64 @@ class AuditService:
             logger.exception("Failed to write audit event %s", action)
             return None
 
+    def record_code(
+        self,
+        action: str,
+        code: str,
+        *,
+        changes: dict[str, Any] | None = None,
+        **fields: Any,
+    ) -> AuditEvents | None:
+        """Records a service result code: outcome and HTTP status come from `outcomes`,
+        and a failure code with an entry in `errors` becomes the client-facing `changes`."""
+        outcome, http_status = self.outcomes[code]
+        return self.record(
+            action=action,
+            outcome=outcome,
+            http_status=http_status,
+            reason=None if outcome is Outcome.SUCCESS else code,
+            changes=changes or self.errors_for(code),
+            **fields,
+        )
+
+    def record_target(
+        self,
+        action: str,
+        code: str,
+        request: Request | None,
+        actor: Any,
+        target_type: str,
+        target: Any = None,
+        target_label: str | None = None,
+        changes: dict[str, Any] | None = None,
+    ) -> AuditEvents | None:
+        """Records a code against a resource row, e.g. `batch.create` on a Batches row."""
+        return self.record_code(
+            action,
+            code,
+            request=request,
+            actor=actor,
+            session_token=getattr(request.state, "access_token", None) if request else None,
+            target_type=target_type if target else None,
+            target_id=getattr(target, "id", None),
+            target_label=target_label,
+            changes=changes,
+        )
+
+    def error_for(self, code: str) -> tuple[str, str]:
+        return self.errors[code]
+
+    def errors_for(self, code: str) -> dict | None:
+        if code not in self.errors:
+            return None
+        field, message = self.errors[code]
+        return self.build_errors((field, message, code.lower()))
+
+    @staticmethod
+    def build_errors(*errors: tuple[str, str, str]) -> dict:
+        """`changes` payload in the same shape as 422 rows: {"errors": [{field, message, type}]}."""
+        return {"errors": [{"field": f, "message": m, "type": t} for f, m, t in errors]}
+
     @staticmethod
     def __role(actor: Any) -> str | None:
         role = getattr(actor, "role", None)
@@ -90,7 +162,7 @@ class AuditService:
 
     @classmethod
     def __actor_type(cls, actor: Any) -> ActorType:
-        # Actor type follows the role value (e.g. Role.STAFF -> STAFF); unknown roles fall back to USER
+        # Actor type follows the role value (e.g. Role.STAFF -> STAFF); unknown roles fall back to the generic USER actor type
         if actor is None:
             return ActorType.ANONYMOUS
         try:

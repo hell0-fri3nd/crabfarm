@@ -18,11 +18,7 @@ from app.core import (
 from app.core.exceptions import AUDIT_ACTION_KEY
 
 from ..dependencies import (
-    CanCreateUsers,
-    CanDeactivateUsers,
-    CanReadUsers,
-    CanResetCredentials,
-    CanUpdateUsers,
+    DeveloperOrAdmin,
     UserServicesDep,
     get_current_user,
 )
@@ -40,7 +36,7 @@ router = APIRouter(prefix="/users", tags=["Users"], dependencies=[Depends(get_cu
 
 UNAUTHORIZED = {"model": ErrorResponse, "description": "Missing, invalid or expired access token"}
 NOT_FOUND = {"model": ValidationErrorResponse, "description": "User not found"}
-ADMIN_REQUIRED = {"model": ValidationErrorResponse, "description": "Missing permission, or only an admin can manage admin accounts"}
+DEVELOPER_REQUIRED = {"model": ValidationErrorResponse, "description": "Only DEVELOPER and ADMIN roles, or only a developer can manage developer accounts"}
 INVALID = {"model": ValidationErrorResponse, "description": "Invalid request fields"}
 
 
@@ -54,8 +50,8 @@ def __raise_for(result: Response, action: str) -> None:
             raise FieldException(status.HTTP_404_NOT_FOUND, "path.user_id", result.message, "user_not_found", detail=result.message, action=action)
         case "EMAIL_ALREADY_EXISTS":
             raise FieldException(status.HTTP_409_CONFLICT, "email", result.message, "email_already_exists", detail=result.message, action=action)
-        case "ADMIN_ROLE_REQUIRED":
-            raise FieldException(status.HTTP_403_FORBIDDEN, "role", result.message, "admin_role_required", detail=result.message, action=action)
+        case "DEVELOPER_ROLE_REQUIRED":
+            raise FieldException(status.HTTP_403_FORBIDDEN, "role", result.message, "developer_role_required", detail=result.message, action=action)
         case "CANNOT_DEACTIVATE_SELF":
             raise FieldException(status.HTTP_409_CONFLICT, "path.user_id", result.message, "cannot_deactivate_self", detail=result.message, action=action)
         case "CANNOT_RESET_OWN_CREDENTIALS":
@@ -71,7 +67,7 @@ def __raise_for(result: Response, action: str) -> None:
     openapi_extra={AUDIT_ACTION_KEY: "user.create"},
     responses={
         status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
-        status.HTTP_403_FORBIDDEN: ADMIN_REQUIRED,
+        status.HTTP_403_FORBIDDEN: DEVELOPER_REQUIRED,
         status.HTTP_409_CONFLICT: {"model": ValidationErrorResponse, "description": "Email already exists"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: INVALID,
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error creating the user"},
@@ -80,7 +76,7 @@ def __raise_for(result: Response, action: str) -> None:
 def create_user(
     payload: CreateUserRequest,
     request: Request,
-    actor: CanCreateUsers,
+    actor: DeveloperOrAdmin,
     services: UserServicesDep,
 ):
     result = services.create(payload, actor=actor, request=request)
@@ -95,7 +91,7 @@ def create_user(
     openapi_extra={AUDIT_ACTION_KEY: "user.list"},
     responses={
         status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
-        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Missing user:read permission"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Only DEVELOPER and ADMIN roles"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: INVALID,
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error listing users"},
     },
@@ -103,7 +99,7 @@ def create_user(
 def list_users(
     query: Annotated[ListUsersQuery, Query()],
     request: Request,
-    actor: CanReadUsers,
+    actor: DeveloperOrAdmin,
     services: UserServicesDep,
 ):
     result = services.list(query, actor=actor, request=request)
@@ -118,13 +114,13 @@ def list_users(
     openapi_extra={AUDIT_ACTION_KEY: "user.get"},
     responses={
         status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
-        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Missing user:read permission"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Only DEVELOPER and ADMIN roles"},
         status.HTTP_404_NOT_FOUND: NOT_FOUND,
         status.HTTP_422_UNPROCESSABLE_CONTENT: INVALID,
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error retrieving the user"},
     },
 )
-def get_user(user_id: UUID, request: Request, actor: CanReadUsers, services: UserServicesDep):
+def get_user(user_id: UUID, request: Request, actor: DeveloperOrAdmin, services: UserServicesDep):
     result = services.get(user_id, actor=actor, request=request)
     __raise_for(result, "user.get")
     return result
@@ -137,7 +133,7 @@ def get_user(user_id: UUID, request: Request, actor: CanReadUsers, services: Use
     openapi_extra={AUDIT_ACTION_KEY: "user.update"},
     responses={
         status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
-        status.HTTP_403_FORBIDDEN: ADMIN_REQUIRED,
+        status.HTTP_403_FORBIDDEN: DEVELOPER_REQUIRED,
         status.HTTP_404_NOT_FOUND: NOT_FOUND,
         status.HTTP_409_CONFLICT: {"model": ValidationErrorResponse, "description": "Email already exists"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: INVALID,
@@ -148,7 +144,7 @@ def update_user(
     user_id: UUID,
     payload: UpdateUserRequest,
     request: Request,
-    actor: CanUpdateUsers,
+    actor: DeveloperOrAdmin,
     services: UserServicesDep,
 ):
     result = services.update(user_id, payload, actor=actor, request=request)
@@ -163,14 +159,14 @@ def update_user(
     openapi_extra={AUDIT_ACTION_KEY: "user.deactivate"},
     responses={
         status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
-        status.HTTP_403_FORBIDDEN: ADMIN_REQUIRED,
+        status.HTTP_403_FORBIDDEN: DEVELOPER_REQUIRED,
         status.HTTP_404_NOT_FOUND: NOT_FOUND,
         status.HTTP_409_CONFLICT: {"model": ValidationErrorResponse, "description": "Cannot deactivate your own account"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: INVALID,
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error deactivating the user"},
     },
 )
-def deactivate_user(user_id: UUID, request: Request, actor: CanDeactivateUsers, services: UserServicesDep):
+def deactivate_user(user_id: UUID, request: Request, actor: DeveloperOrAdmin, services: UserServicesDep):
     result = services.deactivate(user_id, actor=actor, request=request)
     __raise_for(result, "user.deactivate")
     return result
@@ -183,13 +179,13 @@ def deactivate_user(user_id: UUID, request: Request, actor: CanDeactivateUsers, 
     openapi_extra={AUDIT_ACTION_KEY: "user.reactivate"},
     responses={
         status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
-        status.HTTP_403_FORBIDDEN: ADMIN_REQUIRED,
+        status.HTTP_403_FORBIDDEN: DEVELOPER_REQUIRED,
         status.HTTP_404_NOT_FOUND: NOT_FOUND,
         status.HTTP_422_UNPROCESSABLE_CONTENT: INVALID,
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error reactivating the user"},
     },
 )
-def reactivate_user(user_id: UUID, request: Request, actor: CanDeactivateUsers, services: UserServicesDep):
+def reactivate_user(user_id: UUID, request: Request, actor: DeveloperOrAdmin, services: UserServicesDep):
     result = services.reactivate(user_id, actor=actor, request=request)
     __raise_for(result, "user.reactivate")
     return result
@@ -203,14 +199,14 @@ def reactivate_user(user_id: UUID, request: Request, actor: CanDeactivateUsers, 
     openapi_extra={AUDIT_ACTION_KEY: "user.reset_credentials"},
     responses={
         status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
-        status.HTTP_403_FORBIDDEN: ADMIN_REQUIRED,
+        status.HTTP_403_FORBIDDEN: DEVELOPER_REQUIRED,
         status.HTTP_404_NOT_FOUND: NOT_FOUND,
         status.HTTP_409_CONFLICT: {"model": ValidationErrorResponse, "description": "Use /auth/change-password and /auth/change-pin for your own account"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: INVALID,
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error resetting the credentials"},
     },
 )
-def reset_user_credentials(user_id: UUID, request: Request, actor: CanResetCredentials, services: UserServicesDep):
+def reset_user_credentials(user_id: UUID, request: Request, actor: DeveloperOrAdmin, services: UserServicesDep):
     result = services.reset_credentials(user_id, actor=actor, request=request)
     __raise_for(result, "user.reset_credentials")
     return result

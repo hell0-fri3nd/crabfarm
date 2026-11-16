@@ -28,13 +28,13 @@ class CreateUserRequest(BaseModel):
             "example": {
                 "name": "Juan Dela Cruz",
                 "email": "example@gmail.com",
-                "role": Role.USER.value
+                "role": Role.STAFF.value
             }
         }
     )
     name: str = Field(min_length=2, max_length=150, description="Name must be between 2 and 150 characters long.")
     email: NormalizedEmail = Field(max_length=254)
-    role: Role = Field(default=Role.USER)
+    role: Role = Field(default=Role.STAFF)
 
 
 class UpdateUserRequest(BaseModel):

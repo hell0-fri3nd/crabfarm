@@ -23,7 +23,7 @@ class Users(SQLModel, table=True):
     password: str   = Field(max_length=255)
     pin: str        = Field(max_length=255)
     role: Role      = Field(
-                        default=Role.USER,
+                        default=Role.STAFF,
                         sa_column=Column(
                             SAEnum(
                                 Role,
@@ -32,8 +32,8 @@ class Users(SQLModel, table=True):
                                 native_enum=True,
                             ),
                             nullable=False,
-                            default=Role.USER,
-                            server_default=Role.USER.value,
+                            default=Role.STAFF,
+                            server_default=Role.STAFF.value,
                         )
                     )
     is_active: bool = Field(default=True, sa_column_kwargs={"server_default": true()})
