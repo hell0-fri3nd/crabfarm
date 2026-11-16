@@ -207,7 +207,7 @@ Schemas live in the domain `types/` (or global `types/` once shared), and the ty
 | `assistant` | `/assistant/chat` |
 | `users` | `/users` |
 | `activity` | `GET /audit-events` with `action=` repeated for the chosen type (Sign-ins `auth.*` writes, Crab logs `log.create`, Batches `batch.create`, QR stickers `crab.sticker_download`, Users `user.*` writes, Security `auth.role_denied` + token rejections; reads like `log.list` are left out), `outcome=` (succeeded / failed / denied), `from` (today, 7 days, 30 days, 12 months on the farm clock), `q`, `mine` / `actor_id` (Person filter, ADMIN/DEVELOPER only), `size` 20 → 100 via **Load older**. STAFF always get only their own events (the API enforces it). `/users` names the actors for ADMIN/DEVELOPER; `/crabs` names crabs in log events |
-| `profile` | `/auth/me`, `/auth/change-password`, `/auth/change-pin` |
+| `profile` | `/auth/me`, `/auth/change-password`, `/auth/change-pin`, `/auth/me/activity` (recent activity card; **See all** opens `/activity?person=me&result=success&range=12m`, the same slice, so Security events stay out) |
 
 ## 10. Checklist: Adding a Portal Domain
 

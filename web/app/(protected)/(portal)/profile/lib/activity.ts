@@ -4,6 +4,9 @@ import type { ActivityEvent, RecentActivity } from '../types/profile';
 
 export const RECENT_ACTIVITY_LIMIT = 5;
 
+// Same slice as this card (your own successful actions), which also leaves out the Security events
+export const MY_ACTIVITY_HREF = `/activity?${new URLSearchParams({ person: 'me', result: 'success', range: '12m' })}`;
+
 const ACTION_TITLES: Record<string, (target: string) => string> = {
   'auth.sign_in': () => 'Signed in',
   'auth.sign_in.pin': () => 'Unlocked with PIN',

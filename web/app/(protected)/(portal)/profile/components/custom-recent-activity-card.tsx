@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
+import { MY_ACTIVITY_HREF } from '../lib/activity';
+
 import type { RecentActivity } from '../types/profile';
 
 type CustomRecentActivityCardProps = {
@@ -19,7 +21,7 @@ const CustomRecentActivityCard = ({ items, isUnavailable = false }: CustomRecent
       title="My recent activity"
       actions={
         <Button asChild variant="ghost" className="h-11 px-3 text-muted-foreground">
-          <Link href="/activity">
+          <Link href={MY_ACTIVITY_HREF}>
             <History aria-hidden />
             See all
           </Link>
