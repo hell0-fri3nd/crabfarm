@@ -14,8 +14,8 @@ from app.core.audit import (
     AuditServices,
     Outcome,
 )
-from .models import Logs
-from .schemas import (
+from ..models import Logs
+from ..schemas import (
     CreateLogRequest,
     ListCrabLogsQuery,
     ListLogsQuery,
