@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Scale } from 'lucide-react';
@@ -17,7 +17,8 @@ import CustomRecentLogs from './custom-recent-logs';
 import CustomReviewForm from './custom-review-form';
 import CustomScanViewport from './custom-scan-viewport';
 import { createLog } from '../actions/create-log';
-import { formatMm } from '../lib/format-mm';
+import { useWeightStream } from '../events/use-weight-stream';
+import { formatGrams, formatMm } from '../lib/format-measure';
 import { RECENT_LOGS, toRecentLog } from '../lib/recent-logs';
 import { measurementSchema } from '../types/scan';
 
@@ -30,7 +31,6 @@ type CustomScanWorkspaceProps = {
   crabs: Crab[];
   initialRecent: RecentLogs;
   loggedToday: number | null;
-  isScaleConnected: boolean;
 };
 
 const STEPS: Step[] = [
@@ -47,12 +47,14 @@ const MEASUREMENT_FIELDS = { weight_g: 'weight_g', width_mm: 'width_mm' } as con
 
 const isMeasurementField = (field: string): field is keyof typeof MEASUREMENT_FIELDS => field in MEASUREMENT_FIELDS;
 
-const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday, isScaleConnected }: CustomScanWorkspaceProps) => {
+const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday }: CustomScanWorkspaceProps) => {
   const [sticker, setSticker] = useState<ScannedSticker | null>(null);
   const [recent, setRecent] = useState(initialRecent);
   const [savedCount, setSavedCount] = useState(0);
   const [liveWidth, setLiveWidth] = useState<LiveWidth>(NO_LIVE_WIDTH);
   const [isWidthTyped, setIsWidthTyped] = useState(false);
+  const [isWeightTyped, setIsWeightTyped] = useState(false);
+  const { weightG: liveWeightG, isConnected: isScaleConnected } = useWeightStream();
   // Read inside the camera callback, which must stay stable so the viewport's effect doesn't re-fire
   const isWidthTypedRef = useRef(false);
   const form = useForm<MeasurementInput, unknown, MeasurementOutput>({
@@ -75,7 +77,14 @@ const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday, isSca
     form.reset(EMPTY_MEASUREMENT);
     setLiveWidth(NO_LIVE_WIDTH);
     setWidthTyped(false);
+    setIsWeightTyped(false);
   }, [form, setWidthTyped]);
+
+  // Like the width: once a sticker is read, the scale's latest weight fills the form until the user types one
+  useEffect(() => {
+    if (!sticker || isWeightTyped || !isScaleConnected || liveWeightG === null) return;
+    form.setValue('weight_g', formatGrams(liveWeightG), { shouldValidate: true, shouldDirty: true });
+  }, [form, sticker, isWeightTyped, isScaleConnected, liveWeightG]);
 
   const applyWidth = useCallback(
     (widthMm: number) => form.setValue('width_mm', formatMm(widthMm), { shouldValidate: true, shouldDirty: true }),
@@ -104,6 +113,8 @@ const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday, isSca
     setWidthTyped(false);
     if (liveWidth.widthMm !== null) applyWidth(liveWidth.widthMm);
   };
+
+  const handleUseLiveWeight = () => setIsWeightTyped(false);
 
   const handleRescan = () => {
     setSticker(null);
@@ -148,7 +159,13 @@ const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday, isSca
             <span className={cn('flex items-center gap-1.5 font-semibold', isScaleConnected ? 'text-primary' : 'text-warning')}>
               <Scale className="size-4" aria-hidden />
               <span aria-hidden className={cn('size-2 rounded-full', isScaleConnected ? 'bg-primary' : 'bg-warning')} />
-              {isScaleConnected ? 'Scale connected' : 'Scale not connected'}
+              {isScaleConnected && liveWeightG !== null ? (
+                <span>
+                  Scale connected · <span className="tabular-nums">{formatGrams(liveWeightG)} g</span>
+                </span>
+              ) : (
+                'Scale not connected'
+              )}
             </span>
             <span>Put the crab on the scale, then scan its sticker.</span>
           </>
@@ -173,6 +190,10 @@ const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday, isSca
           isScaleConnected={isScaleConnected}
           liveWidth={liveWidth}
           isWidthTyped={isWidthTyped}
+          liveWeightG={isScaleConnected ? liveWeightG : null}
+          isWeightTyped={isWeightTyped}
+          onWeightTyped={() => setIsWeightTyped(true)}
+          onUseLiveWeight={handleUseLiveWeight}
           onWidthTyped={() => setWidthTyped(true)}
           onUseLiveWidth={handleUseLiveWidth}
           onSave={handleSave}

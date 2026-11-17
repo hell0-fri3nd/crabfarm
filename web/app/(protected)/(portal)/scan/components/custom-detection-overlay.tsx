@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { formatMm } from '../lib/format-mm';
+import { formatMm } from '../lib/format-measure';
 import { toCoverRect } from '../lib/frame-codec';
 
 import type { DetectionResult } from '../types/detection';

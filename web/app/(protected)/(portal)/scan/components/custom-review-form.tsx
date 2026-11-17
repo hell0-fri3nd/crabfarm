@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 
-import { formatMm } from '../lib/format-mm';
+import { formatGrams, formatMm } from '../lib/format-measure';
 
 import type { MeasurementInput, MeasurementOutput, ScannedSticker } from '../types/scan';
 
@@ -25,6 +25,10 @@ type CustomReviewFormProps = {
   isWidthTyped: boolean;
   onWidthTyped: () => void;
   onUseLiveWidth: () => void;
+  liveWeightG: number | null;
+  isWeightTyped: boolean;
+  onWeightTyped: () => void;
+  onUseLiveWeight: () => void;
   onSave: (values: MeasurementOutput) => Promise<void>;
   onRescan: () => void;
 };
@@ -32,6 +36,11 @@ type CustomReviewFormProps = {
 const toWidthHint = ({ widthMm, isSteady }: LiveWidth) => {
   if (widthMm === null) return 'Place the crab under the camera to measure, or type it from calipers.';
   return isSteady ? 'Live from the camera · steady' : 'Live from the camera · hold still';
+};
+
+const toWeightHint = (isScaleConnected: boolean, isWeightTyped: boolean) => {
+  if (isWeightTyped) return 'Typed by you.';
+  return isScaleConnected ? 'Live from the scale' : 'Scale not connected. Type it from the display.';
 };
 
 const CustomReviewForm = ({
@@ -42,6 +51,10 @@ const CustomReviewForm = ({
   isWidthTyped,
   onWidthTyped,
   onUseLiveWidth,
+  liveWeightG,
+  isWeightTyped,
+  onWeightTyped,
+  onUseLiveWeight,
   onSave,
   onRescan,
 }: CustomReviewFormProps) => {
@@ -114,6 +127,10 @@ const CustomReviewForm = ({
                     <FieldLabel htmlFor="weight_g">Weight (g)</FieldLabel>
                     <Input
                       {...field}
+                      onChange={(event) => {
+                        onWeightTyped();
+                        field.onChange(event);
+                      }}
                       id="weight_g"
                       inputMode="decimal"
                       readOnly={isSaving}
@@ -123,9 +140,14 @@ const CustomReviewForm = ({
                       className="h-11 bg-card tabular-nums"
                     />
                     <FieldError id="weight_g-error" errors={[fieldState.error]} />
-                    <FieldDescription id="weight_g-hint" className="flex items-center gap-1.5">
+                    <FieldDescription id="weight_g-hint" aria-live="polite" className="flex flex-wrap items-center gap-1.5">
                       <Scale className="size-3.5" aria-hidden />
-                      {isScaleConnected ? 'From the scale' : 'Scale not connected. Type it from the display.'}
+                      {toWeightHint(isScaleConnected, isWeightTyped)}
+                      {isWeightTyped && liveWeightG !== null && (
+                        <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={onUseLiveWeight}>
+                          Use the scale&apos;s {formatGrams(liveWeightG)} g
+                        </Button>
+                      )}
                     </FieldDescription>
                   </Field>
                 )}

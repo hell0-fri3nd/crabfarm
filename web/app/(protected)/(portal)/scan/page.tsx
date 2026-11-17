@@ -20,9 +20,6 @@ import ScanLoading from './loading';
 
 export const metadata: Metadata = { title: 'Scan crab' };
 
-// No scale integration yet, so weight is always typed from the scale's display
-const IS_SCALE_CONNECTED = false;
-
 const ScanLoader = async () => {
   await connection();
   const [batches, crabs, recentResult, todayResult, self] = await Promise.all([
@@ -57,7 +54,6 @@ const ScanLoader = async () => {
       crabs={crabs.data}
       initialRecent={initialRecent}
       loggedToday={todayResult.ok ? todayResult.data.total : null}
-      isScaleConnected={IS_SCALE_CONNECTED}
     />
   );
 };

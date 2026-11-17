@@ -1,6 +1,6 @@
 import { Calculator } from 'lucide-react';
 
-import { formatMm, formatScale } from '../lib/format-mm';
+import { formatMm, formatScale } from '../lib/format-measure';
 
 import type { DetectionResult } from '../types/detection';
 

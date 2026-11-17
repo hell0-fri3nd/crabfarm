@@ -21,7 +21,7 @@ import { useCameraDevices } from './use-camera-devices';
 import { useDetectionSocket } from './use-detection-socket';
 import { useFrameCapture } from './use-frame-capture';
 import { useSteadyWidth } from './use-steady-width';
-import { formatMm } from '../lib/format-mm';
+import { formatMm } from '../lib/format-measure';
 import { readSavedCamera, saveCamera } from '../lib/scan-preferences';
 import { createQrReader } from '../lib/qr-reader';
 import { barcodeResultsSchema, buildManualCodeFormSchema, buildStickerSchema } from '../types/scan';
