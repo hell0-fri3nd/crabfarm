@@ -19,19 +19,11 @@ class CrabWeightMessage(BaseModel):
         return self.weight * GRAMS_PER_UNIT[self.unit]
 
 
-class SensorStreamQuery(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    sensor_type: Literal["weight"] | None = None
-
-
-class SensorReadingEvent(BaseModel):
-    """Data of every `sensor.reading` SSE event. Live only: readings aren't stored yet."""
+class ScaleReadingEvent(BaseModel):
+    """Data of every `scale.reading` SSE event. Live only: readings aren't stored."""
 
     model_config = ConfigDict(extra="forbid")
 
-    sensor_type: Literal["weight"]
     device_id: str | None = None
-    value: float
-    unit: Literal["g"]
+    weight_g: float
     received_at: datetime

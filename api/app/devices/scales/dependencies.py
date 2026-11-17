@@ -10,15 +10,15 @@ from fastapi import (
 
 from app.core import AnyRole
 from app.infrastructure.streaming import StreamHub
-from .services import SensorStreamServices
+from .services import ScaleStreamServices
 
 RETRY_AFTER_SECONDS = "30"
 
 
-class LiveSensorStream:
-    """Sensor stream services on the process's hub, or 503 while the broker is off or unreachable."""
+class LiveScaleStream:
+    """Scale stream services on the process's hub, or 503 while the broker is off or unreachable."""
 
-    def __call__(self, request: Request) -> SensorStreamServices:
+    def __call__(self, request: Request) -> ScaleStreamServices:
         hub: StreamHub | None = getattr(request.app.state, "hub", None)
         if hub is None or not hub.is_ready:
             raise HTTPException(
@@ -26,7 +26,7 @@ class LiveSensorStream:
                 detail="Live readings are unavailable right now",
                 headers={"Retry-After": RETRY_AFTER_SECONDS},
             )
-        return SensorStreamServices(hub)
+        return ScaleStreamServices(hub)
 
 
 class AccessTokenExpiry:
@@ -36,9 +36,9 @@ class AccessTokenExpiry:
         return actor.expires_at
 
 
-get_sensor_stream = LiveSensorStream()
+get_scale_stream = LiveScaleStream()
 get_access_token_expiry = AccessTokenExpiry()
 
 
-type SensorStreamDep = Annotated[SensorStreamServices, Depends(get_sensor_stream)]
+type ScaleStreamDep = Annotated[ScaleStreamServices, Depends(get_scale_stream)]
 type TokenExpiry = Annotated[datetime, Depends(get_access_token_expiry)]

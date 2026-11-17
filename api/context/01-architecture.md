@@ -33,13 +33,14 @@ If code and this document disagree, the code is wrong unless this document is up
 ## 3. System Data Flow
 
 ```
-LIVE SENSOR DATA (one way)
-Device ──MQTT──▶ RabbitMQ ──AMQP──▶ FastAPI GET /sensors/stream ──SSE──▶ Next.js live charts
-                    └──AMQP──▶ worker (persists readings to PostgreSQL; not built yet)
+LIVE DEVICE DATA (one way)
+Device ──MQTT──▶ RabbitMQ ──AMQP──▶ FastAPI GET /<resource>/stream ──SSE──▶ Next.js
+                    └──AMQP──▶ worker (persists water-sensor readings to PostgreSQL; not built yet)
 Built today: the crab scale (ESP32) publishes MQTT crab/weight {"weight": 554.00, "unit": "grams"} every 2 s;
-the StreamHub binds crab.weight on amq.topic, /sensors/stream?sensor_type=weight emits sensor.reading
-{sensor_type, device_id: null, value (g), unit "g", received_at (stamped by the API)}, and Scan's Weight (g)
+the StreamHub binds crab.weight on amq.topic, devices/scales serves GET /scales/stream, which emits
+scale.reading {device_id: null, weight_g, received_at (stamped by the API)}, and Scan's Weight (g)
 fills live from it. Live only, nothing stored. SSE, not WebSocket: the data only flows down to the browser.
+Planned: water-quality sensors on devices/sensors, GET /sensors/stream (sensor.reading).
 
 CONTROL COMMANDS
 Next.js ──POST──▶ FastAPI POST /devices/{id}/commands ──AMQP──▶ RabbitMQ ──MQTT──▶ Device runs command
@@ -110,10 +111,11 @@ api/app/
 │   ├── crab/
 │   ├── logs/
 │   └── forecasts/          # 7-day growth forecasts: request, read, features, prediction rows
-├── monitoring/
+├── devices/                # every MQTT device on the farm
 │   ├── api.py
-│   ├── sensors/            # readings, SSE stream (built: crab scale weight, live only), thresholds
-│   └── devices/            # device registry, commands
+│   ├── scales/             # GET /scales/stream: the crab scale's live weight (built, live only, no tables)
+│   ├── sensors/            # water-quality readings, SSE stream, thresholds (planned)
+│   └── registry/           # /devices: device registry, commands (planned)
 ├── artificial_intelligence/
 │   ├── api.py
 │   ├── vision/             # POST /detections/tickets + WS /detections/ws: live boxes + width from the browser webcam (no tables)
@@ -137,11 +139,11 @@ api/ml/                     # OUTSIDE app/: offline training only, never importe
 └── models/                 # saved artifacts (gitignored), e.g. growth_v3.joblib, downloaded yolo11n.pt
 ```
 
-Domains: `authentication`, `crab_management`, `monitoring`, `artificial_intelligence`, `assistant`, `audit`, `system`.
+Domains: `authentication`, `crab_management`, `devices`, `artificial_intelligence`, `assistant`, `audit`, `system`.
 
 `audit/events` has no `models` layer: `core.audit` owns `audit.audit_events` and writes it, and this domain only reads it (through `core.audit`'s `AuditEvents`). A STAFF caller only ever sees their own events; the service enforces it, because the rule depends on the query (01 §13).
 
-`system/events` has no `models` layer (like `artificial_intelligence/vision` and `assistant/chat`). It's the reference stream: copy its router/services/dependencies when a domain adds its own `/<resource>/stream`.
+`system/events` has no `models` layer (like `artificial_intelligence/vision`, `devices/scales` and `assistant/chat`). It's the reference stream: copy its router/services/dependencies when a domain adds its own `/<resource>/stream`.
 To add a domain, update this file first.
 
 ## 5. Resource Anatomy (non-negotiable)
@@ -260,7 +262,7 @@ Browser frames have to go up and per-frame results come back, so detection uses 
 ## 10. Worker
 
 - Separate process: `python -m app.worker`. Same settings and codebase, no FastAPI.
-- **Sensor persistence job:** durable queue bound to `farm.*.sensors.#` → validates → batch-inserts readings through `monitoring.sensors` services.
+- **Sensor persistence job:** durable queue bound to `farm.*.sensors.#` → validates → batch-inserts readings through `devices.sensors` services.
 - The worker never exposes HTTP.
 - **Detection is not a worker job** ([ADR-0003](../../docs/adr/0003-live-object-detection-over-websocket.md)). Frames come from the browser webcam over the WebSocket (§8), and the **API process** loads YOLO once in `lifespan` through `infrastructure/vision.YoloDetector`.
   - If the model can't load, the API still starts and detection sockets close with 1013.
@@ -315,7 +317,7 @@ assistant/chat/
   - `thread_id` is scoped to the user: the service prefixes or validates it against `current_user.id`, so users can't read each other's threads.
   - History, trimming and summarising are done with LangGraph features (`add_messages` reducer, message trimming inside nodes). Never hand-roll them with your own tables.
   - Domain data the assistant reads (sensors, logs, forecasts) stays in its own domain. The assistant only reads it through tools.
-- Nodes get data **only** through `tools.py`, which calls domain services (`monitoring.sensors`, `crab_management.logs`, …). Nodes never query the DB or broker directly.
+- Nodes get data **only** through `tools.py`, which calls domain services (`devices.sensors`, `crab_management.logs`, …). Nodes never query the DB or broker directly.
 - Tools are read-only. The assistant never sends device commands.
 - **LLM provider is DeepInfra.** `infrastructure/ai/llm.py` exposes `get_chat_model(purpose)`, which returns a `ChatOpenAI` pointed at DeepInfra's OpenAI-compatible API:
   ```python
@@ -349,7 +351,7 @@ Predicts **carapace width and weight for each of the next 7 days**, based on the
 **Rules**
 - **Who runs it:** prediction runs in the **worker** (`jobs/growth_forecast.py`), never inside an API request. The API only queues runs and reads results.
 - **When it runs:** nightly for every active batch (time set in `Settings`), plus on demand through `POST /forecasts` → `worker.forecast.run`.
-- **Input window:** the 14 days of `crab_management.logs` (width, weight, molt flags) up to today, read through the logs service. Sensor aggregates from `monitoring.sensors` (daily mean/min of temperature, salinity, pH, DO) may be added as features. Read them through that domain's service.
+- **Input window:** the 14 days of `crab_management.logs` (width, weight, molt flags) up to today, read through the logs service. Sensor aggregates from `devices.sensors` (daily mean/min of temperature, salinity, pH, DO) may be added as features. Read them through that domain's service.
 - **Not enough data:** if a subject has fewer than the minimum logged days in the window (set in `Settings`), mark the run `status="insufficient_data"` and don't predict. Never pad or invent rows.
 - **Feature code is shared:** training (`api/ml/train_growth_model.py`) and inference import the **same** `build_features()` from `crab_management.forecasts` services, so features never drift between the two.
 - **Model versions:** every `ForecastRun` stores the `model_version` it used. The worker loads one artifact at start through `infrastructure/ml`, from the path set in `Settings`. To change the model, deploy a new artifact and restart the worker.

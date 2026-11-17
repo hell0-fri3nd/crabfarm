@@ -93,6 +93,7 @@ Each log stores who recorded it. Every role sees every log on the Logs page; onl
 | Feature | Endpoint | Developer | Admin | Staff |
 |---|---|:-:|:-:|:-:|
 | System announcements stream | `GET /events/stream` | Yes | Yes | Yes |
+| Crab scale live weight | `GET /scales/stream` | Yes | Yes | Yes |
 
 ## Web pages
 
@@ -126,7 +127,7 @@ These are in the design but have no endpoints yet, so their roles aren't set. De
 | Edit or delete a batch | `GET`, `PATCH`, `DELETE /batches/{batch_id}` | ? | ? | ? |
 | Add, edit or delete a crab | `POST /crabs`, `PATCH`, `DELETE /crabs/{crab_id}` | ? | ? | ? |
 | Growth forecasts | `/forecasts` | ? | ? | ? |
-| Sensors and live readings | `/sensors`, `/sensors/stream` | ? | ? | ? |
+| Water sensors and live readings | `/sensors`, `/sensors/stream` | ? | ? | ? |
 | Devices and commands (feed now, stop) | `/devices`, `/devices/{device_id}/commands` | ? | ? | ? |
 | Cameras and crab detection | `/cameras`, `/detections/stream` | ? | ? | ? |
 | QR scan | `POST /qr/scan` | ? | ? | ? |

@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 
 import { useEventStream } from '@/events/use-event-stream';
 
-import { sensorReadingSchema } from '../types/scale';
+import { scaleReadingSchema } from '../types/scale';
 
-const WEIGHT_STREAM_PATH = 'sensors/stream?sensor_type=weight';
-const READING_EVENTS = ['sensor.reading'] as const;
+const WEIGHT_STREAM_PATH = 'scales/stream';
+const READING_EVENTS = ['scale.reading'] as const;
 // The scale publishes every 2 s, so three missed readings mean it's off or out of Wi-Fi
 const STALE_AFTER_MS = 6000;
 
@@ -20,9 +20,9 @@ export const useWeightStream = () => {
   const { status } = useEventStream({
     path: WEIGHT_STREAM_PATH,
     events: READING_EVENTS,
-    schema: sensorReadingSchema,
+    schema: scaleReadingSchema,
     onEvent: (_, reading) => {
-      setWeightG(reading.value);
+      setWeightG(reading.weight_g);
       setIsFresh(true);
       window.clearTimeout(staleTimerRef.current);
       staleTimerRef.current = window.setTimeout(() => setIsFresh(false), STALE_AFTER_MS);

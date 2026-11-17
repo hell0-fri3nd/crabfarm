@@ -22,7 +22,7 @@ Architecture and layering rules are in `01-architecture.md`.
 
 ## 2. Resource Naming
 
-- **Resources are plural nouns in kebab-case:** `/batches`, `/crabs`, `/logs`, `/forecasts`, `/devices`, `/sensors`, `/detections`.
+- **Resources are plural nouns in kebab-case:** `/batches`, `/crabs`, `/logs`, `/forecasts`, `/devices`, `/scales`, `/sensors`, `/detections`.
 - **No domain segment in the URL.** The domain is a code concern, so the URL is `/batches`, not `/crab-management/batches`. The resource router's `prefix` is the resource itself, matching `/auth` and `/users` today.
 - **Nest at most one level**, and only when the child can't exist without the parent. Logs are the exception, by decision: one `/logs` router, so a crab's logs are read with `GET /logs/{crab_id}` and created with `POST /logs` (`crab_id` in the body). Cross-cutting queries use the top-level collection with filters: `/logs?batch_id=...`.
 - **Path parameters** are named `{<resource>_id}`: `{batch_id}`, `{device_id}`.
@@ -211,7 +211,7 @@ Used for device commands and forecast runs.
 |---|---|
 | Path | `GET /<resource>/stream`, filtered by query params (`?device_id=`, `?batch_id=`) |
 | Response | `200`, `Content-Type: text/event-stream`, `Cache-Control: no-cache` |
-| Event name | `event: <resource>.<event>`, e.g. `sensor.reading`, `device.status`, `forecast.completed` |
+| Event name | `event: <resource>.<event>`, e.g. `scale.reading`, `sensor.reading`, `device.status`, `forecast.completed` |
 | Data | One JSON object per event, validated by a `*Event` schema |
 | Heartbeat | `: ping` comment every 15 s |
 | Errors before streaming | Normal `401`/`403`/`404` JSON. After the stream starts, send `event: error` and close. |
@@ -294,13 +294,14 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 | GET | `/forecasts/{run_id}` | 200 run + 7 points | 404 |
 | GET | `/forecasts/stream` | 200 SSE `forecast.completed` | — |
 
-### monitoring
+### devices
 
 | Method | Path | Success | Notable errors |
 |---|---|---|---|
 | GET | `/sensors` | 200 sensor list | — |
 | GET | `/sensors/{sensor_id}/readings` (`?from=&to=&interval=`) | 200 | 404 |
-| GET | `/sensors/stream` (`?sensor_type=weight`; every role) | 200 SSE `sensor.reading` (`{sensor_type, device_id, value, unit, received_at}`; built for the crab scale, live only), ends at the access token's expiry | 503 broker off or unreachable (`Retry-After`) |
+| GET | `/scales/stream` (every role) | 200 SSE `scale.reading` (`{device_id, weight_g, received_at}`; the crab scale, live only), ends at the access token's expiry | 503 broker off or unreachable (`Retry-After`) |
+| GET | `/sensors/stream` (`?sensor_type=`) | 200 SSE `sensor.reading` (water quality) | 503 broker |
 | GET | `/devices` | 200 | — |
 | POST | `/devices` | 201 | 409 device id exists |
 | GET / PATCH / DELETE | `/devices/{device_id}` | 200 | 404 |

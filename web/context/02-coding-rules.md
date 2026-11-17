@@ -95,7 +95,7 @@ export const createBatch = async (input: CreateBatchInput): Promise<ActionResult
 |---|---|---|
 | React component | PascalCase | `const SidebarMenu = () => {}` |
 | Custom hook | camelCase, starts with `use` | `const useProfileData = () => {}` |
-| SSE hook (`events/`) | camelCase, `use<Resource>Stream` | `const useSensorStream = () => {}` |
+| SSE hook (`events/`) | camelCase, `use<Resource>Stream` | `const useWeightStream = () => {}` |
 | Event handler | camelCase, `handle<Event>` (props: `on<Event>`) | `const handleLogout = () => {}`, `onSubmit` |
 | Zustand action | camelCase verb | `const setUserData = (data) => {}` |
 | BFF / API fetcher | camelCase verb | `const getSessionToken = () => {}` |

@@ -45,7 +45,7 @@ crabfarm/
 ├── docs/ui/{desktop,tablet,phone}/  # page mockups per screen size
 ├── docker-compose.yml       # PostgreSQL 16 + RabbitMQ 4 (management :15672, MQTT :1883 for ESP32, Prometheus :15692)
 ├── api/                     # FastAPI backend + worker (Python ≥ 3.12, Poetry)
-│   ├── app/                 # domains: authentication, crab_management, audit, system, artificial_intelligence (vision), (monitoring, assistant planned)
+│   ├── app/                 # domains: authentication, crab_management, audit, system, artificial_intelligence (vision), devices (scales), (assistant planned)
 │   ├── migrations/          # Alembic
 │   └── context/             # backend context docs
 └── web/                     # Next.js frontend + BFF (being rewritten; old React Router app removed)

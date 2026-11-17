@@ -17,7 +17,7 @@ One PostgreSQL database, **one Postgres schema per module**, the same way the co
 | `auth` | `authentication` | `users` | live |
 | `audit` | `core/audit` | `audit_events` | live |
 | `crab_management` | `crab_management` | `crabs`, `batches`, `logs` | live (see §6 drift) |
-| `monitoring` | `monitoring` | sensors, readings, devices, commands | planned |
+| `devices` | `devices` | sensors, readings, devices, commands | planned |
 
 - A module's tables live only in its schema: `__table_args__ = {"schema": "<schema>"}`.
 - **Modules are isolated: no foreign keys between schemas, ever** (including toward `auth.users`). FKs exist only between tables of the **same** module (§5).
@@ -107,7 +107,7 @@ These are enforced by the `naming_convention` on `SQLModel.metadata` in `core/da
 
 | Object | Rule | Example |
 |---|---|---|
-| Schema | module name, `snake_case` | `crab_management`, `monitoring` |
+| Schema | module name, `snake_case` | `crab_management`, `devices` |
 | Table | **plural** noun, `snake_case` | `users`, `batches`, `sensor_readings` |
 | Join table | both sides, plural last | `batch_crabs`, `device_sensors` |
 | Column | singular, `snake_case` | `email`, `stocked_at` |
@@ -163,7 +163,7 @@ These are enforced by the `naming_convention` on `SQLModel.metadata` in `core/da
 |---|---|---|
 | **Historical snapshot**: the value at the time of the event must not change later | Copy the value onto the event row | `audit_events.actor_email`, `actor_role`; forecast `model_version` and input window |
 | **Derived value read far more than written** | Postgres `GENERATED ALWAYS AS (...) STORED` column | `audit_events.occurred_date`, `occurred_time` |
-| **Time-series read performance** | Aggregate table or **materialized view**, refreshed by the worker | `monitoring.sensor_readings_daily` (planned), used by charts and forecast features |
+| **Time-series read performance** | Aggregate table or **materialized view**, refreshed by the worker | `devices.sensor_readings_daily` (planned), used by charts and forecast features |
 | **Immutable results** | Store the computed output once | `forecast_points` |
 
 Rules for every denormalized column:
