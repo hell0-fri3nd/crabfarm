@@ -36,3 +36,13 @@
 /api/app/artificial_intelligence/vision/__pycache__
 /api/app/monitoring/__pycache__
 /api/app/monitoring/sensors/__pycache__
+/api/app/artificial_intelligence/prediction/__pycache__
+/api/app/devices/__pycache__
+/api/app/devices/scales/__pycache__
+/api/app/infrastructure/ml/__pycache__
+/api/app/crab_management/forecasts/__pycache__
+/api/app/crab_management/logs/services/__pycache__
+/api/ml/__pycache__
+/api/app/crab_management/forecasts/services/__pycache__
+/api/app/crab_management/logs/schemas/__pycache__
+/api/app/crab_management/logs/router/__pycache__
