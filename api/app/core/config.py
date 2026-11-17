@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     forecast_horizon_days: int = Field(default=7, ge=1, le=7)
     forecast_min_logged_days: int = Field(default=7, ge=2)
     forecast_reload_seconds: float = Field(default=60, ge=0)
+    forecast_retrain_min_new_days: int = Field(default=28, ge=0)
+    forecast_retrain_min_scored_crabs: int = Field(default=3, ge=1)
     forecast_keep_models: int = Field(default=5, ge=1)
     # A lock older than this belongs to a training that died, so the next one may take it over
     forecast_training_timeout_minutes: int = Field(default=30, ge=1)

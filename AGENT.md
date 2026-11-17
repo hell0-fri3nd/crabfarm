@@ -69,6 +69,7 @@ poetry run alembic upgrade head
 poetry run uvicorn app.main:app --reload --reload-dir . --reload-dir .. --reload-include .env   # also reloads on root .env edits (needs watchfiles, a dev dependency)
 poetry run alembic revision --autogenerate -m "<verb> <what>"   # then review the file (api/context/04 §7)
 poetry run python -m ml.train_growth_model     # first growth model: trains and promotes without the gate
+poetry run python -m ml.retrain_growth_model   # gated retrain (schedule it weekly; ADR-0004)
 ```
 
 Frontend commands will be added here once the Next.js app is scaffolded (lint + typecheck must pass, see `web/context/02-coding-rules.md` §4).

@@ -2,6 +2,7 @@ from .models import Logs, LogType
 from .router import (
     forecasts_router,
     logs_router,
+    model_trainings_router,
 )
 from .schemas import (
     CrabForecast,
@@ -13,6 +14,7 @@ from .schemas import (
 from .services import (
     ForecastServices,
     LogServices,
+    ModelTrainingServices,
 )
 
 __all__ = [
@@ -20,6 +22,7 @@ __all__ = [
     "LogType",
     "forecasts_router",
     "logs_router",
+    "model_trainings_router",
     "CrabForecast",
     "CreateForecastRequest",
     "ForecastResult",
@@ -27,4 +30,5 @@ __all__ = [
     "PredictedDay",
     "ForecastServices",
     "LogServices",
+    "ModelTrainingServices",
 ]

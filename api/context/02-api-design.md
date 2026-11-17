@@ -24,7 +24,7 @@ Architecture and layering rules are in `01-architecture.md`.
 
 - **Resources are plural nouns in kebab-case:** `/batches`, `/crabs`, `/logs`, `/forecasts`, `/devices`, `/scales`, `/sensors`, `/detections`.
 - **No domain segment in the URL.** The domain is a code concern, so the URL is `/batches`, not `/crab-management/batches`. The resource router's `prefix` is the resource itself, matching `/auth` and `/users` today.
-- **Nest at most one level**, and only when the child can't exist without the parent. Logs are the exception, by decision: one `/logs` router, so a crab's logs are read with `GET /logs/{crab_id}` and created with `POST /logs` (`crab_id` in the body). Cross-cutting queries use the top-level collection with filters: `/logs?batch_id=...`.
+- **Nest at most one level**, and only when the child can't exist without the parent. Logs are the exception, by decision: one `/logs` router, so a crab's logs are read with `GET /logs/{crab_id}` and created with `POST /logs` (`crab_id` in the body). Cross-cutting queries use the top-level collection with filters: `/logs?batch_id=...`. Model trainings are the second exception, by decision: they only exist to serve forecasts, so they live at `/forecasts/model-trainings` (a sub-collection, not under a forecast id).
 - **Path parameters** are named `{<resource>_id}`: `{batch_id}`, `{device_id}`.
 - **Actions** (non-CRUD verbs) are allowed only when no resource fits. They are always `POST`, in kebab-case:
   - Auth flows: `/auth/sign-in`, `/auth/sign-in/pin`, `/auth/change-password`, `/auth/change-pin` (existing).
@@ -125,7 +125,7 @@ To keep OpenAPI typed, make `Response` generic: `Response[BatchRead]`, `Response
 |---|---|---|
 | `200 OK` | Read, update, delete or action succeeded | `GET /batches/{id}`, `PATCH /auth/change-password` |
 | `201 Created` | A new resource was created; the new resource is returned in `details` (no `Location` header) | `POST /batches` |
-| `202 Accepted` | Work was queued; the result arrives later through SSE or polling | `POST /devices/{id}/commands` |
+| `202 Accepted` | Work was queued; the result arrives later through SSE or polling | `POST /devices/{id}/commands`, `POST /forecasts/model-trainings` |
 | `400 Bad Request` | Well-formed request rejected by a business rule | incorrect current password/pin, a log date before the batch's stocking date |
 | `401 Unauthorized` | Missing, invalid or expired token, or wrong sign-in credentials; include `WWW-Authenticate: Bearer` for token errors | `/auth/sign-in` wrong password |
 | `403 Forbidden` | Authenticated but the role isn't allowed | `STAFF` calling `POST /users` |
@@ -290,6 +290,9 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 | POST | `/logs` (`AnyRole`; `{crab_id, batch_id?, log_type = actual, width_mm?, weight_g?}`, at least one measurement) | 201 `LOG_CREATED` (`user_id` = the caller) | 404 `crab_not_found` (`crab_id`), 404 `batch_not_found` (`batch_id`), read from the foreign-key violation on insert (no lookup first), 422 |
 | GET / PATCH / DELETE | `/logs/{log_id}` | 200 | 404 |
 | POST | `/forecasts` (`DeveloperOrAdmin`; body optional: `{}` = every crab with enough logged days, `{crab_id}` = one crab) | 201 `FORECAST_CREATED` (`{model_version, forecasts: [{crab_id, batch_id, window_start, window_end, points: [{day_offset, day, predicted_width_mm, predicted_weight_g}] × 7}], skipped_crab_ids, already_forecast_crab_ids}`; each point is also inserted as a `log_type = prediction` log) | 400 `forecast_insufficient_data` (`crab_id`), 409 `forecast_already_exists` (`crab_id`): the crab's (or every eligible crab's) earlier forecast still covers the coming days, 503 `FORECAST_MODEL_UNAVAILABLE` (`Retry-After: 3600`), 500 |
+| POST | `/forecasts/model-trainings` (`DeveloperOrAdmin`, no body; ADR-0004; audited as `model_training.create`) | 202 `MODEL_TRAINING_QUEUED` (`TrainingStatus`, `status = queued`): a gated retrain runs in its own process | 409 a training is already running (plain detail), 500 process couldn't start |
+| GET | `/forecasts/model-trainings` (`DeveloperOrAdmin`; `?page=&size=&status=&sort=`, `sort` ∈ `±started_at`, default `-started_at`; audited as `model_training.list`) | 200 `MODEL_TRAININGS_LISTED` (a page of `TrainingStatus`) | 422 bad page, status or sort |
+| GET | `/forecasts/model-trainings/{training_id}` (`DeveloperOrAdmin`; not audited, polled while a training runs) | 200 `MODEL_TRAINING_FOUND` (`{training_id (UUID), status: queued | running | succeeded | failed | insufficient_data, outcome: promoted | rejected | skipped | null, trigger, started_by, started_at, finished_at, version, scores: {challenger, champion, baseline: {mae_width_mm, mae_weight_g, mape_pct}}, reason}`) | 404 `model_training_not_found` (`path.training_id`), 422 not a UUID |
 
 ### devices
 

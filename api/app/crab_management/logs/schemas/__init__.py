@@ -11,6 +11,7 @@ from .log_schemas import (
     ListLogsQuery,
     LogSort,
 )
+from .training_schemas import ListModelTrainingsQuery
 
 __all__ = [
     "CrabForecast",
@@ -22,4 +23,5 @@ __all__ = [
     "ListCrabLogsQuery",
     "ListLogsQuery",
     "LogSort",
+    "ListModelTrainingsQuery",
 ]

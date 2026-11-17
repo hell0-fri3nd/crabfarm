@@ -1,5 +1,5 @@
 """Trains the growth model on every crab's actual logs and promotes it WITHOUT the holdout gate: for the first model,
-or a deliberate manual override.
+or a deliberate manual override. Scheduled and button retrains use ml.retrain_growth_model instead (ADR-0004).
 Run from api/: poetry run python -m ml.train_growth_model"""
 
 import argparse

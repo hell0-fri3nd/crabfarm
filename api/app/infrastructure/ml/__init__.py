@@ -17,6 +17,7 @@ from .registry import (
     TrainingStatus,
     TrainingTrigger,
 )
+from .runner import TrainingRunner
 
 __all__ = [
     "GrowthForecaster",
@@ -36,4 +37,5 @@ __all__ = [
     "TrainingState",
     "TrainingStatus",
     "TrainingTrigger",
+    "TrainingRunner",
 ]

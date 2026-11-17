@@ -101,7 +101,7 @@ api/app/
 │   ├── messaging/          # RabbitMQ connection, publisher, consumer, topics.py
 │   ├── streaming/          # SSE hub: AMQP → in-process fan-out → per-client queues
 │   ├── vision/             # YoloDetector (loaded in lifespan, 1-thread executor), JPEG decode, px → mm measurement, QR decoder
-│   ├── ml/                 # GrowthLstm, GrowthForecaster, ModelRegistry (versioned checkpoints, current.json, training lock), load_growth_forecaster() (reloads on promotion)
+│   ├── ml/                 # GrowthLstm, GrowthForecaster, ModelRegistry (versioned checkpoints, current.json, training lock), load_growth_forecaster() (reloads on promotion), TrainingRunner (ADR-0004)
 │   └── ai/                 # LLM client factory, in-memory LangGraph checkpointer
 ├── authentication/
 │   ├── api.py              # ROUTERS
@@ -109,7 +109,7 @@ api/app/
 ├── crab_management/
 │   ├── api.py
 │   ├── crab/
-│   └── logs/               # /logs, plus /forecasts (7-day forecast, saved as prediction logs)
+│   └── logs/               # /logs, plus /forecasts (7-day forecast, saved as prediction logs) and /forecasts/model-trainings (retrain the model)
 ├── devices/                # every MQTT device on the farm
 │   ├── api.py
 │   ├── scales/             # GET /scales/stream: the crab scale's live weight (built, live only, no tables)
@@ -135,7 +135,8 @@ api/app/
 
 api/ml/                     # OUTSIDE app/: offline training only, never imported by app/
 ├── train_growth_model.py   # trains on every crab and promotes WITHOUT the gate (first model, manual override)
-└── models/                 # saved artifacts (gitignored): growth/ (growth-lstm-<version>.pt, current.json), yolo11n.pt
+├── retrain_growth_model.py # gated retrain: holdout score vs current model + straight line, promote only if it wins (ADR-0004)
+└── models/                 # saved artifacts (gitignored): growth/ (growth-lstm-<version>.pt, current.json, trainings/<training_id>.json), yolo11n.pt
 ```
 
 Domains: `authentication`, `crab_management`, `devices`, `artificial_intelligence`, `assistant`, `audit`, `system`.
@@ -342,9 +343,9 @@ Predicts **carapace width and weight for each of the next 7 days**, based on the
 
 | Part | Contents |
 |---|---|
-| `logs/router/` | `logs.py` (`/logs`), `forecasts.py` (`POST /forecasts`, `DeveloperOrAdmin`; body optional: `{}` forecasts every crab, `{crab_id}` one crab → `201 FORECAST_CREATED`) |
-| `logs/schemas/` | `log_schemas.py`; `forecast_schemas.py` (`CreateForecastRequest`, `GrowthDay`, `PredictedDay`, `CrabForecast`, `ForecastResult`: `model_version`, `forecasts`, `skipped_crab_ids`) |
-| `logs/services/` | `forecast_services.py`: `ForecastServices`: `build_features()` (measured logs → one row per crab per logged day, from that day's **latest** log, never averaged and never mixing crabs), `to_rows()`, `forecast(crab_id=None)` (predicts, stores nothing), `create()` (forecasts, builds each predicted day as `Logs.model_validate({..., log_type: prediction, created_at: that day})` so the model's bounds apply, saves them all in one transaction with `LogServices.create_many()`, audited once as `forecast.create`). `log_services.py`: `LogServices`, incl. `list_measured()` (the forecast's and training's input: each crab's latest actual log per UTC day, `DISTINCT ON (crab_id, day)`) and `create_many()` (rows built in code, one transaction, no per-log audit). `Logs` carries the same bounds as `CreateLogRequest` (ids > 0, width 0–300 mm, weight 0–5000 g, at least one measurement); a table model skips validation in `Logs(...)`, so code-built rows use `Logs.model_validate`. |
+| `logs/router/` | `logs.py` (`/logs`), `forecasts.py` (`POST /forecasts`, `DeveloperOrAdmin`; body optional: `{}` forecasts every crab, `{crab_id}` one crab → `201 FORECAST_CREATED`), `model_trainings.py` (`POST /forecasts/model-trainings` → 202, `GET /forecasts/model-trainings`, `GET /forecasts/model-trainings/{training_id}`; ADR-0004) |
+| `logs/schemas/` | `log_schemas.py`; `forecast_schemas.py` (`CreateForecastRequest`, `GrowthDay`, `PredictedDay`, `CrabForecast`, `ForecastResult`: `model_version`, `forecasts`, `skipped_crab_ids`); `training_schemas.py` (`ListModelTrainingsQuery`) |
+| `logs/services/` | `forecast_services.py`: `ForecastServices`: `build_features()` (measured logs → one row per crab per logged day, from that day's **latest** log, never averaged and never mixing crabs), `to_rows()`, `forecast(crab_id=None)` (predicts, stores nothing), `create()` (forecasts, builds each predicted day as `Logs.model_validate({..., log_type: prediction, created_at: that day})` so the model's bounds apply, saves them all in one transaction with `LogServices.create_many()`, audited once as `forecast.create`). `training_services.py`: `ModelTrainingServices` (`create()` takes the training lock and starts the retrain process; `list()` and `get()` read `trainings/<training_id>.json`). `log_services.py`: `LogServices`, incl. `list_measured()` (the forecast's and training's input: each crab's latest actual log per UTC day, `DISTINCT ON (crab_id, day)`) and `create_many()` (rows built in code, one transaction, no per-log audit). `Logs` carries the same bounds as `CreateLogRequest` (ids > 0, width 0–300 mm, weight 0–5000 g, at least one measurement); a table model skips validation in `Logs(...)`, so code-built rows use `Logs.model_validate`. |
 
 **Rules**
 - **Who runs it:** on demand, **in the API request** (`POST /forecasts`). The model is small (milliseconds per crab), so a worker isn't needed yet. A nightly run for every crab, if added, goes in the worker (`jobs/growth_forecast.py`) and calls the same `ForecastServices.create()`.
@@ -356,7 +357,7 @@ Predicts **carapace width and weight for each of the next 7 days**, based on the
 - **Model missing:** no `current.json` in `forecast_model_dir` → `503 MODEL_UNAVAILABLE`.
 - **Feature code is shared:** training (`api/ml/train_growth_model.py`) and inference use the **same** `ForecastServices.build_features()`, so features never drift between the two.
 - **Model versions:** the checkpoint stores its version (set by the training script) and the response returns it as `model_version`. The API serves the checkpoint `current.json` names, through `infrastructure/ml.load_growth_forecaster()`, and reloads when a new version is promoted (checked every `forecast_reload_seconds`). The checkpoint holds the weights, hidden size, window length, scaling and version, all as tensors or plain values, so it loads with `weights_only=True`.
-- **Training is offline:** `poetry run python -m ml.train_growth_model` from `api/` trains on every crab, saves a versioned checkpoint and promotes it in `current.json` (one training at a time, `.training.lock`). The API never trains. Artifacts are never committed.
+- **Training is offline, retraining is gated** ([ADR-0004](../../docs/adr/0004-growth-model-retraining.md)): `ml.retrain_growth_model` runs weekly (OS scheduler, later the worker) and from the web's Retrain button through `POST /forecasts/model-trainings` (`DeveloperOrAdmin`, 202), which takes the training lock and starts it as a **separate process**; the API never trains. It holds out each scored crab's last 7 days and promotes only if the new model beats the straight-line baseline and isn't worse than the current model (`mape_pct`). One training at a time (`.training.lock`, 409). Each training is a record in `ml/models/growth/trainings/` (the last 100 kept), read by `GET /forecasts/model-trainings` and `GET /forecasts/model-trainings/{training_id}`. `ml.train_growth_model` promotes without the gate (the first model). Artifacts are never committed.
 
 ## 13. Errors, Auth, Audit
 
@@ -377,7 +378,7 @@ Predicts **carapace width and weight for each of the next 7 days**, based on the
 
 ## 14. Configuration
 
-- All settings live in `core/config.py` (`Settings`, pydantic-settings, `.env`). This includes DB URI, JWT, RabbitMQ URL, exchange names, YOLO (`yolo_weights`, `yolo_weights_dir`, `yolo_classes`, `yolo_image_size`, `yolo_confidence`, `yolo_device`, `yolo_threads`), detection (`detection_ticket_seconds`, `detection_auth_timeout_seconds`, `detection_max_frame_bytes`, `detection_max_sessions`, `detection_ticket_rate_limit`, `detection_allowed_origins`, `detection_sticker_mm`, `detection_camera_distance_mm`, `detection_camera_fov_deg`, `detection_width_offset_mm`), DeepInfra settings (`deepinfra_api_key`, `deepinfra_base_url`, and model IDs for each purpose), and forecast settings (`forecast_model_dir`, `forecast_history_days=14`, `forecast_horizon_days=7`, `forecast_min_logged_days=5`, `forecast_reload_seconds=60`, `forecast_keep_models=5`, `forecast_training_timeout_minutes=30`).
+- All settings live in `core/config.py` (`Settings`, pydantic-settings, `.env`). This includes DB URI, JWT, RabbitMQ URL, exchange names, YOLO (`yolo_weights`, `yolo_weights_dir`, `yolo_classes`, `yolo_image_size`, `yolo_confidence`, `yolo_device`, `yolo_threads`), detection (`detection_ticket_seconds`, `detection_auth_timeout_seconds`, `detection_max_frame_bytes`, `detection_max_sessions`, `detection_ticket_rate_limit`, `detection_allowed_origins`, `detection_sticker_mm`, `detection_camera_distance_mm`, `detection_camera_fov_deg`, `detection_width_offset_mm`), DeepInfra settings (`deepinfra_api_key`, `deepinfra_base_url`, and model IDs for each purpose), and forecast settings (`forecast_model_dir`, `forecast_history_days=14`, `forecast_horizon_days=7`, `forecast_min_logged_days=5`, `forecast_reload_seconds=60`, `forecast_retrain_min_new_days=20`, `forecast_retrain_min_scored_crabs=3`, `forecast_keep_models=5`, `forecast_training_timeout_minutes=30`).
 - Long-lived clients (AMQP connection, SSE hub, YOLO detector, in-memory checkpointer + compiled graph) are created in the FastAPI `lifespan` and closed on shutdown. Don't create them at import time.
 
 ## 15. Checklist: Adding a Resource

@@ -8,6 +8,11 @@ from .log_services import (
     LOG_OUTCOMES,
     LogServices,
 )
+from .training_services import (
+    MODEL_TRAINING_ERRORS,
+    MODEL_TRAINING_OUTCOMES,
+    ModelTrainingServices,
+)
 
 __all__ = [
     "FORECAST_ERRORS",
@@ -16,4 +21,7 @@ __all__ = [
     "LOG_ERRORS",
     "LOG_OUTCOMES",
     "LogServices",
+    "MODEL_TRAINING_ERRORS",
+    "MODEL_TRAINING_OUTCOMES",
+    "ModelTrainingServices",
 ]
