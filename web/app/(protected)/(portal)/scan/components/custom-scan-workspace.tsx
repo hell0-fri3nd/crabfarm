@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Scale } from 'lucide-react';
@@ -17,9 +17,11 @@ import CustomRecentLogs from './custom-recent-logs';
 import CustomReviewForm from './custom-review-form';
 import CustomScanViewport from './custom-scan-viewport';
 import { createLog } from '../actions/create-log';
+import { formatMm } from '../lib/format-mm';
 import { RECENT_LOGS, toRecentLog } from '../lib/recent-logs';
 import { measurementSchema } from '../types/scan';
 
+import type { LiveWidth } from './custom-review-form';
 import type { RecentLogs } from './custom-recent-logs';
 import type { MeasurementInput, MeasurementOutput, ScannedSticker } from '../types/scan';
 
@@ -39,6 +41,8 @@ const STEPS: Step[] = [
 
 const EMPTY_MEASUREMENT: MeasurementInput = { weight_g: '', width_mm: '' };
 
+const NO_LIVE_WIDTH: LiveWidth = { widthMm: null, isSteady: false };
+
 const MEASUREMENT_FIELDS = { weight_g: 'weight_g', width_mm: 'width_mm' } as const;
 
 const isMeasurementField = (field: string): field is keyof typeof MEASUREMENT_FIELDS => field in MEASUREMENT_FIELDS;
@@ -47,6 +51,10 @@ const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday, isSca
   const [sticker, setSticker] = useState<ScannedSticker | null>(null);
   const [recent, setRecent] = useState(initialRecent);
   const [savedCount, setSavedCount] = useState(0);
+  const [liveWidth, setLiveWidth] = useState<LiveWidth>(NO_LIVE_WIDTH);
+  const [isWidthTyped, setIsWidthTyped] = useState(false);
+  // Read inside the camera callback, which must stay stable so the viewport's effect doesn't re-fire
+  const isWidthTypedRef = useRef(false);
   const form = useForm<MeasurementInput, unknown, MeasurementOutput>({
     resolver: zodResolver(measurementSchema),
     mode: 'onTouched',
@@ -58,18 +66,48 @@ const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday, isSca
   const isMeasured = measurementSchema.safeParse({ ...EMPTY_MEASUREMENT, ...measurement }).success;
   const stepIndex = Math.min(Number(sticker !== null) + Number(sticker !== null && isMeasured), STEPS.length - 1);
 
-  const handleScan = useCallback(
-    (scanned: ScannedSticker) => {
-      setSticker(scanned);
-      form.reset(EMPTY_MEASUREMENT);
-      form.setFocus('weight_g');
-    },
+  const setWidthTyped = useCallback((isTyped: boolean) => {
+    isWidthTypedRef.current = isTyped;
+    setIsWidthTyped(isTyped);
+  }, []);
+
+  const resetMeasurement = useCallback(() => {
+    form.reset(EMPTY_MEASUREMENT);
+    setLiveWidth(NO_LIVE_WIDTH);
+    setWidthTyped(false);
+  }, [form, setWidthTyped]);
+
+  const applyWidth = useCallback(
+    (widthMm: number) => form.setValue('width_mm', formatMm(widthMm), { shouldValidate: true, shouldDirty: true }),
     [form],
   );
 
+  const handleScan = useCallback(
+    (scanned: ScannedSticker) => {
+      setSticker(scanned);
+      resetMeasurement();
+      form.setFocus('weight_g');
+    },
+    [form, resetMeasurement],
+  );
+
+  // A width the user typed wins over the camera until they ask for the camera again
+  const handleMeasure = useCallback(
+    (widthMm: number | null, isSteady: boolean) => {
+      setLiveWidth({ widthMm, isSteady });
+      if (widthMm !== null && !isWidthTypedRef.current) applyWidth(widthMm);
+    },
+    [applyWidth],
+  );
+
+  const handleUseLiveWidth = () => {
+    setWidthTyped(false);
+    if (liveWidth.widthMm !== null) applyWidth(liveWidth.widthMm);
+  };
+
   const handleRescan = () => {
     setSticker(null);
-    form.reset(EMPTY_MEASUREMENT);
+    resetMeasurement();
   };
 
   const handleSave = async ({ weight_g, width_mm }: MeasurementOutput) => {
@@ -94,8 +132,8 @@ const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday, isSca
     setRecent((current) => ({ ...current, records: [record, ...current.records].slice(0, RECENT_LOGS) }));
     setSavedCount((count) => count + 1);
     setSticker(null);
-    form.reset(EMPTY_MEASUREMENT);
-    notify.success('Log saved · scanner ready for the next crab', {
+    resetMeasurement();
+    notify.success('Log saved · camera off. Start it again for the next crab.', {
       description: `${sticker.code} · ${weight_g} g · ${width_mm} mm`,
     });
   };
@@ -120,11 +158,23 @@ const CustomScanWorkspace = ({ batches, crabs, initialRecent, loggedToday, isSca
       <CustomStepper steps={STEPS} currentIndex={stepIndex} label="Scan progress" />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
-        <CustomScanViewport batches={batches} crabs={crabs} sticker={sticker} onScan={handleScan} />
+        {/* A new key per saved log remounts the viewport, which stops the webcam and closes the detection socket */}
+        <CustomScanViewport
+          key={savedCount}
+          batches={batches}
+          crabs={crabs}
+          sticker={sticker}
+          onScan={handleScan}
+          onMeasure={handleMeasure}
+        />
         <CustomReviewForm
           form={form}
           sticker={sticker}
           isScaleConnected={isScaleConnected}
+          liveWidth={liveWidth}
+          isWidthTyped={isWidthTyped}
+          onWidthTyped={() => setWidthTyped(true)}
+          onUseLiveWidth={handleUseLiveWidth}
           onSave={handleSave}
           onRescan={handleRescan}
         />

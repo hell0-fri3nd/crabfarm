@@ -1,7 +1,7 @@
 'use client';
 
 import { Controller } from 'react-hook-form';
-import { Check, Lock, QrCode, RotateCcw, Scale } from 'lucide-react';
+import { Camera, Check, Lock, QrCode, RotateCcw, Scale } from 'lucide-react';
 
 import type { UseFormReturn } from 'react-hook-form';
 
@@ -11,17 +11,40 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 
+import { formatMm } from '../lib/format-mm';
+
 import type { MeasurementInput, MeasurementOutput, ScannedSticker } from '../types/scan';
+
+export type LiveWidth = { widthMm: number | null; isSteady: boolean };
 
 type CustomReviewFormProps = {
   form: UseFormReturn<MeasurementInput, unknown, MeasurementOutput>;
   sticker: ScannedSticker | null;
   isScaleConnected: boolean;
+  liveWidth: LiveWidth;
+  isWidthTyped: boolean;
+  onWidthTyped: () => void;
+  onUseLiveWidth: () => void;
   onSave: (values: MeasurementOutput) => Promise<void>;
   onRescan: () => void;
 };
 
-const CustomReviewForm = ({ form, sticker, isScaleConnected, onSave, onRescan }: CustomReviewFormProps) => {
+const toWidthHint = ({ widthMm, isSteady }: LiveWidth) => {
+  if (widthMm === null) return 'Place the crab under the camera to measure, or type it from calipers.';
+  return isSteady ? 'Live from the camera · steady' : 'Live from the camera · hold still';
+};
+
+const CustomReviewForm = ({
+  form,
+  sticker,
+  isScaleConnected,
+  liveWidth,
+  isWidthTyped,
+  onWidthTyped,
+  onUseLiveWidth,
+  onSave,
+  onRescan,
+}: CustomReviewFormProps) => {
   const isSaving = form.formState.isSubmitting;
   const lockedFields = sticker
     ? [
@@ -115,6 +138,10 @@ const CustomReviewForm = ({ form, sticker, isScaleConnected, onSave, onRescan }:
                     <FieldLabel htmlFor="width_mm">Width (mm)</FieldLabel>
                     <Input
                       {...field}
+                      onChange={(event) => {
+                        onWidthTyped();
+                        field.onChange(event);
+                      }}
                       id="width_mm"
                       inputMode="decimal"
                       readOnly={isSaving}
@@ -124,7 +151,15 @@ const CustomReviewForm = ({ form, sticker, isScaleConnected, onSave, onRescan }:
                       className="h-11 bg-card tabular-nums"
                     />
                     <FieldError id="width_mm-error" errors={[fieldState.error]} />
-                    <FieldDescription id="width_mm-hint">Measure across the shell with calipers, in millimetres.</FieldDescription>
+                    <FieldDescription id="width_mm-hint" aria-live="polite" className="flex flex-wrap items-center gap-1.5">
+                      <Camera className="size-3.5" aria-hidden />
+                      {isWidthTyped ? 'Typed by you.' : toWidthHint(liveWidth)}
+                      {isWidthTyped && liveWidth.widthMm !== null && (
+                        <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={onUseLiveWidth}>
+                          Use the camera&apos;s {formatMm(liveWidth.widthMm)} mm
+                        </Button>
+                      )}
+                    </FieldDescription>
                   </Field>
                 )}
               />
