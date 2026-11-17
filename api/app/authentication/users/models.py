@@ -13,15 +13,22 @@ from sqlalchemy import (
 )
 from app.core.security import Role
 
+LOWERCASE_EMAIL = r"^[^@\sA-Z]+@[^@\sA-Z]+\.[^@\sA-Z]+$"
+# Stored secrets are argon2 hashes, never the plain password or pin
+ARGON2_HASH = r"^\$argon2"
+
+
 class Users(SQLModel, table=True):
+    """Bounds match CreateUserRequest. `Users(...)` skips validation, so new rows use `Users.model_validate(...)`."""
+
     __tablename__ = "users"
     __table_args__ = {"schema": "auth"}
 
     id: UUID        = Field(default_factory=uuid4, primary_key=True, index=True)
-    name: str       = Field(max_length=150)
-    email: str      = Field(max_length=254, unique=True, index=True)
-    password: str   = Field(max_length=255)
-    pin: str        = Field(max_length=255)
+    name: str       = Field(min_length=2, max_length=150)
+    email: str      = Field(max_length=254, schema_extra={"pattern": LOWERCASE_EMAIL}, unique=True, index=True)
+    password: str   = Field(max_length=255, schema_extra={"pattern": ARGON2_HASH})
+    pin: str        = Field(max_length=255, schema_extra={"pattern": ARGON2_HASH})
     role: Role      = Field(
                         default=Role.STAFF,
                         sa_column=Column(

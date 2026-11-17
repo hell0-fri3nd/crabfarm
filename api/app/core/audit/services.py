@@ -68,23 +68,25 @@ class AuditServices:
         """`actor` is any object with `id`, `role` and `email` (e.g. Users); pass
         `actor_email` alone when the user is unknown, such as a failed sign-in."""
         try:
-            event = AuditEvents(
-                actor_id=getattr(actor, "id", None),
-                actor_type=(actor_type or self.__actor_type(actor)).value,
-                actor_role=self.__role(actor),
-                actor_email=getattr(actor, "email", None) or actor_email,
-                session_hash=self.__hash(session_token),
-                service=self.service,
-                action=action,
-                target_type=target_type,
-                target_id=target_id,
-                target_label=target_label,
-                outcome=outcome.value,
-                severity=(severity or DEFAULT_SEVERITY[outcome]).value,
-                http_status=http_status,
-                reason=reason,
-                changes=changes,
-                **self.__request_fields(request),
+            event = AuditEvents.model_validate(
+                {
+                    "actor_id": getattr(actor, "id", None),
+                    "actor_type": (actor_type or self.__actor_type(actor)).value,
+                    "actor_role": self.__role(actor),
+                    "actor_email": getattr(actor, "email", None) or actor_email,
+                    "session_hash": self.__hash(session_token),
+                    "service": self.service,
+                    "action": action,
+                    "target_type": target_type,
+                    "target_id": target_id,
+                    "target_label": target_label,
+                    "outcome": outcome.value,
+                    "severity": (severity or DEFAULT_SEVERITY[outcome]).value,
+                    "http_status": http_status,
+                    "reason": reason,
+                    "changes": changes,
+                    **self.__request_fields(request),
+                }
             )
 
             with self.session_factory() as db:

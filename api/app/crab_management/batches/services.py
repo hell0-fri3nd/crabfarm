@@ -56,7 +56,7 @@ class BatchServices:
     def create(self, actor: Actor, request: Request | None = None) -> Response[Batches]:
         action = "batch.create"
         try:
-            batch = Batches(user_id=actor.id)
+            batch = Batches.model_validate({"user_id": actor.id})
             self.db.add(batch)
             self.db.commit()
             self.db.refresh(batch)

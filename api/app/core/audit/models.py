@@ -26,10 +26,22 @@ from sqlmodel import (
     func,
 )
 
+from .schemas import (
+    ActorType,
+    Outcome,
+    Severity,
+)
+
 LOCAL_TZ = "Asia/Manila"
 
 
+def match_any(choices: type[ActorType | Outcome | Severity]) -> str:
+    return rf"^({'|'.join(choice.value for choice in choices)})$"
+
+
 class AuditEvents(SQLModel, table=True):
+    """The writer builds rows with `AuditEvents.model_validate(...)`, so these bounds hold for every event."""
+
     __tablename__ = "audit_events"
     __table_args__ = {"schema": "audit"}
 
@@ -65,10 +77,10 @@ class AuditEvents(SQLModel, table=True):
 
     # Who
     actor_id: UUID | None     = Field(default=None, index=True)
-    actor_type: str           = Field(max_length=16)
+    actor_type: str           = Field(max_length=16, schema_extra={"pattern": match_any(ActorType)})
     actor_role: str | None    = Field(default=None, max_length=32)
     actor_email: str | None   = Field(default=None, max_length=320)
-    session_hash: str | None  = Field(default=None, sa_column=Column(CHAR(64)))
+    session_hash: str | None  = Field(default=None, schema_extra={"pattern": r"^[0-9a-f]{64}$"}, sa_column=Column(CHAR(64)))
 
     # Where (client)
     source_ip: str | None     = Field(default=None, sa_column=Column(INET))
@@ -82,19 +94,19 @@ class AuditEvents(SQLModel, table=True):
     source: str | None        = Field(default=None, max_length=16)
     version: str | None       = Field(default=None, max_length=32)
     environment: str | None   = Field(default=None, max_length=16)
-    http_method: str | None   = Field(default=None, max_length=8)
+    http_method: str | None   = Field(default=None, max_length=8, schema_extra={"pattern": r"^[A-Z]+$"})
     http_path: str | None     = Field(default=None, sa_column=Column(Text))
     request_id: UUID | None   = Field(default=None)
 
     # What
-    action: str               = Field(max_length=48, index=True)
+    action: str               = Field(max_length=48, schema_extra={"pattern": r"^[a-z_]+(\.[a-z_]+)+$"}, index=True)
     target_type: str | None   = Field(default=None, max_length=48)
     target_id: UUID | None    = Field(default=None)
     target_label: str | None  = Field(default=None, sa_column=Column(Text))
 
     # Result
-    outcome: str              = Field(max_length=16)
-    severity: str             = Field(max_length=16)
-    http_status: int | None   = Field(default=None)
+    outcome: str              = Field(max_length=16, schema_extra={"pattern": match_any(Outcome)})
+    severity: str             = Field(max_length=16, schema_extra={"pattern": match_any(Severity)})
+    http_status: int | None   = Field(default=None, ge=100, le=599)
     reason: str | None        = Field(default=None, sa_column=Column(Text))
     changes: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))

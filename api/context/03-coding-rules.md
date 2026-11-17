@@ -50,6 +50,15 @@ class CreateBatchRequest(BaseModel):
 
 Responses return the resource's own table model (`Response[Batches]`). Add a `*Read` only when the table has columns that must not leak, as `UserRead` does (02 §5).
 
+### Models: table models carry their own Pydantic bounds
+
+A SQLModel table model is also a Pydantic model, so it declares the same bounds as its request schema (`Logs.width_mm: gt=0, le=300`, `Users.name: min_length=2`, `Crabs.name` pattern) plus cross-field rules as `@model_validator`s. Two SQLModel quirks decide how:
+
+- **`Model(...)` skips validation** on a `table=True` model. Build every new row with `Model.model_validate({...})`, which does validate: `Users.model_validate({**payload.model_dump(), **credentials})`, `AuditEvents.model_validate({...})`. Rows loaded from the database and attribute updates (`user.name = ...`) aren't validated; the request schema guards those.
+- **`Field(regex=...)` is silently ignored** under Pydantic v2 (SQLModel passes the old name). Write string patterns as `Field(schema_extra={"pattern": r"..."})`.
+
+These are Pydantic checks only, not database constraints, so they need no migration.
+
 ### Services: one class per entity, collaborators injected
 
 ```python

@@ -99,7 +99,7 @@ class UserServices:
             if self.__email_taken(payload.email):
                 return self.__fail(action, "EMAIL_ALREADY_EXISTS", actor, request)
 
-            user = Users(**payload.model_dump(), **self.__default_credentials())
+            user = Users.model_validate({**payload.model_dump(), **self.__default_credentials()})
             self.db.add(user)
             self.db.commit()
             self.db.refresh(user)
