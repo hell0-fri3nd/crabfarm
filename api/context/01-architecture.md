@@ -10,8 +10,8 @@ If code and this document disagree, the code is wrong unless this document is up
 - **Modular monolith.** One deployable codebase, split into **domains**. Each domain is split into **resources**.
 - **Layered inside every resource:** router → services → models. Schemas form the contract at the edges.
 - **Two processes, one codebase:**
-  - `api`: FastAPI (HTTP, SSE, publishing commands).
-  - `worker`: a custom long-running process (camera capture, YOLOv8, growth forecasts, background consumers).
+  - `api`: FastAPI (HTTP, SSE, publishing commands, live object detection over WebSocket with YOLO loaded in this process, [ADR-0003](../../docs/adr/0003-live-object-detection-over-websocket.md)).
+  - `worker`: a custom long-running process (growth forecasts, background consumers).
   Both import the same `app.*` packages.
 
 ## 2. Stack
@@ -24,8 +24,8 @@ If code and this document disagree, the code is wrong unless this document is up
 | Migrations | Alembic (`api/migrations`) |
 | Auth | JWT (PyJWT) + role checks (`core/dependencies.py`) |
 | Broker | RabbitMQ with the MQTT plugin (devices speak MQTT, the backend speaks AMQP) |
-| Realtime to browser | Server-Sent Events (SSE) |
-| Computer vision | YOLOv8 (crab detection + carapace width), QR decoding |
+| Realtime to browser | Server-Sent Events (SSE). A WebSocket only for live detection (§8) |
+| Computer vision | Ultralytics YOLO, built-in pretrained `yolo11n.pt` (COCO object detection) for now, in the API process. OpenCV (`opencv-python`, pulled in by Ultralytics) for decoding and the sticker's QR. Width in mm from the 40 mm sticker, or the stand's camera distance and field of view. QR decoding |
 | AI orchestration | LangGraph (one router graph, one file per node) |
 | LLM provider | DeepInfra, through its OpenAI-compatible endpoint (`langchain-openai` `ChatOpenAI` with `base_url`) |
 | Growth forecasting | scikit-learn-compatible regressor (e.g. LightGBM / GradientBoosting), pandas for features, saved with `joblib` |
@@ -40,9 +40,11 @@ Device ──MQTT──▶ RabbitMQ ──AMQP──▶ FastAPI GET /sensors/str
 CONTROL COMMANDS
 Next.js ──POST──▶ FastAPI POST /devices/{id}/commands ──AMQP──▶ RabbitMQ ──MQTT──▶ Device runs command
 
-CRAB MEASUREMENT
-Camera ──RTSP/USB──▶ worker (YOLOv8) ──AMQP event──▶ FastAPI GET /detections/stream ──SSE──▶ Next.js
-(live only: vision results are not stored in the database)
+LIVE DETECTION (browser webcam, no broker; ADR-0003, docs/yolo/README.md)
+Next.js Server Action ──BFF──▶ FastAPI POST /detections/tickets ──▶ 30 s single-use ticket
+Browser webcam ──wss <web origin>/ws/detections (Next rewrite)──▶ FastAPI WS /detections/ws
+   ──▶ decode (OpenCV) ──▶ YOLO (1-thread executor) ──▶ width in mm (40 mm sticker, else stand distance + field of view) ──▶ JSON boxes + measurement ──▶ browser overlay
+(live only: detection results are not stored in the database)
 
 QR SCAN
 Next.js ──POST image──▶ FastAPI POST /qr/scan ──▶ decode ──▶ look up crab/batch ──▶ JSON response
@@ -72,8 +74,6 @@ The RabbitMQ MQTT plugin maps MQTT topics onto the `amq.topic` exchange and turn
 | Sensor readings | `farm/{device_id}/sensors/{sensor_type}` | `farm.{device_id}.sensors.{sensor_type}` | `amq.topic` |
 | Device commands | `farm/{device_id}/cmd` | `farm.{device_id}.cmd` | `amq.topic` |
 | Device ack/status | `farm/{device_id}/status` | `farm.{device_id}.status` | `amq.topic` |
-| Vision results | — | `vision.detection.{camera_id}` | `crabfarm.events` (topic) |
-| Worker control | — | `worker.camera.{start\|stop}` | `crabfarm.events` (topic) |
 | Forecast request | — | `worker.forecast.run` | `crabfarm.events` (topic) |
 | Forecast finished | — | `forecast.completed.{batch_id}` | `crabfarm.events` (topic) |
 
@@ -94,7 +94,7 @@ api/app/
 ├── infrastructure/         # technical clients only, no business rules, no routers
 │   ├── messaging/          # RabbitMQ connection, publisher, consumer, topics.py
 │   ├── streaming/          # SSE hub: AMQP → in-process fan-out → per-client queues
-│   ├── vision/             # YOLOv8 loader + width calc, QR decoder
+│   ├── vision/             # YoloDetector (loaded in lifespan, 1-thread executor), JPEG decode, px → mm measurement, QR decoder
 │   ├── ml/                 # forecast model loader (joblib), model registry/version lookup
 │   └── ai/                 # LLM client factory, in-memory LangGraph checkpointer
 ├── authentication/
@@ -109,10 +109,10 @@ api/app/
 │   ├── api.py
 │   ├── sensors/            # readings, SSE stream, thresholds
 │   └── devices/            # device registry, commands
-├── vision/
+├── artificial_intelligence/
 │   ├── api.py
-│   ├── detection/          # camera start/stop, live SSE stream of results (no tables)
-│   └── qr/                 # QR scan
+│   ├── vision/             # POST /detections/tickets + WS /detections/ws: live boxes + width from the browser webcam (no tables)
+│   └── qr/                 # QR scan (planned)
 ├── audit/                  # reads the audit trail that core.audit writes (no tables of its own)
 │   ├── api.py
 │   └── events/             # GET /audit-events: filtered, paginated, scoped by role
@@ -125,18 +125,18 @@ api/app/
 └── worker/
     ├── __main__.py         # python -m app.worker
     ├── runner.py           # starts/stops jobs, handles signals
-    └── jobs/               # camera_detection.py, sensor_persistence.py, growth_forecast.py
+    └── jobs/               # sensor_persistence.py, growth_forecast.py
 
 api/ml/                     # OUTSIDE app/: offline training only, never imported by app/
 ├── train_growth_model.py   # builds dataset from DB, trains, evaluates, saves artifact
-└── models/                 # saved artifacts (gitignored), e.g. growth_v3.joblib
+└── models/                 # saved artifacts (gitignored), e.g. growth_v3.joblib, downloaded yolo11n.pt
 ```
 
-Domains: `authentication`, `crab_management`, `monitoring`, `vision`, `assistant`, `audit`, `system`.
+Domains: `authentication`, `crab_management`, `monitoring`, `artificial_intelligence`, `assistant`, `audit`, `system`.
 
 `audit/events` has no `models` layer: `core.audit` owns `audit.audit_events` and writes it, and this domain only reads it (through `core.audit`'s `AuditEvents`). A STAFF caller only ever sees their own events; the service enforces it, because the rule depends on the query (01 §13).
 
-`system/events` has no `models` layer (like `vision` and `assistant/chat`). It's the reference stream: copy its router/services/dependencies when a domain adds its own `/<resource>/stream`.
+`system/events` has no `models` layer (like `artificial_intelligence/vision` and `assistant/chat`). It's the reference stream: copy its router/services/dependencies when a domain adds its own `/<resource>/stream`.
 To add a domain, update this file first.
 
 ## 5. Resource Anatomy (non-negotiable)
@@ -209,10 +209,12 @@ The DB layer is **sync**: SQLModel `Session` from `core.database.get_db`.
 | CRUD endpoints (anything that uses `get_db`) | plain `def` (FastAPI runs it in the threadpool) |
 | Services | plain `def`, receive `db: Session` as the first argument |
 | SSE endpoints | `async def`, return `StreamingResponse` / `EventSourceResponse`, **never** take a `Session` |
+| WebSocket endpoints | `async def`, **never** take a `Session`; a receive task and a work task under `asyncio.wait(FIRST_COMPLETED, timeout=<session left>)`, both cancelled on exit |
+| YOLO inference (API) | `await detector.infer(image)`, which runs on the detector's own `ThreadPoolExecutor(max_workers=1)`, never on the event loop or the shared threadpool |
 | Broker publish/consume (`infrastructure/messaging`) | `async` (aio-pika) |
 | LangGraph run (`ainvoke` / `astream`) | `async` |
 | Async code that needs the DB | `await run_in_threadpool(fn, ...)`, where `fn` opens its own `SessionFactory()` session |
-| Worker jobs | their own loop; DB through `SessionFactory()` per unit of work; YOLO inference in a thread/process, never on the event loop |
+| Worker jobs | their own loop; DB through `SessionFactory()` per unit of work |
 
 Never call a sync `Session` directly inside an `async def`.
 
@@ -221,10 +223,29 @@ Never call a sync `Session` directly inside an `async def`.
 - `infrastructure/streaming` runs **one** AMQP consumer per API process. It binds an exclusive auto-delete queue to the keys it needs and fans messages out to an `asyncio.Queue` for each connected client.
 - The SSE endpoint subscribes a client queue, yields `event:`/`data:` frames, sends a heartbeat comment every 15 s, and unsubscribes on disconnect.
 - Filtering (by device, pond or camera) happens in the hub, not in RabbitMQ bindings per client.
-- **Built:** `infrastructure/messaging` (`RabbitClient`, `publish()`, `topics.py`) and `infrastructure/streaming` (`StreamHub`, `event_stream()`, `format_event()`). The FastAPI `lifespan` connects the client, declares `crabfarm.events` and starts one hub bound to the keys streams need (today `system.#`); add a domain's keys there. If RabbitMQ is down at startup the API still starts, and stream endpoints answer `503` + `Retry-After` until a restart.
+- **Built:** `infrastructure/messaging` (`RabbitClient`, `publish()`, `topics.py`) and `infrastructure/streaming` (`StreamHub`, `event_stream()`, `format_event()`). The FastAPI `lifespan` connects the client, declares `crabfarm.events` and starts one hub bound to the keys streams need (today `system.#`); add a domain's keys there. The broker is **off by default** (`rabbitmq_enabled=false`) until a feature needs it; set `RABBITMQ_ENABLED=true` to connect. While it's off or unreachable at startup the API still starts, and stream endpoints answer `503` + `Retry-After` until a restart. Live detection never uses the broker.
 - **Per client:** a bounded queue (`sse_client_queue_size`, oldest dropped when full), a `retry: 5000` frame first, `: ping` every `sse_heartbeat_seconds`, every broker body validated by the stream's `*Event` schema (invalid ones are logged and dropped), and the stream **ends when the access token expires**, so the client reconnects with a fresh token.
 - **Auth:** the browser never calls FastAPI; the Next.js BFF (`/api/stream/...`) sends the access token as `Authorization: Bearer`, so stream endpoints use the normal `get_current_user` + `require_roles`. Cookie or `?token=` auth is only needed if a non-BFF client ever streams directly.
 - SSE is one-way. All client actions go through normal `POST` endpoints.
+
+### WebSocket: live detection (the only WebSocket)
+
+Browser frames have to go up and per-frame results come back, so detection uses a WebSocket ([ADR-0003](../../docs/adr/0003-live-object-detection-over-websocket.md)). The full protocol is in `docs/yolo/README.md`.
+- **Path:** `WS {api_prefix}/detections/ws`. The browser reaches it on the web origin at `/ws/detections` through a `next.config.ts` rewrite. Next proxies the upgrade, and Route Handlers can't.
+- **Auth: ticket, never a JWT in the browser.**
+  - `POST /detections/tickets` (Bearer from the BFF, `AnyRole`) returns a 30 s JWT with `type: "detection"`, a `jti` and `session_exp`, where `session_exp` is the caller's access-token `exp`.
+  - The first socket message must be `{"type":"auth","ticket":…}` within `detection_auth_timeout_seconds`.
+  - The `jti` is consumed in an in-process set (single use).
+  - `Origin` is checked against `detection_allowed_origins` before accepting.
+- **Frames:** binary, `[u32 big-endian frame_id][JPEG]` (the page sends up to 1280 px on the long side), at most `detection_max_frame_bytes`. A one-slot latest-frame buffer: newer frames replace unprocessed ones, so nothing queues.
+- **Replies:** text JSON validated by Pydantic: `ready`, `result {frame_id, width, height, inference_ms, boxes[] (normalized), measurement | null}`, `error`. The mm scale comes from the sticker (`detection_sticker_mm`) or the stand (`detection_camera_distance_mm`, `detection_camera_fov_deg`).
+- **Close codes:**
+  - 4001: session expired. The socket closes at `session_exp`, like SSE.
+  - 4401: bad, used or late ticket.
+  - 4403: origin not allowed.
+  - 4413: frame too large.
+  - 1013: model not loaded, or `detection_max_sessions` reached.
+- **Limits:** the `jti` set, the session cap and the model live in memory, so run the API as a single process (as for the assistant).
 
 ## 9. Device Commands
 
@@ -234,12 +255,16 @@ Never call a sync `Session` directly inside an `async def`.
 ## 10. Worker
 
 - Separate process: `python -m app.worker`. Same settings and codebase, no FastAPI.
-- **Camera detection job:** reads cameras directly (RTSP/USB) → YOLOv8 → computes crab width (px → mm using the camera's calibration) → publishes `vision.detection.{camera_id}`. **Vision writes nothing to the database.** Results are live-only (SSE). A width becomes permanent only when a user records it as a crab log (`POST /logs`).
 - **Sensor persistence job:** durable queue bound to `farm.*.sensors.#` → validates → batch-inserts readings through `monitoring.sensors` services.
-- Cameras are started and stopped by `worker.camera.{start|stop}` events that the API publishes. The worker never exposes HTTP.
-- The YOLOv8 model is loaded once at worker start through `infrastructure/vision`. The API process never loads YOLO.
-- QR decoding is light, so it runs **in the API** (`vision/qr` service, called through `run_in_threadpool`). It decodes and looks up the crab or batch, and stores nothing.
-- Cameras (id, source URL, calibration) are configured in `Settings`, not in a table. The `vision` domain has no `models` layer.
+- The worker never exposes HTTP.
+- **Detection is not a worker job** ([ADR-0003](../../docs/adr/0003-live-object-detection-over-websocket.md)). Frames come from the browser webcam over the WebSocket (§8), and the **API process** loads YOLO once in `lifespan` through `infrastructure/vision.YoloDetector`.
+  - If the model can't load, the API still starts and detection sockets close with 1013.
+  - **Vision writes nothing to the database.** A width becomes permanent only when a user saves it as a crab log (`POST /logs`).
+  - The fixed-camera job (RTSP/USB, `/cameras`, `/detections/stream`, `vision.detection.*` and `worker.camera.*`) is dropped. If it returns, it reuses `YoloDetector` in the worker.
+- **Model:** the built-in pretrained `yolo11n.pt` (COCO object detection), downloaded by Ultralytics on first load into `api/ml/models/` (gitignored). A custom crab model later only changes `yolo_weights` (and optionally `yolo_classes`).
+- **Width in mm (fixed stand + 40 mm sticker):** the camera is on a stand 12 in above the crab, pointing down. `infrastructure/vision/measurement.py` multiplies the most confident box's **horizontal** span by a scale. The scale is the crab's sticker when its QR is in view (`detection_sticker_mm` 40 × 0.62 = 24.8 mm QR ÷ its px), otherwise the stand (`2 × detection_camera_distance_mm × tan(detection_camera_fov_deg ÷ 2) ÷ frame long side`; defaults 304.8 mm lens-to-shell, 51.4° calibrated on the farm's stand camera). With the sticker in view, the result also reports the `fov_deg` it implies, so each camera model is calibrated by copying that into `.env`. Frames are up to 1280 px so the QR is big enough to read.
+- QR decoding is light, so it runs **in the API** (`artificial_intelligence/qr` service, called through `run_in_threadpool`). It decodes and looks up the crab or batch, and stores nothing.
+- The `artificial_intelligence` domain has no `models` layer.
 
 ## 11. Assistant (LangGraph)
 
@@ -277,7 +302,7 @@ assistant/chat/
   - Intents are a `Literal`/`Enum` in `graph/state.py`, and `intent_router` returns structured output with one of them. Unknown or unclear intents fall back to `farming_qa`.
   - Reports are just the `log_report` intent answered in chat. There is no separate reports endpoint.
 - **Follow LangGraph strictly; the app doesn't store messages.**
-  - The app has **no** conversation, message or report tables, so `assistant/chat` has no `models` layer (an exception to §5, like `vision`).
+  - The app has **no** conversation, message or report tables, so `assistant/chat` has no `models` layer (an exception to §5, like `artificial_intelligence/vision`).
   - Conversation memory lives in LangGraph's state, held by LangGraph's **in-memory checkpointer** (`InMemorySaver`, created once in `infrastructure/ai`) and keyed by `thread_id`. **Nothing is written to PostgreSQL.**
   - **No chat history.** Memory lasts only for the live session. Once the user closes the chat, or the API restarts, the conversation is gone. There is no endpoint to list, reload or export past chats.
   - Memory lives in one API process, so run the API as a single process or use sticky sessions for `/assistant/chat`.
@@ -346,8 +371,8 @@ Predicts **carapace width and weight for each of the next 7 days**, based on the
 
 ## 14. Configuration
 
-- All settings live in `core/config.py` (`Settings`, pydantic-settings, `.env`). This includes DB URI, JWT, RabbitMQ URL, exchange names, camera list/calibration, YOLO weights path, DeepInfra settings (`deepinfra_api_key`, `deepinfra_base_url`, and model IDs for each purpose), and forecast settings (`forecast_model_path`, `forecast_history_days=14`, `forecast_horizon_days=7`, `forecast_min_logged_days`, `forecast_nightly_time`).
-- Long-lived clients (AMQP connection, SSE hub, in-memory checkpointer + compiled graph) are created in the FastAPI `lifespan` and closed on shutdown. Don't create them at import time.
+- All settings live in `core/config.py` (`Settings`, pydantic-settings, `.env`). This includes DB URI, JWT, RabbitMQ URL, exchange names, YOLO (`yolo_weights`, `yolo_weights_dir`, `yolo_classes`, `yolo_image_size`, `yolo_confidence`, `yolo_device`, `yolo_threads`), detection (`detection_ticket_seconds`, `detection_auth_timeout_seconds`, `detection_max_frame_bytes`, `detection_max_sessions`, `detection_ticket_rate_limit`, `detection_allowed_origins`, `detection_sticker_mm`, `detection_camera_distance_mm`, `detection_camera_fov_deg`, `detection_width_offset_mm`), DeepInfra settings (`deepinfra_api_key`, `deepinfra_base_url`, and model IDs for each purpose), and forecast settings (`forecast_model_path`, `forecast_history_days=14`, `forecast_horizon_days=7`, `forecast_min_logged_days`, `forecast_nightly_time`).
+- Long-lived clients (AMQP connection, SSE hub, YOLO detector, in-memory checkpointer + compiled graph) are created in the FastAPI `lifespan` and closed on shutdown. Don't create them at import time.
 
 ## 15. Checklist: Adding a Resource
 

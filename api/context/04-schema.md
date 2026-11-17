@@ -23,7 +23,7 @@ One PostgreSQL database, **one Postgres schema per module**, the same way the co
 - **Modules are isolated: no foreign keys between schemas, ever** (including toward `auth.users`). FKs exist only between tables of the **same** module (§5).
 - The migration that introduces a schema creates it (`op.execute("CREATE SCHEMA IF NOT EXISTS <schema>")`), and its downgrade drops it.
 - A schema name is the module name in `snake_case`. `auth` is the one existing short form.
-- **Modules with no database:** `vision` (results are live-only over SSE, cameras are in `Settings`) and `assistant` (LangGraph uses an in-memory checkpointer). Neither gets a schema or tables. A vision width is stored only when a user saves it as a `crab_management.logs` row.
+- **Modules with no database:** `artificial_intelligence` (detection results are live-only over the WebSocket, ADR-0003) and `assistant` (LangGraph uses an in-memory checkpointer). Neither gets a schema or tables. A vision width is stored only when a user saves it as a `crab_management.logs` row.
 
 ## 2. Current Tables
 

@@ -157,7 +157,7 @@ Prefer the right-hand column.
 | getter methods | `@property`; expensive and fixed → `@cached_property` |
 | alternative constructors in `__init__` | `@classmethod`: `ForecastRun.queued(batch_id)` |
 | a dict for an internal value object | `@dataclass(slots=True, frozen=True)` |
-| reloading settings or models | `@functools.cache` on the loader (`get_settings()`, `load_yolo()`) |
+| reloading settings or models | `@functools.cache` on the loader (`get_settings()`, `load_forecast_model()`) |
 | manual open/close, try/finally | `with` / `async with` context managers |
 | chunking by index | `itertools.batched(readings, 500)` |
 | checking before acting (LBYL) | EAFP: `try` / `except SpecificError` |

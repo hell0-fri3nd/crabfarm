@@ -22,13 +22,13 @@ Architecture and layering rules are in `01-architecture.md`.
 
 ## 2. Resource Naming
 
-- **Resources are plural nouns in kebab-case:** `/batches`, `/crabs`, `/logs`, `/forecasts`, `/devices`, `/sensors`, `/cameras`.
+- **Resources are plural nouns in kebab-case:** `/batches`, `/crabs`, `/logs`, `/forecasts`, `/devices`, `/sensors`, `/detections`.
 - **No domain segment in the URL.** The domain is a code concern, so the URL is `/batches`, not `/crab-management/batches`. The resource router's `prefix` is the resource itself, matching `/auth` and `/users` today.
 - **Nest at most one level**, and only when the child can't exist without the parent. Logs are the exception, by decision: one `/logs` router, so a crab's logs are read with `GET /logs/{crab_id}` and created with `POST /logs` (`crab_id` in the body). Cross-cutting queries use the top-level collection with filters: `/logs?batch_id=...`.
 - **Path parameters** are named `{<resource>_id}`: `{batch_id}`, `{device_id}`.
 - **Actions** (non-CRUD verbs) are allowed only when no resource fits. They are always `POST`, in kebab-case:
   - Auth flows: `/auth/sign-in`, `/auth/sign-in/pin`, `/auth/change-password`, `/auth/change-pin` (existing).
-  - A state change on one resource: `POST /cameras/{camera_id}/start`, `POST /cameras/{camera_id}/stop`.
+  - A state change on one resource: `POST /devices/{device_id}/commands`.
   - When something is created, prefer a sub-resource noun over a verb: `POST /devices/{device_id}/commands`, not `/devices/{id}/send-cmd`.
 
 ## 3. Methods
@@ -37,7 +37,7 @@ Architecture and layering rules are in `01-architecture.md`.
 |---|---|---|---|
 | `GET` | Read one resource or a list | — | `200 OK` |
 | `POST` | Create a resource | create schema | `201 Created` |
-| `POST` | Start async work (command, forecast run, camera start/stop) | request schema | `202 Accepted` |
+| `POST` | Start async work (command, forecast run) | request schema | `202 Accepted` |
 | `POST` | Action / RPC (sign-in, scan QR, chat) | request schema | `200 OK` |
 | `PATCH` | Partial update (only sent fields change) | update schema, all fields optional | `200 OK` |
 | `DELETE` | Delete (soft-delete where the model has `deleted_at`) | — | `200 OK` |
@@ -130,7 +130,7 @@ To keep OpenAPI typed, make `Response` generic: `Response[BatchRead]`, `Response
 | `401 Unauthorized` | Missing, invalid or expired token, or wrong sign-in credentials; include `WWW-Authenticate: Bearer` for token errors | `/auth/sign-in` wrong password |
 | `403 Forbidden` | Authenticated but the role isn't allowed | `STAFF` calling `POST /users` |
 | `404 Not Found` | The resource in the path doesn't exist (or is soft-deleted), or a collection that returns 404 when empty (only where the catalog says so) | `GET /crabs/{unknown}`, sign-in email not found (existing), `GET /batches` with no batches (`BATCHES_NOT_FOUND`) |
-| `409 Conflict` | Duplicate unique value or a state conflict | email already used, new password same as current, device offline, camera already running |
+| `409 Conflict` | Duplicate unique value or a state conflict | email already used, new password same as current, device offline |
 | `413 Content Too Large` | Upload over the limit | QR image > `settings.max_upload_mb` |
 | `415 Unsupported Media Type` | Wrong upload type | QR scan with a non-image |
 | `422 Unprocessable Content` | Pydantic validation failed | pin not 4 digits, `size > 100` |
@@ -197,7 +197,7 @@ Checklist for every endpoint:
 
 ## 9. Async Work (202 pattern)
 
-Used for device commands, forecast runs and camera start/stop.
+Used for device commands and forecast runs.
 
 1. The `POST` validates input, publishes to RabbitMQ, and returns `202` with `details: { "<job>_id": "...", "status": "queued" }`.
 2. The client follows progress through the matching SSE stream or `GET /<resource>/{id}`.
@@ -209,14 +209,27 @@ Used for device commands, forecast runs and camera start/stop.
 
 | Rule | Standard |
 |---|---|
-| Path | `GET /<resource>/stream`, filtered by query params (`?device_id=`, `?batch_id=`, `?camera_id=`) |
+| Path | `GET /<resource>/stream`, filtered by query params (`?device_id=`, `?batch_id=`) |
 | Response | `200`, `Content-Type: text/event-stream`, `Cache-Control: no-cache` |
-| Event name | `event: <resource>.<event>`, e.g. `sensor.reading`, `device.status`, `detection.created`, `forecast.completed` |
+| Event name | `event: <resource>.<event>`, e.g. `sensor.reading`, `device.status`, `forecast.completed` |
 | Data | One JSON object per event, validated by a `*Event` schema |
 | Heartbeat | `: ping` comment every 15 s |
 | Errors before streaming | Normal `401`/`403`/`404` JSON. After the stream starts, send `event: error` and close. |
 
 The assistant chat (`POST /assistant/chat`) also replies with SSE. Its events are `thread` (first event, `{thread_id}`), `token` (`{content}`), `done`, and `error`.
+
+## 10a. WebSocket (live detection only)
+
+SSE stays the default for live data. A WebSocket is used only where the browser streams data up and needs a reply per message: live detection ([ADR-0003](../../docs/adr/0003-live-object-detection-over-websocket.md), full protocol in `docs/yolo/README.md`).
+
+| Rule | Standard |
+|---|---|
+| Path | `WS /<resource>/ws` (`/detections/ws`). The browser reaches it through a same-origin Next rewrite (`/ws/detections`) |
+| Auth | A `POST /<resource>/tickets` ticket (short-lived, single-use, `type` scoped to the resource) sent as the first text message `{"type":"auth","ticket":…}`. Never a JWT from the browser, never a ticket in the URL. `Origin` is checked before accepting |
+| Client messages | Text JSON for control (`auth`), binary for payloads (`[u32 frame_id][JPEG]`) |
+| Server messages | Text JSON, a Pydantic union on `type` (`ready`, `result`, `error`). `error` keeps the socket open |
+| Close codes | `4001` session (access token) expired, `4401` bad or used ticket or auth timeout, `4403` origin, `4413` payload too large, `1013` try again later (model not loaded, session cap) |
+| Lifetime | Ends at the ticket's `session_exp` (the access token's expiry), like SSE |
 
 ## 11. Endpoint Catalog
 
@@ -295,14 +308,12 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 | GET | `/devices/{device_id}/commands/{command_id}` | 200 status | 404 |
 | GET | `/devices/stream` | 200 SSE `device.status` | — |
 
-### vision
+### artificial_intelligence (resource `vision`)
 
 | Method | Path | Success | Notable errors |
 |---|---|---|---|
-| GET | `/cameras` | 200 cameras from `Settings` + running state | — |
-| POST | `/cameras/{camera_id}/start` | 202 | 404, 409 already running, 503 broker |
-| POST | `/cameras/{camera_id}/stop` | 202 | 404, 409 not running, 503 broker |
-| GET | `/detections/stream` (`?camera_id=`) | 200 SSE `detection.created` (live only, not stored) | — |
+| POST | `/detections/tickets` (every role) | 201 `DETECTION_TICKET_ISSUED` (`{ticket, expires_at}`: a 30 s single-use JWT, `type: "detection"`) | 429, 503 model not loaded (`Retry-After`) |
+| WS | `/detections/ws` (ticket as the first message, not a Bearer) | live `ready` / `result` / `error` JSON per frame (not stored), see §10a | close 4001 session expired, 4401 bad ticket, 4403 origin, 4413 frame too large, 1013 model unavailable or too many sessions |
 | POST | `/qr/scan` (multipart image) | 200 `QR_DECODED` + linked crab/batch | 413, 415, 404 no QR found in image, 404 code not linked to a crab/batch |
 
 ### audit

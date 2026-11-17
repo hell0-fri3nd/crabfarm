@@ -27,11 +27,11 @@ Rules:
 | File | What it decides |
 |---|---|
 | `context/01-project-overview.md` | Product overview (not configured yet) |
-| `api/context/01-architecture.md` | Modular monolith, domains/resources, layer rules, RabbitMQ/MQTT topology, SSE, worker (YOLOv8, forecasts), LangGraph assistant (DeepInfra, in-memory, no history) |
+| `api/context/01-architecture.md` | Modular monolith, domains/resources, layer rules, RabbitMQ/MQTT topology, SSE, live-detection WebSocket (YOLO in the API, ticket auth, ADR-0003), worker (forecasts), LangGraph assistant (DeepInfra, in-memory, no history) |
 | `api/context/02-api-design.md` | REST resources, methods, status codes, `{success, message, code, details}` envelope, error shape, Pydantic validation, endpoint catalog |
 | `api/context/03-coding-rules.md` | Python style: file-first layers, class-based schemas/services/dependencies, naming, Pythonic sugar, dunders, comments |
 | `api/context/04-schema.md` + `schema.dbml` | Postgres schema-per-module, SQL naming, normalization, **no cross-module FKs**, known drift, migration rules |
-| `web/context/01-architecture.md` | Next.js App Router + BFF, httpOnly-cookie tokens, `(auth)` / `(protected)/team-onboarding` / `(protected)/(portal)` domains, layered domain folders (each with its own `api/` endpoint fetchers), data flow, zod, zustand |
+| `web/context/01-architecture.md` | Next.js App Router + BFF, httpOnly-cookie tokens, `(auth)` / `(protected)/team-onboarding` / `(protected)/(portal)` domains, layered domain folders (each with its own `api/` endpoint fetchers), data flow (incl. the `/ws/detections` exception), zod, zustand |
 | `web/context/02-coding-rules.md` | Arrow functions assigned to `const`, naming, `custom-<name>.tsx`, ESLint config, idiomatic TypeScript, the Next.js Way |
 | `web/context/03-design-systems.md` | Design tokens, typography, components per page, icons, feedback patterns, UX laws, WCAG 2.2 AA, review checklist |
 
@@ -45,7 +45,7 @@ crabfarm/
 ├── docs/ui/{desktop,tablet,phone}/  # page mockups per screen size
 ├── docker-compose.yml       # PostgreSQL 16 + RabbitMQ 4 (management)
 ├── api/                     # FastAPI backend + worker (Python ≥ 3.12, Poetry)
-│   ├── app/                 # domains: authentication, crab_management, (monitoring, vision, assistant planned)
+│   ├── app/                 # domains: authentication, crab_management, audit, system, artificial_intelligence (vision), (monitoring, assistant planned)
 │   ├── migrations/          # Alembic
 │   └── context/             # backend context docs
 └── web/                     # Next.js frontend + BFF (being rewritten; old React Router app removed)
@@ -66,7 +66,7 @@ docker compose up -d
 # backend (from api/)
 poetry install
 poetry run alembic upgrade head
-poetry run uvicorn app.main:app --reload
+poetry run uvicorn app.main:app --reload --reload-dir . --reload-dir .. --reload-include .env   # also reloads on root .env edits (needs watchfiles, a dev dependency)
 poetry run alembic revision --autogenerate -m "<verb> <what>"   # then review the file (api/context/04 §7)
 ```
 
