@@ -125,7 +125,7 @@ To keep OpenAPI typed, make `Response` generic: `Response[BatchRead]`, `Response
 |---|---|---|
 | `200 OK` | Read, update, delete or action succeeded | `GET /batches/{id}`, `PATCH /auth/change-password` |
 | `201 Created` | A new resource was created; the new resource is returned in `details` (no `Location` header) | `POST /batches` |
-| `202 Accepted` | Work was queued; the result arrives later through SSE or polling | `POST /devices/{id}/commands`, `POST /forecasts` |
+| `202 Accepted` | Work was queued; the result arrives later through SSE or polling | `POST /devices/{id}/commands` |
 | `400 Bad Request` | Well-formed request rejected by a business rule | incorrect current password/pin, a log date before the batch's stocking date |
 | `401 Unauthorized` | Missing, invalid or expired token, or wrong sign-in credentials; include `WWW-Authenticate: Bearer` for token errors | `/auth/sign-in` wrong password |
 | `403 Forbidden` | Authenticated but the role isn't allowed | `STAFF` calling `POST /users` |
@@ -289,10 +289,7 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 | GET | `/logs/{crab_id}` (`AnyRole`; same query as `/logs` without `crab_id`, paginated; an unknown crab is an empty page, not a 404) | 200 `LOGS_LISTED` | 422 |
 | POST | `/logs` (`AnyRole`; `{crab_id, batch_id?, log_type = actual, width_mm?, weight_g?}`, at least one measurement) | 201 `LOG_CREATED` (`user_id` = the caller) | 404 `crab_not_found` (`crab_id`), 404 `batch_not_found` (`batch_id`), read from the foreign-key violation on insert (no lookup first), 422 |
 | GET / PATCH / DELETE | `/logs/{log_id}` | 200 | 404 |
-| POST | `/forecasts` (`{batch_id \| crab_id}`) | 202 `FORECAST_QUEUED` | 404 subject, 409 run already queued, 503 broker |
-| GET | `/forecasts` (`?batch_id=&crab_id=`) | 200 latest runs | — |
-| GET | `/forecasts/{run_id}` | 200 run + 7 points | 404 |
-| GET | `/forecasts/stream` | 200 SSE `forecast.completed` | — |
+| POST | `/forecasts` (`DeveloperOrAdmin`; body optional: `{}` = every crab with enough logged days, `{crab_id}` = one crab) | 201 `FORECAST_CREATED` (`{model_version, forecasts: [{crab_id, batch_id, window_start, window_end, points: [{day_offset, day, predicted_width_mm, predicted_weight_g}] × 7}], skipped_crab_ids, already_forecast_crab_ids}`; each point is also inserted as a `log_type = prediction` log) | 400 `forecast_insufficient_data` (`crab_id`), 409 `forecast_already_exists` (`crab_id`): the crab's (or every eligible crab's) earlier forecast still covers the coming days, 503 `FORECAST_MODEL_UNAVAILABLE` (`Retry-After: 3600`), 500 |
 
 ### devices
 

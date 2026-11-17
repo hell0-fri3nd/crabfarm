@@ -28,7 +28,7 @@ If code and this document disagree, the code is wrong unless this document is up
 | Computer vision | Ultralytics YOLO, built-in pretrained `yolo11n.pt` (COCO object detection) for now, in the API process. OpenCV (`opencv-python`, pulled in by Ultralytics) for decoding and the sticker's QR. Width in mm from the 40 mm sticker, or the stand's camera distance and field of view. QR decoding |
 | AI orchestration | LangGraph (one router graph, one file per node) |
 | LLM provider | DeepInfra, through its OpenAI-compatible endpoint (`langchain-openai` `ChatOpenAI` with `base_url`) |
-| Growth forecasting | scikit-learn-compatible regressor (e.g. LightGBM / GradientBoosting), pandas for features, saved with `joblib` |
+| Growth forecasting | PyTorch LSTM + linear regression output layer (`GrowthLstm`: `nn.LSTM` → `nn.Linear`, trained together): a window of daily (width, weight) rows → the next day, rolled forward 7 days. Min-max scaling is fixed at training and saved in the checkpoint (`.pt`, loaded with `weights_only=True`). Features in plain Python + NumPy, no pandas |
 
 ## 3. System Data Flow
 
@@ -101,7 +101,7 @@ api/app/
 │   ├── messaging/          # RabbitMQ connection, publisher, consumer, topics.py
 │   ├── streaming/          # SSE hub: AMQP → in-process fan-out → per-client queues
 │   ├── vision/             # YoloDetector (loaded in lifespan, 1-thread executor), JPEG decode, px → mm measurement, QR decoder
-│   ├── ml/                 # forecast model loader (joblib), model registry/version lookup
+│   ├── ml/                 # GrowthLstm, GrowthForecaster, ModelRegistry (versioned checkpoints, current.json, training lock), load_growth_forecaster() (reloads on promotion)
 │   └── ai/                 # LLM client factory, in-memory LangGraph checkpointer
 ├── authentication/
 │   ├── api.py              # ROUTERS
@@ -109,8 +109,7 @@ api/app/
 ├── crab_management/
 │   ├── api.py
 │   ├── crab/
-│   ├── logs/
-│   └── forecasts/          # 7-day growth forecasts: request, read, features, prediction rows
+│   └── logs/               # /logs, plus /forecasts (7-day forecast, saved as prediction logs)
 ├── devices/                # every MQTT device on the farm
 │   ├── api.py
 │   ├── scales/             # GET /scales/stream: the crab scale's live weight (built, live only, no tables)
@@ -135,8 +134,8 @@ api/app/
     └── jobs/               # sensor_persistence.py, growth_forecast.py
 
 api/ml/                     # OUTSIDE app/: offline training only, never imported by app/
-├── train_growth_model.py   # builds dataset from DB, trains, evaluates, saves artifact
-└── models/                 # saved artifacts (gitignored), e.g. growth_v3.joblib, downloaded yolo11n.pt
+├── train_growth_model.py   # trains on every crab and promotes WITHOUT the gate (first model, manual override)
+└── models/                 # saved artifacts (gitignored): growth/ (growth-lstm-<version>.pt, current.json), yolo11n.pt
 ```
 
 Domains: `authentication`, `crab_management`, `devices`, `artificial_intelligence`, `assistant`, `audit`, `system`.
@@ -339,25 +338,25 @@ assistant/chat/
 
 Predicts **carapace width and weight for each of the next 7 days**, based on the **last 14 days** of crab logs.
 
-**Resource:** `crab_management/forecasts/` (standard anatomy)
+**Code:** inside the `crab_management/logs/` resource, split per concern (03 §2), because forecasts are prediction logs: no tables of their own, each predicted day is a `crab_management.logs` row with `log_type = prediction`.
 
 | Part | Contents |
 |---|---|
-| `router` | `POST /forecasts` (request a run → `202` + `run_id`), `GET /forecasts?batch_id=&crab_id=` (latest), `GET /forecasts/{run_id}`, `GET /forecasts/stream` (SSE) |
-| `models` | `ForecastRun` (id, batch_id/crab_id, status, model_version, window_start, window_end, error, timestamps) and `ForecastPoint` (run_id, day_offset 1–7, date, predicted_width_mm, predicted_weight_g, lower/upper bound) |
-| `schemas` | `ForecastRequest`, `ForecastRunRead`, `ForecastPointRead`, `ForecastCompletedEvent` |
-| `services` | `ForecastServices`: request run, read results, `build_features()` (14-day window → feature frame), `predict()` (calls the `infrastructure/ml` model), save results |
+| `logs/router/` | `logs.py` (`/logs`), `forecasts.py` (`POST /forecasts`, `DeveloperOrAdmin`; body optional: `{}` forecasts every crab, `{crab_id}` one crab → `201 FORECAST_CREATED`) |
+| `logs/schemas/` | `log_schemas.py`; `forecast_schemas.py` (`CreateForecastRequest`, `GrowthDay`, `PredictedDay`, `CrabForecast`, `ForecastResult`: `model_version`, `forecasts`, `skipped_crab_ids`) |
+| `logs/services/` | `forecast_services.py`: `ForecastServices`: `build_features()` (measured logs → one row per crab per logged day, from that day's **latest** log, never averaged and never mixing crabs), `to_rows()`, `forecast(crab_id=None)` (predicts, stores nothing), `create()` (forecasts, builds each predicted day as `Logs.model_validate({..., log_type: prediction, created_at: that day})` so the model's bounds apply, saves them all in one transaction with `LogServices.create_many()`, audited once as `forecast.create`). `log_services.py`: `LogServices`, incl. `list_measured()` (the forecast's and training's input: each crab's latest actual log per UTC day, `DISTINCT ON (crab_id, day)`) and `create_many()` (rows built in code, one transaction, no per-log audit). `Logs` carries the same bounds as `CreateLogRequest` (ids > 0, width 0–300 mm, weight 0–5000 g, at least one measurement); a table model skips validation in `Logs(...)`, so code-built rows use `Logs.model_validate`. |
 
 **Rules**
-- **Who runs it:** prediction runs in the **worker** (`jobs/growth_forecast.py`), never inside an API request. The API only queues runs and reads results.
-- **When it runs:** nightly for every active batch (time set in `Settings`), plus on demand through `POST /forecasts` → `worker.forecast.run`.
-- **Input window:** the 14 days of `crab_management.logs` (width, weight, molt flags) up to today, read through the logs service. Sensor aggregates from `devices.sensors` (daily mean/min of temperature, salinity, pH, DO) may be added as features. Read them through that domain's service.
-- **Not enough data:** if a subject has fewer than the minimum logged days in the window (set in `Settings`), mark the run `status="insufficient_data"` and don't predict. Never pad or invent rows.
-- **Feature code is shared:** training (`api/ml/train_growth_model.py`) and inference import the **same** `build_features()` from `crab_management.forecasts` services, so features never drift between the two.
-- **Model versions:** every `ForecastRun` stores the `model_version` it used. The worker loads one artifact at start through `infrastructure/ml`, from the path set in `Settings`. To change the model, deploy a new artifact and restart the worker.
-- **Training is offline:** run `api/ml/train_growth_model.py` by hand or on a schedule outside the app. Artifacts are never committed, and the app never trains.
-- **Results are stored:** forecasts are rows in the DB. Read endpoints and the assistant only read stored runs and never trigger inference synchronously.
-- **Granularity:** per batch by default. Per crab only when that crab has its own measurements over the window.
+- **Who runs it:** on demand, **in the API request** (`POST /forecasts`). The model is small (milliseconds per crab), so a worker isn't needed yet. A nightly run for every crab, if added, goes in the worker (`jobs/growth_forecast.py`) and calls the same `ForecastServices.create()`.
+- **Scope:** every crab with enough logged days in the window, or one crab when `crab_id` is sent. Crabs with some logs but too few days are listed in `skipped_crab_ids`; if no crab qualifies, `422 insufficient_data`.
+- **Input window:** the last `forecast_history_days` (14) of actual logs that have both width and weight, read through `LogServices.list_measured()`. Days are calendar days of `created_at` in UTC. Sensor aggregates from `devices.sensors` may be added as features later, read through that domain's service.
+- **Not enough data:** a crab needs at least `max(forecast_min_logged_days, the model's window_days)` logged days. Never pad or invent rows.
+- **Results are stored as prediction logs:** each predicted day is one `logs` row (`log_type = prediction`, `created_at` = the predicted day at 00:00 UTC, `user_id` = the caller, `batch_id` = the crab's latest batch). Every run **inserts**; earlier predictions are kept, never replaced or deleted.
+- **No overlapping forecasts:** a new forecast starts the day after the crab's last logged day. While the crab's latest prediction log is on or after that day, the crab isn't forecast again (`LogServices.last_predicted_days()`): `{crab_id}` gets `409 forecast_already_exists`, and `{}` skips it into `already_forecast_crab_ids` (409 if that leaves no crab). Once its last predicted day has passed in the logs, it can be forecast again. The web's Predicted (dashed) line reads these rows.
+- **Model missing:** no `current.json` in `forecast_model_dir` → `503 MODEL_UNAVAILABLE`.
+- **Feature code is shared:** training (`api/ml/train_growth_model.py`) and inference use the **same** `ForecastServices.build_features()`, so features never drift between the two.
+- **Model versions:** the checkpoint stores its version (set by the training script) and the response returns it as `model_version`. The API serves the checkpoint `current.json` names, through `infrastructure/ml.load_growth_forecaster()`, and reloads when a new version is promoted (checked every `forecast_reload_seconds`). The checkpoint holds the weights, hidden size, window length, scaling and version, all as tensors or plain values, so it loads with `weights_only=True`.
+- **Training is offline:** `poetry run python -m ml.train_growth_model` from `api/` trains on every crab, saves a versioned checkpoint and promotes it in `current.json` (one training at a time, `.training.lock`). The API never trains. Artifacts are never committed.
 
 ## 13. Errors, Auth, Audit
 
@@ -378,7 +377,7 @@ Predicts **carapace width and weight for each of the next 7 days**, based on the
 
 ## 14. Configuration
 
-- All settings live in `core/config.py` (`Settings`, pydantic-settings, `.env`). This includes DB URI, JWT, RabbitMQ URL, exchange names, YOLO (`yolo_weights`, `yolo_weights_dir`, `yolo_classes`, `yolo_image_size`, `yolo_confidence`, `yolo_device`, `yolo_threads`), detection (`detection_ticket_seconds`, `detection_auth_timeout_seconds`, `detection_max_frame_bytes`, `detection_max_sessions`, `detection_ticket_rate_limit`, `detection_allowed_origins`, `detection_sticker_mm`, `detection_camera_distance_mm`, `detection_camera_fov_deg`, `detection_width_offset_mm`), DeepInfra settings (`deepinfra_api_key`, `deepinfra_base_url`, and model IDs for each purpose), and forecast settings (`forecast_model_path`, `forecast_history_days=14`, `forecast_horizon_days=7`, `forecast_min_logged_days`, `forecast_nightly_time`).
+- All settings live in `core/config.py` (`Settings`, pydantic-settings, `.env`). This includes DB URI, JWT, RabbitMQ URL, exchange names, YOLO (`yolo_weights`, `yolo_weights_dir`, `yolo_classes`, `yolo_image_size`, `yolo_confidence`, `yolo_device`, `yolo_threads`), detection (`detection_ticket_seconds`, `detection_auth_timeout_seconds`, `detection_max_frame_bytes`, `detection_max_sessions`, `detection_ticket_rate_limit`, `detection_allowed_origins`, `detection_sticker_mm`, `detection_camera_distance_mm`, `detection_camera_fov_deg`, `detection_width_offset_mm`), DeepInfra settings (`deepinfra_api_key`, `deepinfra_base_url`, and model IDs for each purpose), and forecast settings (`forecast_model_dir`, `forecast_history_days=14`, `forecast_horizon_days=7`, `forecast_min_logged_days=5`, `forecast_reload_seconds=60`, `forecast_keep_models=5`, `forecast_training_timeout_minutes=30`).
 - Long-lived clients (AMQP connection, SSE hub, YOLO detector, in-memory checkpointer + compiled graph) are created in the FastAPI `lifespan` and closed on shutdown. Don't create them at import time.
 
 ## 15. Checklist: Adding a Resource

@@ -1,4 +1,10 @@
 import logging
+from collections.abc import Iterable, Sequence
+from datetime import (
+    date,
+    datetime,
+    timezone,
+)
 
 from fastapi import Request, status
 from sqlalchemy.exc import IntegrityError
@@ -14,7 +20,7 @@ from app.core.audit import (
     AuditServices,
     Outcome,
 )
-from ..models import Logs
+from ..models import Logs, LogType
 from ..schemas import (
     CreateLogRequest,
     ListCrabLogsQuery,
@@ -27,6 +33,7 @@ logger = logging.getLogger(__name__)
 LOG_OUTCOMES = {
     "LOGS_LISTED":       (Outcome.SUCCESS, status.HTTP_200_OK),
     "LOG_CREATED":       (Outcome.SUCCESS, status.HTTP_201_CREATED),
+    "LOGS_CREATED":      (Outcome.SUCCESS, status.HTTP_201_CREATED),
     "CRAB_NOT_FOUND":    (Outcome.FAILURE, status.HTTP_404_NOT_FOUND),
     "BATCH_NOT_FOUND":   (Outcome.FAILURE, status.HTTP_404_NOT_FOUND),
     "LOGS_LIST_FAILED":  (Outcome.ERROR,   status.HTTP_500_INTERNAL_SERVER_ERROR),
@@ -111,10 +118,61 @@ class LogServices:
     ) -> Response[Page[Logs]]:
         return self.list(ListLogsQuery(**query.model_dump(), crab_id=crab_id), actor, request)
 
+    def list_measured(self, crab_id: int | None = None, since: datetime | None = None) -> Sequence[Logs]:
+        """Each crab's latest actual log per UTC day that has both width and weight, oldest first;
+        the growth forecast's and training's input. Only the latest log of a day counts as that day's measurement."""
+        conditions = [
+            Logs.log_type == LogType.ACTUAL,
+            Logs.width_mm.is_not(None),
+            Logs.weight_g.is_not(None),
+        ]
+        if crab_id is not None:
+            conditions.append(Logs.crab_id == crab_id)
+        if since is not None:
+            conditions.append(Logs.created_at >= since)
+        logged_day = func.date(func.timezone("UTC", Logs.created_at))
+        latest_per_day = self.db.exec(
+            select(Logs)
+            .where(*conditions)
+            .distinct(Logs.crab_id, logged_day)
+            .order_by(Logs.crab_id, logged_day, Logs.created_at.desc(), Logs.id.desc())
+        ).all()
+        return sorted(latest_per_day, key=lambda log: (log.crab_id, log.created_at))
+
+    def last_predicted_days(self, crab_ids: Iterable[int]) -> dict[int, date]:
+        """Each crab's latest prediction-log day, for crabs that have any. A forecast may not overlap one."""
+        rows = self.db.exec(
+            select(Logs.crab_id, func.max(Logs.created_at))
+            .where(Logs.log_type == LogType.PREDICTION, Logs.crab_id.in_(list(crab_ids)))
+            .group_by(Logs.crab_id)
+        ).all()
+        return {crab_id: last.astimezone(timezone.utc).date() for crab_id, last in rows}
+
+    def create_many(self, logs: Sequence[Logs]) -> Response[Sequence[Logs]]:
+        """Saves rows built in code (a forecast's prediction logs) in one transaction: all of them or none.
+        Not audited here; the caller records one event for the batch. Validate the rows first
+        (`Logs.model_validate`), since `Logs(...)` doesn't."""
+        try:
+            self.db.add_all(logs)
+            self.db.commit()
+            return Response(success=True, message="Logs created", code="LOGS_CREATED", details=list(logs))
+
+        except IntegrityError as error:
+            self.db.rollback()
+            if code := MISSING_REFERENCE_CODES.get(getattr(error.orig.diag, "constraint_name", None)):
+                return Response(success=False, message=FAILURE_MESSAGES[code], code=code)
+            logger.exception("Creating %d logs failed", len(logs))
+            return Response(success=False, message=FAILURE_MESSAGES["LOG_CREATE_FAILED"], code="LOG_CREATE_FAILED")
+
+        except Exception:
+            self.db.rollback()
+            logger.exception("Creating %d logs failed", len(logs))
+            return Response(success=False, message=FAILURE_MESSAGES["LOG_CREATE_FAILED"], code="LOG_CREATE_FAILED")
+
     def create(self, payload: CreateLogRequest, actor: Actor, request: Request | None = None) -> Response[Logs]:
         action = "log.create"
         try:
-            log = Logs(user_id=actor.id, **payload.model_dump())
+            log = Logs.model_validate({"user_id": actor.id, **payload.model_dump()})
             self.db.add(log)
             self.db.commit()
             self.db.refresh(log)

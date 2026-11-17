@@ -10,7 +10,7 @@ from pydantic import (
 )
 
 from app.core import PageQuery
-from .models import LogType
+from ..models import LogType
 
 
 type LogSort = Literal["created_at", "-created_at", "width_mm", "-width_mm", "weight_g", "-weight_g"]

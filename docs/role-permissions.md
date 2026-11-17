@@ -71,6 +71,7 @@ A deactivated user can't sign in, unlock with a PIN, or use their own-account en
 | Record a log (width, weight) | `POST /logs` | Yes | Yes | Yes |
 | See recent logs on Scan crab (latest 5) | `GET /audit-events` (`action=log.create`) | Yes | Yes | Own |
 | See who recorded each log, by name | `GET /users` | Yes | Yes | No ⁹ |
+| Run the 7-day growth forecast (all crabs, or one), saved as prediction logs | `POST /forecasts` | Yes | Yes | No |
 
 Each log stores who recorded it. Every role sees every log on the Logs page; only the names behind "Logged by" depend on the role.
 
@@ -126,7 +127,6 @@ These are in the design but have no endpoints yet, so their roles aren't set. De
 | Edit or delete a single log | `GET`, `PATCH`, `DELETE /logs/{log_id}` | ? | ? | ? |
 | Edit or delete a batch | `GET`, `PATCH`, `DELETE /batches/{batch_id}` | ? | ? | ? |
 | Add, edit or delete a crab | `POST /crabs`, `PATCH`, `DELETE /crabs/{crab_id}` | ? | ? | ? |
-| Growth forecasts | `/forecasts` | ? | ? | ? |
 | Water sensors and live readings | `/sensors`, `/sensors/stream` | ? | ? | ? |
 | Devices and commands (feed now, stop) | `/devices`, `/devices/{device_id}/commands` | ? | ? | ? |
 | Cameras and crab detection | `/cameras`, `/detections/stream` | ? | ? | ? |

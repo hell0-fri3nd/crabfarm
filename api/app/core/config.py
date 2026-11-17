@@ -60,6 +60,16 @@ class Settings(BaseSettings):
     # Fixed correction added to every width after scaling (negative trims); -5 matched the stand test phone
     detection_width_offset_mm: float = Field(default=-5.0, ge=-100, le=100)
 
+    # Versioned growth checkpoints + current.json (the served one), relative to api/ unless absolute (ADR-0004)
+    forecast_model_dir: str = "ml/models/growth"
+    forecast_history_days: int = Field(default=7, ge=2)
+    forecast_horizon_days: int = Field(default=7, ge=1, le=7)
+    forecast_min_logged_days: int = Field(default=7, ge=2)
+    forecast_reload_seconds: float = Field(default=60, ge=0)
+    forecast_keep_models: int = Field(default=5, ge=1)
+    # A lock older than this belongs to a training that died, so the next one may take it over
+    forecast_training_timeout_minutes: int = Field(default=30, ge=1)
+
     # Given to new and reset users; onboarding forces both to be changed on first sign-in
     default_user_password: str = Field(default="@HelloFriend1234", min_length=8, max_length=128)
     default_user_pin: str = Field(default="1234", pattern=r"^\d{4}$")

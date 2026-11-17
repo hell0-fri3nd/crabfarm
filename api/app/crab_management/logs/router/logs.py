@@ -19,14 +19,14 @@ from app.core import (
     get_current_user,
 )
 from app.core.exceptions import AUDIT_ACTION_KEY
-from .dependencies import LogServicesDep
-from .models import Logs
-from .schemas import (
+from ..dependencies import LogServicesDep
+from ..models import Logs
+from ..schemas import (
     CreateLogRequest,
     ListCrabLogsQuery,
     ListLogsQuery,
 )
-from .services import LOG_ERRORS, LOG_OUTCOMES
+from ..services import LOG_ERRORS, LOG_OUTCOMES
 
 
 router = APIRouter(
