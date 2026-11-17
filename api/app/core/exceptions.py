@@ -61,11 +61,18 @@ class FieldException(Exception):
 class RaiseFor:
     """Raises the HTTP error a failed service result maps to (02 §6), read from the service's own maps:
     the status from `outcomes`, the field from `errors`. Routers call it instead of matching codes.
-    A code with no input to blame (a 5xx, the field "server", or no error entry) answers a plain detail."""
+    A code with no input to blame (a 5xx, the field "server", or no error entry) answers a plain detail,
+    with that code's `headers` (e.g. `Retry-After` on a 503)."""
 
-    def __init__(self, outcomes: dict[str, tuple[Outcome, int]], errors: dict[str, tuple[str, str]]):
+    def __init__(
+        self,
+        outcomes: dict[str, tuple[Outcome, int]],
+        errors: dict[str, tuple[str, str]],
+        headers: dict[str, dict[str, str]] | None = None,
+    ):
         self.outcomes = outcomes
         self.errors = errors
+        self.headers = headers or {}
 
     def __call__(self, result: Response, action: str) -> None:
         if result:
@@ -74,7 +81,7 @@ class RaiseFor:
         _, http_status = self.outcomes.get(result.code, (Outcome.ERROR, status.HTTP_500_INTERNAL_SERVER_ERROR))
         field, _ = self.errors.get(result.code, ("server", None))
         if http_status >= status.HTTP_500_INTERNAL_SERVER_ERROR or field == "server":
-            raise HTTPException(http_status, detail=result.message)
+            raise HTTPException(http_status, detail=result.message, headers=self.headers.get(result.code))
 
         raise FieldException(http_status, field, result.message, result.code.lower(), detail=result.message, action=action)
 
