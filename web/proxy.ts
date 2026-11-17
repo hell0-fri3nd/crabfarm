@@ -26,6 +26,6 @@ export const proxy = (request: NextRequest) => {
 };
 
 export const config = {
-  // Every page except BFF Route Handlers, Next.js internals and static files (anything with an extension)
-  matcher: ['/((?!api/|_next/|.*\\..*).*)'],
+  // Every page except BFF Route Handlers, the detection WebSocket, Next.js internals and static files (anything with an extension)
+  matcher: ['/((?!api/|ws/|_next/|.*\\..*).*)'],
 };

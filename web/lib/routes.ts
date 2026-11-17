@@ -2,3 +2,5 @@ export const SIGN_IN_HREF = '/sign-in';
 export const PIN_HREF = '/pin';
 export const ONBOARDING_HREF = '/team-onboarding';
 export const END_SESSION_HREF = '/api/session/end';
+// Same-origin path of the live-detection WebSocket; next.config.ts rewrites it to FastAPI (ADR-0003)
+export const DETECTION_SOCKET_PATH = '/ws/detections';
