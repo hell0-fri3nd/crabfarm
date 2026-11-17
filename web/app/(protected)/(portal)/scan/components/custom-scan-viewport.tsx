@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
+import Webcam from 'react-webcam';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Camera, CameraOff, CircleCheck, ScanLine } from 'lucide-react';
 
@@ -13,6 +14,7 @@ import { cn } from '@/lib/utils';
 
 import type { Batch, Crab } from '@/types/crab-management';
 
+import { createQrReader } from '../lib/qr-reader';
 import { barcodeResultsSchema, buildManualCodeFormSchema, buildStickerSchema } from '../types/scan';
 
 import type { ManualCodeFormInput, ManualCodeFormOutput, ScannedSticker } from '../types/scan';
@@ -28,6 +30,9 @@ type CustomScanViewportProps = {
 
 const DETECT_EVERY_MS = 500;
 
+// Rear camera on phones; laptops fall back to whatever camera they have
+const VIDEO_CONSTRAINTS = { facingMode: 'environment' } satisfies MediaTrackConstraints;
+
 const CAMERA_MESSAGES = {
   off: { title: 'Camera off', hint: 'Turn it on to read stickers and measure width.' },
   starting: { title: 'Starting camera…', hint: 'Allow camera access if the browser asks.' },
@@ -39,15 +44,9 @@ const CAMERA_MESSAGES = {
   unavailable: { title: 'No camera found', hint: 'Type the code printed under the QR below.' },
 } as const satisfies Record<CameraState, { title: string; hint: string }>;
 
-const createDetector = () => {
-  const Detector = Reflect.get(window, 'BarcodeDetector');
-  return typeof Detector === 'function' ? new Detector({ formats: ['qr_code'] }) : null;
-};
-
 const CustomScanViewport = ({ batches, crabs, sticker, onScan }: CustomScanViewportProps) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const webcamRef = useRef<Webcam>(null);
   const [cameraState, setCameraState] = useState<CameraState>('off');
-  const [stream, setStream] = useState<MediaStream | null>(null);
   const [canDetect, setCanDetect] = useState(true);
   const [readError, setReadError] = useState<string | null>(null);
   const stickerSchema = useMemo(() => buildStickerSchema(batches, crabs), [batches, crabs]);
@@ -60,60 +59,58 @@ const CustomScanViewport = ({ batches, crabs, sticker, onScan }: CustomScanViewp
   });
 
   const isCameraOn = cameraState === 'on';
+  const isWebcamMounted = cameraState === 'starting' || isCameraOn;
   const message = CAMERA_MESSAGES[cameraState];
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = stream;
-    return () => stream?.getTracks().forEach((track) => track.stop());
-  }, [stream]);
-
-  useEffect(() => {
     if (!isCameraOn || sticker) return;
-    const detector = createDetector();
-    if (!detector) return;
+    let isActive = true;
+    let isReading = false;
+    let timer: number | undefined;
 
-    const timer = window.setInterval(async () => {
-      const video = videoRef.current;
-      if (!video || video.readyState < 2) return;
-      const results = barcodeResultsSchema.safeParse(await detector.detect(video));
-      const rawValue = results.success ? results.data[0]?.rawValue : undefined;
-      if (!rawValue) return;
-      const parsed = stickerSchema.safeParse(rawValue);
-      if (parsed.success) {
-        setReadError(null);
-        onScan(parsed.data);
-      } else {
-        setReadError(parsed.error.issues[0]?.message ?? "That QR isn't a CrabFarm sticker. Try the sticker on the crab's back.");
-      }
-    }, DETECT_EVERY_MS);
+    void createQrReader().then((reader) => {
+      if (!isActive) return;
+      setCanDetect(reader !== null);
+      if (!reader) return;
 
-    return () => window.clearInterval(timer);
+      timer = window.setInterval(async () => {
+        const video = webcamRef.current?.video;
+        // ZXing can take longer than one tick on slow phones; skip ticks instead of queueing reads
+        if (!video || video.readyState < 2 || isReading) return;
+        isReading = true;
+        const results = barcodeResultsSchema.safeParse(await reader.detect(video).catch(() => []));
+        isReading = false;
+        if (!isActive) return;
+        const rawValue = results.success ? results.data[0]?.rawValue : undefined;
+        if (!rawValue) return;
+        const parsed = stickerSchema.safeParse(rawValue);
+        if (parsed.success) {
+          setReadError(null);
+          onScan(parsed.data);
+        } else {
+          setReadError(parsed.error.issues[0]?.message ?? "That QR isn't a CrabFarm sticker. Try the sticker on the crab's back.");
+        }
+      }, DETECT_EVERY_MS);
+    });
+
+    return () => {
+      isActive = false;
+      window.clearInterval(timer);
+    };
   }, [isCameraOn, sticker, onScan, stickerSchema]);
 
-  const handleStartCamera = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraState('unavailable');
-      return;
-    }
-    setCameraState('starting');
-    try {
-      const nextStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false,
-      });
-      setStream(nextStream);
-      setCanDetect(createDetector() !== null);
-      setCameraState('on');
-    } catch (error) {
-      const isBlocked = error instanceof DOMException && error.name === 'NotAllowedError';
-      setCameraState(isBlocked ? 'blocked' : 'unavailable');
-    }
+  // Without camera support (old browser, plain http) react-webcam reports it through onUserMediaError
+  const handleStartCamera = () => setCameraState('starting');
+
+  const handleCameraReady = () => setCameraState('on');
+
+  const handleCameraError = (error: string | DOMException) => {
+    const isBlocked = error instanceof DOMException && error.name === 'NotAllowedError';
+    setCameraState(isBlocked ? 'blocked' : 'unavailable');
   };
 
-  const handleStopCamera = () => {
-    setStream(null);
-    setCameraState('off');
-  };
+  // Unmounting the webcam stops its tracks, so the camera light goes off
+  const handleStopCamera = () => setCameraState('off');
 
   const handleManualCode = ({ code }: ManualCodeFormOutput) => {
     onScan(code);
@@ -124,14 +121,17 @@ const CustomScanViewport = ({ batches, crabs, sticker, onScan }: CustomScanViewp
     <Card className="gap-5 rounded-2xl py-5 sm:py-6">
       <CardContent className="flex flex-col gap-5 px-4 sm:px-6">
         <div className="relative aspect-4/3 overflow-hidden rounded-xl border border-border bg-sidebar text-sidebar-foreground">
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            aria-label="Camera preview"
-            className={cn('absolute inset-0 size-full object-cover', !isCameraOn && 'hidden')}
-          />
+          {isWebcamMounted && (
+            <Webcam
+              ref={webcamRef}
+              audio={false}
+              videoConstraints={VIDEO_CONSTRAINTS}
+              onUserMedia={handleCameraReady}
+              onUserMediaError={handleCameraError}
+              aria-label="Camera preview"
+              className={cn('absolute inset-0 size-full object-cover', !isCameraOn && 'hidden')}
+            />
+          )}
 
           {isCameraOn && !sticker && (
             <div aria-hidden className="absolute inset-0 flex items-center justify-center">
@@ -162,7 +162,7 @@ const CustomScanViewport = ({ batches, crabs, sticker, onScan }: CustomScanViewp
                 <p className="text-sm font-semibold">{message.title}</p>
                 <p className="max-w-xs text-sm text-sidebar-foreground/75">
                   {isCameraOn && !canDetect
-                    ? "This browser can't read QR codes from the camera. Type the code below."
+                    ? "The QR reader couldn't load. Check your connection, or type the code below."
                     : message.hint}
                 </p>
               </>
@@ -186,7 +186,7 @@ const CustomScanViewport = ({ batches, crabs, sticker, onScan }: CustomScanViewp
             type="button"
             className="h-11 w-full sm:mx-auto sm:w-auto sm:px-5"
             disabled={cameraState === 'starting'}
-            onClick={() => void handleStartCamera()}
+            onClick={handleStartCamera}
           >
             <ScanLine aria-hidden />
             {cameraState === 'starting' ? 'Starting camera…' : 'Start camera'}
