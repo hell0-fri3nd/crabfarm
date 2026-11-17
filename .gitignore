@@ -34,3 +34,5 @@
 /api/app/vision/detection/__pycache__
 /api/app/artificial_intelligence/__pycache__
 /api/app/artificial_intelligence/vision/__pycache__
+/api/app/monitoring/__pycache__
+/api/app/monitoring/sensors/__pycache__

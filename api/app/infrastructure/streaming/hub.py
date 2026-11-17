@@ -49,11 +49,13 @@ class _Subscriber:
 
 
 class StreamHub:
-    """One exclusive broker queue per API process, fanned out to every connected SSE client."""
+    """One exclusive broker queue per API process, fanned out to every connected SSE client.
+    `bindings` are keys on crabfarm.events; `device_bindings` are keys on amq.topic (MQTT devices)."""
 
-    def __init__(self, client: RabbitClient, bindings: Iterable[str]):
+    def __init__(self, client: RabbitClient, bindings: Iterable[str], device_bindings: Iterable[str] = ()):
         self._client = client
         self._bindings = tuple(bindings)
+        self._device_bindings = tuple(device_bindings)
         self._subscribers: set[_Subscriber] = set()
         self._queue: AbstractQueue | None = None
         self._consumer_tag: str | None = None
@@ -71,8 +73,12 @@ class StreamHub:
         self._queue = await self._client.channel.declare_queue(exclusive=True, auto_delete=True)
         for binding in self._bindings:
             await self._queue.bind(exchange, routing_key=binding)
+        if self._device_bindings:
+            device_exchange = await self._client.get_device_exchange()
+            for binding in self._device_bindings:
+                await self._queue.bind(device_exchange, routing_key=binding)
         self._consumer_tag = await self._queue.consume(self.__dispatch, no_ack=True)
-        logger.info("Stream hub consuming %s", ", ".join(self._bindings))
+        logger.info("Stream hub consuming %s", ", ".join((*self._bindings, *self._device_bindings)))
 
     async def stop(self) -> None:
         if self._queue is not None and self._consumer_tag is not None:
@@ -95,4 +101,7 @@ class StreamHub:
             self._subscribers.discard(subscriber)
 
     def __repr__(self) -> str:
-        return f"StreamHub(ready={self.is_ready}, bindings={self._bindings}, subscribers={self.subscriber_count})"
+        return (
+            f"StreamHub(ready={self.is_ready}, bindings={self._bindings}, "
+            f"device_bindings={self._device_bindings}, subscribers={self.subscriber_count})"
+        )

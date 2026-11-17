@@ -11,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core import settings, register_exception_handlers
 
-from app.infrastructure.messaging import RabbitClient, SYSTEM_EVENTS
+from app.infrastructure.messaging import CRAB_WEIGHT, RabbitClient, SYSTEM_EVENTS
 from app.infrastructure.streaming import StreamHub
 from app.infrastructure.vision import YoloDetector
 
@@ -20,6 +20,7 @@ from app.authentication import ROUTERS as AUTH_ROUTERS
 from app.crab_management import ROUTERS as CRAB_ROUTERS
 from app.audit import ROUTERS as AUDIT_ROUTERS
 from app.artificial_intelligence import ROUTERS as AI_ROUTERS
+from app.monitoring import ROUTERS as MONITORING_ROUTERS
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.rabbitmq_enabled:
         try:
             await broker.connect()
-            hub = StreamHub(broker, bindings=[SYSTEM_EVENTS])
+            hub = StreamHub(broker, bindings=[SYSTEM_EVENTS], device_bindings=[CRAB_WEIGHT])
             await hub.start()
             app.state.broker, app.state.hub = broker, hub
         except (AMQPError, OSError):
@@ -95,6 +96,7 @@ This API provides endpoints for interacting with the Crabfarm backend.
         *AUDIT_ROUTERS,
         *SYSTEM_ROUTERS,
         *AI_ROUTERS,
+        *MONITORING_ROUTERS,
     ):
         app.include_router(router, prefix=settings.api_prefix)
 

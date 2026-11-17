@@ -8,7 +8,7 @@ from aio_pika.abc import (
 )
 
 from app.core import settings
-from .topics import EVENTS_EXCHANGE
+from .topics import AMQ_TOPIC, EVENTS_EXCHANGE
 
 
 class RabbitClient:
@@ -39,6 +39,10 @@ class RabbitClient:
 
     async def declare_events_exchange(self) -> AbstractExchange:
         return await self.channel.declare_exchange(EVENTS_EXCHANGE, aio_pika.ExchangeType.TOPIC, durable=True)
+
+    async def get_device_exchange(self) -> AbstractExchange:
+        """amq.topic, where the MQTT plugin publishes what devices send; it always exists."""
+        return await self.channel.get_exchange(AMQ_TOPIC)
 
     async def close(self) -> None:
         if self._connection is not None:

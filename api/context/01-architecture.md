@@ -35,7 +35,11 @@ If code and this document disagree, the code is wrong unless this document is up
 ```
 LIVE SENSOR DATA (one way)
 Device ──MQTT──▶ RabbitMQ ──AMQP──▶ FastAPI GET /sensors/stream ──SSE──▶ Next.js live charts
-                    └──AMQP──▶ worker (persists readings to PostgreSQL)
+                    └──AMQP──▶ worker (persists readings to PostgreSQL; not built yet)
+Built today: the crab scale (ESP32) publishes MQTT crab/weight {"weight": 554.00, "unit": "grams"} every 2 s;
+the StreamHub binds crab.weight on amq.topic, /sensors/stream?sensor_type=weight emits sensor.reading
+{sensor_type, device_id: null, value (g), unit "g", received_at (stamped by the API)}, and Scan's Weight (g)
+fills live from it. Live only, nothing stored. SSE, not WebSocket: the data only flows down to the browser.
 
 CONTROL COMMANDS
 Next.js ──POST──▶ FastAPI POST /devices/{id}/commands ──AMQP──▶ RabbitMQ ──MQTT──▶ Device runs command
@@ -72,6 +76,7 @@ The RabbitMQ MQTT plugin maps MQTT topics onto the `amq.topic` exchange and turn
 | Purpose | MQTT topic (device side) | AMQP routing key (backend side) | Exchange |
 |---|---|---|---|
 | Sensor readings | `farm/{device_id}/sensors/{sensor_type}` | `farm.{device_id}.sensors.{sensor_type}` | `amq.topic` |
+| Crab scale weight (today, one scale, no device id) | `crab/weight` | `crab.weight` (`CRAB_WEIGHT`) | `amq.topic` |
 | Device commands | `farm/{device_id}/cmd` | `farm.{device_id}.cmd` | `amq.topic` |
 | Device ack/status | `farm/{device_id}/status` | `farm.{device_id}.status` | `amq.topic` |
 | Forecast request | — | `worker.forecast.run` | `crabfarm.events` (topic) |
@@ -107,7 +112,7 @@ api/app/
 │   └── forecasts/          # 7-day growth forecasts: request, read, features, prediction rows
 ├── monitoring/
 │   ├── api.py
-│   ├── sensors/            # readings, SSE stream, thresholds
+│   ├── sensors/            # readings, SSE stream (built: crab scale weight, live only), thresholds
 │   └── devices/            # device registry, commands
 ├── artificial_intelligence/
 │   ├── api.py

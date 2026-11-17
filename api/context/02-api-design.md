@@ -300,7 +300,7 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 |---|---|---|---|
 | GET | `/sensors` | 200 sensor list | — |
 | GET | `/sensors/{sensor_id}/readings` (`?from=&to=&interval=`) | 200 | 404 |
-| GET | `/sensors/stream` (`?device_id=&sensor_type=`) | 200 SSE `sensor.reading` | — |
+| GET | `/sensors/stream` (`?sensor_type=weight`; every role) | 200 SSE `sensor.reading` (`{sensor_type, device_id, value, unit, received_at}`; built for the crab scale, live only), ends at the access token's expiry | 503 broker off or unreachable (`Retry-After`) |
 | GET | `/devices` | 200 | — |
 | POST | `/devices` | 201 | 409 device id exists |
 | GET / PATCH / DELETE | `/devices/{device_id}` | 200 | 404 |
