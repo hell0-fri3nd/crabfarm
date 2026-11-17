@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     auth_rate_limit: int = Field(default=10, ge=1)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=1)
 
+    # Off until a feature needs the broker (live SSE streams); detection doesn't use it
+    rabbitmq_enabled: bool = False
     rabbitmq_host: str = "localhost"
     rabbitmq_port: int = 5672
     rabbitmq_user: str = "guest"

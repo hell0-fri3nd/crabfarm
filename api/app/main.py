@@ -25,14 +25,15 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     broker = RabbitClient()
     app.state.broker = app.state.hub = None
-    try:
-        await broker.connect()
-        hub = StreamHub(broker, bindings=[SYSTEM_EVENTS])
-        await hub.start()
-        app.state.broker, app.state.hub = broker, hub
-    except (AMQPError, OSError):
-        # Auth and CRUD keep working without the broker; stream endpoints answer 503 until a restart
-        logger.exception("RabbitMQ unreachable at startup; live streams are disabled")
+    if settings.rabbitmq_enabled:
+        try:
+            await broker.connect()
+            hub = StreamHub(broker, bindings=[SYSTEM_EVENTS])
+            await hub.start()
+            app.state.broker, app.state.hub = broker, hub
+        except (AMQPError, OSError):
+            # Auth and CRUD keep working without the broker; stream endpoints answer 503 until a restart
+            logger.exception("RabbitMQ unreachable at startup; live streams are disabled")
 
     yield
 
