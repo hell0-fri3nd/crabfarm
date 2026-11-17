@@ -24,18 +24,39 @@ services:
     container_name: rabbitmq-server
     hostname: my-rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5672:5672"     # STANDARD AMQP PORT
+      - "15672:15672"   # MANAGEMENT CONSOLE PORT
+      - "1883:1883"     # MQTT PORT (ESP32 devices)
+      - "15692:15692"   # PROMETHEUS METRICS PORT (/metrics)
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    configs:
+      - source: rabbitmq_plugins
+        target: /etc/rabbitmq/enabled_plugins
+      - source: rabbitmq_mqtt
+        target: /etc/rabbitmq/conf.d/20-mqtt.conf
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
+
+configs:
+  rabbitmq_plugins:
+    content: |
+      [rabbitmq_management,rabbitmq_prometheus,rabbitmq_mqtt].
+  rabbitmq_mqtt:
+    # ESP32 devices: MQTT on 1883 into amq.topic on vhost "/", so topic farm/{device_id}/sensors/{type}
+    # arrives as routing key farm.{device_id}.sensors.{type} (api/context/01-architecture.md, broker topology)
+    content: |
+      mqtt.listeners.tcp.default = 1883
+      mqtt.vhost = /
+      mqtt.exchange = amq.topic
+      mqtt.allow_anonymous = false
+      mqtt.max_session_expiry_interval_seconds = 86400
 
 volumes:
   db_data:
