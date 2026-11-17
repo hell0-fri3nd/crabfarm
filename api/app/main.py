@@ -19,6 +19,7 @@ from app.system import ROUTERS as SYSTEM_ROUTERS
 from app.authentication import ROUTERS as AUTH_ROUTERS
 from app.crab_management import ROUTERS as CRAB_ROUTERS
 from app.audit import ROUTERS as AUDIT_ROUTERS
+from app.artificial_intelligence import ROUTERS as AI_ROUTERS
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,7 @@ This API provides endpoints for interacting with the Crabfarm backend.
         *CRAB_ROUTERS,
         *AUDIT_ROUTERS,
         *SYSTEM_ROUTERS,
+        *AI_ROUTERS,
     ):
         app.include_router(router, prefix=settings.api_prefix)
 

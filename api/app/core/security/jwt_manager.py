@@ -62,6 +62,12 @@ class JwtManager:
             algorithm=self.algorithm,
         )
 
+    def issue_scoped_token(self, data: dict, token_type: str, expires_in: timedelta) -> tuple[str, datetime]:
+        """A short-lived token for one purpose (e.g. a detection ticket); `type` keeps it out of the access guards."""
+        expire = datetime.now(timezone.utc) + expires_in
+        payload = {**data, "type": token_type, "exp": expire}
+        return jwt.encode(payload, self.secret_key, algorithm=self.algorithm), expire
+
     def decode_token(self, token: str) -> dict:
         return jwt.decode(
             token,
