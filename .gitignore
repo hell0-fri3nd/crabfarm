@@ -28,3 +28,9 @@
 /api/app/crab_management/batches/models/__pycache__
 /api/app/audit/__pycache__
 /api/app/audit/events/__pycache__
+/api/ml/models/
+/api/app/infrastructure/vision/__pycache__
+/api/app/vision/__pycache__
+/api/app/vision/detection/__pycache__
+/api/app/artificial_intelligence/__pycache__
+/api/app/artificial_intelligence/vision/__pycache__

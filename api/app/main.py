@@ -7,11 +7,13 @@ from contextlib import asynccontextmanager
 from aio_pika.exceptions import AMQPError
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 
 from app.core import settings, register_exception_handlers
 
 from app.infrastructure.messaging import RabbitClient, SYSTEM_EVENTS
 from app.infrastructure.streaming import StreamHub
+from app.infrastructure.vision import YoloDetector
 
 from app.system import ROUTERS as SYSTEM_ROUTERS
 from app.authentication import ROUTERS as AUTH_ROUTERS
@@ -35,8 +37,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # Auth and CRUD keep working without the broker; stream endpoints answer 503 until a restart
             logger.exception("RabbitMQ unreachable at startup; live streams are disabled")
 
+    detector = YoloDetector()
+    app.state.detector = detector
+    try:
+        await run_in_threadpool(detector.load)
+    except Exception:
+        # Missing weights or a failed download: everything else keeps working; detection sockets close with 1013
+        logger.exception("YOLO model %s failed to load; live detection is disabled", detector.name)
+
     yield
 
+    detector.close()
     if app.state.hub is not None:
         await app.state.hub.stop()
     await broker.close()

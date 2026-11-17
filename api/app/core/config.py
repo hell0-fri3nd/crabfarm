@@ -34,6 +34,32 @@ class Settings(BaseSettings):
     sse_heartbeat_seconds: int = Field(default=15, ge=1)
     sse_client_queue_size: int = Field(default=100, ge=1)
 
+    # Built-in Ultralytics name (downloaded into yolo_weights_dir) or a path to custom weights
+    yolo_weights: str = "yolo11s.pt"
+    yolo_weights_dir: str = "ml/models"
+    yolo_classes: list[str] | None = None
+    yolo_image_size: int = Field(default=640, ge=32)
+    yolo_confidence: float = Field(default=0.3, gt=0, lt=1)
+    yolo_device: str = "cpu"
+    yolo_threads: int = Field(default=2, ge=1)
+
+    detection_ticket_seconds: int = Field(default=30, ge=5)
+    detection_auth_timeout_seconds: int = Field(default=5, ge=1)
+    detection_max_frame_bytes: int = Field(default=600_000, ge=10_000)
+    detection_max_sessions: int = Field(default=4, ge=1)
+    detection_ticket_rate_limit: int = Field(default=2, ge=1)
+    detection_allowed_origins: list[str] = ["http://localhost:3000"]
+    # Width in mm: the crab's sticker (its QR is 0.62 of the sticker's width) is the scale when its QR is in view;
+    # otherwise the fixed stand and the camera's field of view across its long side
+    detection_sticker_mm: float = Field(default=30.0, gt=0, le=500)
+    # Lens to the TOP of the measured object (the crab's shell), not the tray: a closer surface reads bigger
+    detection_camera_distance_mm: float = Field(default=304.8, gt=0, le=5000)
+    # Calibrated on the farm's stand camera: a phone ~164.1 mm long (162.2-166) read 180 mm at 55.7 deg
+    # -> 2*atan(tan(27.85)*164.1/180); recalibrate with the "How this width was computed" panel if the camera changes
+    detection_camera_fov_deg: float = Field(default=51.4, gt=1, lt=179)
+    # Fixed correction added to every width after scaling (negative trims); -5 matched the stand test phone
+    detection_width_offset_mm: float = Field(default=-5.0, ge=-100, le=100)
+
     # Given to new and reset users; onboarding forces both to be changed on first sign-in
     default_user_password: str = Field(default="@HelloFriend1234", min_length=8, max_length=128)
     default_user_pin: str = Field(default="1234", pattern=r"^\d{4}$")
