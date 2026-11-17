@@ -38,13 +38,15 @@ const CustomPinForm = ({ name }: CustomPinFormProps) => {
     const result = await unlockWithPin(input);
 
     if (result.ok) {
+      form.resetField('pin');
       router.replace(result.data.needs_onboarding ? ONBOARDING_HREF : DASHBOARD_HREF);
       return;
     }
 
-    form.resetField('pin');
+    
     const pinError = result.errors.find(({ field }) => field === 'pin');
     if (pinError) {
+      form.resetField('pin');
       form.setError('pin', { message: pinError.message }, { shouldFocus: true });
       return;
     }
