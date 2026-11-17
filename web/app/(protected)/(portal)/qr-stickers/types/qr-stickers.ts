@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const stickerSizeSchema = z.enum(['30', '40', '50']);
-export type StickerSize = z.infer<typeof stickerSizeSchema>;
+export { stickerSizeSchema } from '@/types/sticker';
+export type { StickerSize } from '@/types/sticker';
 
 export const paperSchema = z.enum(['a4', 'short', 'long']);
 export type Paper = z.infer<typeof paperSchema>;

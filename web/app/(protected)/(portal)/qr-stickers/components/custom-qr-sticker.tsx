@@ -2,6 +2,7 @@ import { QRCodeSVG } from 'qrcode.react';
 
 import type { CSSProperties } from 'react';
 
+import { QR_SHARE } from '@/lib/sticker-size';
 import { cn } from '@/lib/utils';
 
 import { CUT_LINE, QR_LEVEL, toQrLogo } from '../lib/sticker-sheet';
@@ -44,7 +45,8 @@ const CustomQrSticker = ({ sticker, style, className }: CustomQrStickerProps) =>
         marginSize={0}
         imageSettings={toQrLogo(QR_SVG_SIZE)}
         title={`QR code for crab ${sticker.code}`}
-        className="h-auto w-[62cqw]"
+        style={{ width: `${QR_SHARE * 100}cqw` }}
+        className="h-auto"
       />
       <figcaption className="flex flex-col items-center gap-[2cqw]">
         <span className="font-mono text-[11cqw] leading-none font-bold tracking-wider">{sticker.code}</span>

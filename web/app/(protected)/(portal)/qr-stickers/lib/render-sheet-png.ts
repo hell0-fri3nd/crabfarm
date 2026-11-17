@@ -1,3 +1,5 @@
+import { QR_SHARE } from '@/lib/sticker-size';
+
 import { CUT_LINE, PAPER, SHEET_MARGIN_MM, STICKER_GAP_MM, getSheetLayout, toPages, toSizeMm } from './sticker-sheet';
 
 import type { Paper, Sticker, StickerSize } from '../types/qr-stickers';
@@ -69,7 +71,7 @@ const drawSticker = (
   context.stroke();
   context.restore();
 
-  const qrSide = side * 0.62;
+  const qrSide = side * QR_SHARE;
   context.imageSmoothingEnabled = false;
   context.drawImage(qrCanvas, x + (side - qrSide) / 2, y + side * 0.08, qrSide, qrSide);
 

@@ -1,3 +1,5 @@
+import { toSizeMm } from '@/lib/sticker-size';
+
 import type { Batch, Crab, FileType, Paper, Sticker, StickerSize } from '../types/qr-stickers';
 
 export const PAPER = {
@@ -36,9 +38,7 @@ export const STICKER_GAP_MM = 4;
 const fitCount = (lengthMm: number, sizeMm: number) =>
   Math.max(Math.floor((lengthMm - SHEET_MARGIN_MM * 2 + STICKER_GAP_MM) / (sizeMm + STICKER_GAP_MM)), 1);
 
-const STICKER_SIZE_MM = { '30': 30, '40': 40, '50': 50 } as const satisfies Record<StickerSize, number>;
-
-export const toSizeMm = (size: StickerSize) => STICKER_SIZE_MM[size];
+export { toSizeMm };
 
 export const getSheetLayout = (size: StickerSize, paper: Paper) => {
   const sizeMm = toSizeMm(size);
