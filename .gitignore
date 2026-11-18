@@ -46,3 +46,4 @@
 /api/app/crab_management/forecasts/services/__pycache__
 /api/app/crab_management/logs/schemas/__pycache__
 /api/app/crab_management/logs/router/__pycache__
+/api/app/devices/water_sensors/__pycache__
