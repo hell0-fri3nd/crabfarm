@@ -4,51 +4,59 @@ import { batchesApi } from '@/api/batches-api';
 import { crabLogsApi } from '@/api/crab-logs-api';
 import { toFarmDayKey, toFarmDayStart, toFarmShortDate } from '@/lib/format';
 
-import type { ApiLog } from '@/types/crab-log';
-
-import type { GrowthData } from '../types/dashboard';
-
-export const GROWTH_DAYS = 7;
+import type { GrowthData, GrowthDay, GrowthRange } from '../types/dashboard';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const PAGE_SIZE = 100;
-// Daily averages need every log in the window; 500 covers a week of hand logging many times over
-const MAX_PAGES = 5;
+const MONTHS_IN_YEAR = 12;
+const RANGE_DAYS = { '7d': 7, '30d': 30 } as const;
 
-const toDays = (now: Date) =>
-  Array.from({ length: GROWTH_DAYS }, (_, index) => {
-    const at = new Date(now.getTime() - (GROWTH_DAYS - 1 - index) * DAY_MS).toISOString();
+const monthLabel = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', year: '2-digit' });
+
+const toDayBuckets = (now: Date, count: number): GrowthDay[] =>
+  Array.from({ length: count }, (_, index) => {
+    const at = new Date(now.getTime() - (count - 1 - index) * DAY_MS).toISOString();
     return { key: toFarmDayKey(at), label: toFarmShortDate(at) };
   });
 
-export const loadGrowth = async (now: Date): Promise<{ ok: true; data: GrowthData } | { ok: false; message: string }> => {
-  const from = toFarmDayStart(new Date(now.getTime() - (GROWTH_DAYS - 1) * DAY_MS));
-  const logs: ApiLog[] = [];
-  let total = 0;
+const toMonthBuckets = (now: Date): GrowthDay[] => {
+  const [year = 0, month = 1] = toFarmDayKey(now.toISOString()).split('-').map(Number);
+  return Array.from({ length: MONTHS_IN_YEAR }, (_, index) => {
+    const at = new Date(Date.UTC(year, month - MONTHS_IN_YEAR + index, 1));
+    return { key: at.toISOString().slice(0, 7), label: monthLabel.format(at) };
+  });
+};
 
-  for (let page = 1; page <= MAX_PAGES; page += 1) {
-    const result = await crabLogsApi.list(new URLSearchParams({ from, page: String(page), size: String(PAGE_SIZE), sort: '-created_at' }));
-    if (!result.ok) return { ok: false, message: result.message };
-    total = result.data.total;
-    logs.push(...result.data.items);
-    if (logs.length >= total || result.data.items.length === 0) break;
-  }
+const toRangeStart = (now: Date, range: GrowthRange, days: GrowthDay[]) =>
+  range === '12m'
+    ? `${days[0]?.key ?? toFarmDayKey(now.toISOString()).slice(0, 7)}-01T00:00:00+08:00`
+    : toFarmDayStart(new Date(now.getTime() - (RANGE_DAYS[range] - 1) * DAY_MS));
 
-  const batches = await batchesApi.list();
+export const loadGrowth = async (
+  now: Date,
+  range: GrowthRange,
+): Promise<{ ok: true; data: GrowthData } | { ok: false; message: string }> => {
+  const days = range === '12m' ? toMonthBuckets(now) : toDayBuckets(now, RANGE_DAYS[range]);
+  const [summary, batches] = await Promise.all([
+    crabLogsApi.dailySummary(new URLSearchParams({ from: toRangeStart(now, range, days) })),
+    batchesApi.list(),
+  ]);
+  if (!summary.ok) return { ok: false, message: summary.message };
 
   return {
     ok: true,
     data: {
-      days: toDays(now),
-      logs: logs.map(({ batch_id, log_type, weight_g, width_mm, created_at }) => ({
+      range,
+      days,
+      logs: summary.data.map(({ day, batch_id, log_type, weight_g_avg, weight_g_count, width_mm_avg, width_mm_count }) => ({
         batch_id,
         log_type,
-        weight_g,
-        width_mm,
-        day_key: toFarmDayKey(created_at),
+        weight_avg: weight_g_avg,
+        weight_count: weight_g_count,
+        width_avg: width_mm_avg,
+        width_count: width_mm_count,
+        day_key: range === '12m' ? day.slice(0, 7) : day,
       })),
       batches: (batches.ok ? batches.data : []).map(({ id }) => id).toSorted((left, right) => right - left),
-      isPartial: logs.length < total,
     },
   };
 };

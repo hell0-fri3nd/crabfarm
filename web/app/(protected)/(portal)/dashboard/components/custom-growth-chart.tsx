@@ -15,14 +15,14 @@ type CustomGrowthChartProps = {
 
 const CHART_CONFIG = {
   actual: { label: 'Actual (logged)', color: 'var(--primary)' },
-  predicted: { label: 'Predicted (model)', color: 'var(--muted-foreground)' },
+  predicted: { label: 'Forecast (model)', color: 'var(--muted-foreground)' },
 } satisfies ChartConfig;
 
 const CustomGrowthChart = ({ points, unit }: CustomGrowthChartProps) => (
   <ChartContainer config={CHART_CONFIG} className="aspect-auto h-72 w-full md:h-80">
     <LineChart data={points} margin={{ top: 12, right: 16, bottom: 4, left: 4 }}>
       <CartesianGrid vertical={false} strokeDasharray="0" />
-      <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} />
+      <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} minTickGap={16} />
       <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={(value: number) => `${value} ${unit}`} />
       <ChartTooltip content={<ChartTooltipContent />} />
       <Line

@@ -73,7 +73,7 @@ Follow this file whenever you design, build or review a page, a component or a `
 | # | Heuristic | Crabfarm rule |
 |---|---|---|
 | 1 | Visibility of system status | Feeding status is always in the sidebar footer. Live tiles show "now" or the last-seen time. Every save shows pending → success or error. |
-| 2 | Match the real world | Use farm words: cage, batch, crab, feed. There are no ponds, so never say pond. No internal jargon (`logs_enum`, `prediction`). |
+| 2 | Match the real world | Use farm words: cage, batch, crab, feed. There are no ponds, so never say pond. No internal jargon (`logs_enum`, `prediction`). Model output is always **Forecast**, next to **Actual**. |
 | 3 | User control and freedom | Reversible actions offer **Undo**. Every flow has Cancel/Back. Wrong crab in Scan → **Rescan**. |
 | 4 | Consistency and standards | Same thing, same name, same look, same place (§3, §11, §17). |
 | 5 | Error prevention | QR locks IDs. Correct input types and bounds (weight > 0). AlertDialog before anything physical or anything that locks someone out (§15). |
@@ -236,7 +236,7 @@ export default RootLayout;
 
 ## 10. Icons: lucide-react
 
-- **62 icons**, **2 px stroke**, **18 px** in controls and **15 px** in small buttons. Import by name.
+- **65 icons**, **2 px stroke**, **18 px** in controls and **15 px** in small buttons. Import by name.
 - One icon per meaning (Similarity). Icon-only buttons need an `aria-label` and a tooltip.
 
 | Group | Icon → meaning / where |
@@ -246,7 +246,7 @@ export default RootLayout;
 | Sensors | `Thermometer` temperature · `Droplet` pH · `Waves` salinity · `FlaskConical` ammonia · `Wind` oxygen |
 | Actions | `Play` start/resume · `Pause` pause · `Square` stop · `Plus` add/new · `Trash` delete · `Download` PNG/PDF · `Camera` / `CameraOff` camera on/off · `Scale` scale connected · `RotateCcw` rescan · `Search` search · `Calendar` date range · `FileDown` export CSV · `Send` send · `ThumbsUp` / `ThumbsDown` feedback |
 | Forms & account | `Mail` email · `Lock` password, PIN locked · `Eye` show password · `KeyRound` reset · `UserPlus` add user · `Pencil` edit |
-| Buttons | `Utensils` feed now · `Save` save · `LogIn` sign in · `ArrowLeft` back · `UserX` deactivate · `UserCheck` reactivate, change role · `ChartLine` see trend, chart view · `Rows3` table view · `ChevronDown` load older · `ChevronLeft` previous |
+| Buttons | `Utensils` feed now · `Save` save · `LogIn` sign in · `ArrowLeft` back · `UserX` deactivate · `UserCheck` reactivate, change role · `ChartLine` see trend, chart view · `TrendingUp` forecast growth (Logs) · `RefreshCw` train / retrain the growth model · `LoaderCircle` a background job is running (spins only without reduced motion) · `Rows3` table view · `ChevronDown` load older · `ChevronLeft` previous |
 
 ## 11. Shared Components (component map)
 
@@ -265,7 +265,7 @@ export default RootLayout;
 | `custom-severity-alert` | `Alert` + `custom-severity-badge` | Dashboard, Scan | high, medium, low, success; optional action |
 | `custom-status-pill` | `Badge` | Feeding, Users, top bar | running, paused, stopped, offline, invited, deactivated |
 | `custom-sensor-tile` + `custom-range-meter` | `Card` | Dashboard | in range, watch, out of range, **no reading** (with last-seen time, never "0"), loading. The meter shows the safe band + a marker, not a fill. |
-| `custom-sensor-sparkline`, `custom-growth-chart` | Recharts | Dashboard | safe band, predicted dashed vs actual solid, tooltip per point, empty |
+| `custom-sensor-sparkline`, `custom-growth-chart` | Recharts | Dashboard | safe band, forecast dashed vs actual solid, tooltip per point, empty |
 | `custom-theme-toggle` | `Button` + `Sun` / `Moon` | top bar | round 36 px (hit area ≥ 24); icon shows the current mode; the label says the action |
 | `custom-ask-ai-button` | `Button` + `Bot` | top bar except Assistant | inverse pill, hover ring, focus ring |
 | `custom-bubbles` | Web Animations API | every screen | behind content at 8–9% opacity; rise from the bottom with a random sway, speed and column, respawning at a new spot; a click on a bubble (not on a control) pops it (swell + fade + splash ring, ~0.4 s) and a new one rises; static (mockup layout) with reduced motion, where a pop is a plain fade out and back; `aria-hidden`, never blocks clicks on content |
@@ -281,12 +281,13 @@ export default RootLayout;
 | `custom-stepper` | `Check` + connecting line | Onboarding, Scan | done, current (`aria-current="step"`), upcoming; "Step X of Y"; sub-text hidden on phones |
 | `custom-brand-logo` | `next/image` + SVG | sidebar, sign-in, stickers | see §9 |
 | `custom-empty-state` | icon + `Button` | Logs, Activity, Feeding, Users | no data yet, no results for filters (with **Clear filters**) |
+| `custom-forecast-model-alert` | `custom-severity-alert` / `Alert` + `Button` | Dashboard (above the growth card), Logs (above the filters) | hidden when ready · missing **Medium** "Growth forecasts are off" + **Train model** · due **Low** "Growth model is due for a retrain" (new crab-days, trained date) + **Retrain model** · training: neutral `Alert` + `LoaderCircle`, start time, what keeps working · last failed/rejected run's reason appended · STAFF get "Ask an admin to train it" instead of the button · "Starting…" while the action runs; the starter alone gets the outcome toast |
 
 ## 12. Charts: Recharts
 
 | Chart | Recharts parts | Component |
 |---|---|---|
-| Predicted vs actual growth | `LineChart`, 2× `Line` (actual solid, predicted dashed), `XAxis`, `YAxis`, `CartesianGrid`, `Tooltip`, `Legend` | `custom-growth-chart` |
+| Actual vs forecast growth | `LineChart`, 2× `Line` (actual solid, forecast dashed), `XAxis`, `YAxis`, `CartesianGrid`, `Tooltip`, `Legend` | `custom-growth-chart` |
 | Feed per day | `BarChart`, `Bar`, `ReferenceLine` (plan), axes, `Tooltip`; days under plan are **striped** (not color alone) | `custom-feed-bar-chart` |
 | Each sensor over time | `LineChart`, `Line`, `ReferenceArea` (safe band), hidden fixed-domain `YAxis`, `Tooltip` | `custom-sensor-sparkline` |
 | Range meter | plain CSS bar, renders before Recharts | `custom-range-meter` |
@@ -306,11 +307,11 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | **Login** | Sign in | Input, Label, Button, Checkbox, Alert, Sonner | `custom-bubbles`, `custom-theme-switch` | Sun, Moon, Mail, Lock, Eye, CircleCheck |
 | **PIN login** | Unlock | Avatar, InputOTP, Button, Alert | — | Sun, Moon, Lock (device keyboard only) |
 | **Onboarding** | Continue / Finish | Form, Input, InputOTP, ToggleGroup, Button | `custom-stepper`, `custom-password-rules` | Check, CircleAlert, ArrowLeft |
-| **Dashboard** | See trend (on the top alert) | Card, ToggleGroup, Select, Tooltip | `custom-briefing`, `custom-severity-alert`, `custom-sensor-tile`, `custom-range-meter`, `custom-sensor-sparkline`, `custom-growth-chart` | Thermometer, Droplet, Waves, FlaskConical, Wind, OctagonAlert, TriangleAlert, Info, CircleCheck, Bot, ChartLine |
+| **Dashboard** | See trend (on the top alert) | Card, ToggleGroup, Select, Tooltip | `custom-briefing`, `custom-severity-alert`, `custom-sensor-tile`, `custom-range-meter`, `custom-sensor-sparkline`, `custom-growth-chart`, `custom-forecast-model-alert` | RefreshCw, LoaderCircle, Thermometer, Droplet, Waves, FlaskConical, Wind, OctagonAlert, TriangleAlert, Info, CircleCheck, Bot, ChartLine |
 | **Feeding** | Feed now | Card, Switch, Button, AlertDialog, ToggleGroup, Input, Sonner | `custom-status-pill`, `custom-feeder-row`, `custom-schedule-form`, `custom-feed-bar-chart` | Utensils, Play, Pause, Square, TriangleAlert, Plus, Trash, CalendarClock, CircleCheck |
 | **QR stickers** | Download stickers | Select, ToggleGroup, Button, Table, Sonner | `custom-qr-sticker`, `custom-sticker-sheet`, `custom-print-bar` | Plus, Download, QrCode |
 | **Scan** | Save log | Card, Input, Button, Alert, Sonner | `custom-stepper`, `custom-scan-viewport`, `custom-severity-alert` | Scale, Camera, CameraOff, ScanLine, RotateCcw, Check, TriangleAlert, CircleCheck |
-| **Logs** | Export CSV | Tabs, Input, Select, Popover, Calendar, Table, Pagination, ToggleGroup, Chart | `custom-severity-badge`, `custom-empty-state`, `custom-crab-log-chart`, `custom-measure-chart` | Search, Calendar, FileDown, OctagonAlert, TriangleAlert, Info, Rows3, ChartLine |
+| **Logs** | Export CSV | Tabs, Input, Select, Popover, Calendar, Table, Pagination, ToggleGroup, Chart | `custom-severity-badge`, `custom-empty-state`, `custom-crab-log-chart`, `custom-measure-chart`, `custom-run-prediction-button`, `custom-forecast-model-alert` | Search, Calendar, FileDown, TrendingUp, RefreshCw, LoaderCircle, OctagonAlert, TriangleAlert, Info, Rows3, ChartLine |
 | **Activity** | — (read-only) | ToggleGroup, Select, Input, Table, Badge | `custom-empty-state` | Search, History, ChevronDown, CircleX, ShieldAlert |
 | **Users** | Add user | Table, Avatar, Select, Dialog, AlertDialog, Sonner | `custom-status-pill` | UserPlus, Search, KeyRound, UserX, UserCheck |
 | **My profile** | Save | Card, Avatar, Form, Input, InputOTP, AlertDialog, Sonner | `custom-password-rules`, `custom-theme-switch` | Pencil, Mail, LogOut, Sun, Moon, Check, Save |
@@ -343,6 +344,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | Feed a cage or group now | **No** | `AlertDialog` naming the cages | Toast · success after the device confirms; the row shows "Fed 9:42 PM" |
 | Stop the feeding system | Restart only | `AlertDialog`, destructive confirm | Status pill changes, toast · warning |
 | Deactivate a user, reset credentials, change a role | Partly | `AlertDialog` naming the person | Toast; deactivate offers Undo |
+| Forecast crabs from old logs | No | `AlertDialog` with the logs' age and why the numbers are rough; **Cancel** focused | Toast · success, says which crabs used old logs |
 | Apply an assistant suggestion | Depends | Preview card, then the **same** `AlertDialog` as the manual action | Toast + Activity entry tagged Assistant |
 
 **Toasts (Sonner)**

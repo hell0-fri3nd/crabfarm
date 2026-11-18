@@ -12,6 +12,9 @@ export type TrendRange = z.infer<typeof trendRangeSchema>;
 export const growthMetricSchema = z.enum(['weight', 'width']);
 export type GrowthMetric = z.infer<typeof growthMetricSchema>;
 
+export const growthRangeSchema = z.enum(['7d', '30d', '12m']);
+export type GrowthRange = z.infer<typeof growthRangeSchema>;
+
 export const summaryStatSchema = z.object({
   id: z.string(),
   label: z.string(),
@@ -85,16 +88,18 @@ export type GrowthDay = z.infer<typeof growthDaySchema>;
 export const growthLogSchema = z.object({
   batch_id: z.number().int().nullable(),
   log_type: z.enum(['actual', 'prediction']),
-  weight_g: z.number().nullable(),
-  width_mm: z.number().nullable(),
+  weight_avg: z.number().nullable(),
+  weight_count: z.number().int().nonnegative(),
+  width_avg: z.number().nullable(),
+  width_count: z.number().int().nonnegative(),
   day_key: z.string(),
 });
 export type GrowthLog = z.infer<typeof growthLogSchema>;
 
 export const growthDataSchema = z.object({
+  range: growthRangeSchema,
   days: z.array(growthDaySchema),
   logs: z.array(growthLogSchema),
   batches: z.array(z.number().int()),
-  isPartial: z.boolean(),
 });
 export type GrowthData = z.infer<typeof growthDataSchema>;

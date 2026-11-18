@@ -1,17 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 
 import CustomCardHeading from '@/components/custom/custom-card-heading';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 import CustomGrowthChart from './custom-growth-chart';
-import { ALL_BATCHES, GROWTH_UNITS, toGrowthPoints } from '../lib/growth-points';
-import { growthMetricSchema } from '../types/dashboard';
+import { ALL_BATCHES, DEFAULT_GROWTH_RANGE, GROWTH_RANGE_LABELS, GROWTH_UNITS, toGrowthPoints } from '../lib/growth-points';
+import { growthMetricSchema, growthRangeSchema } from '../types/dashboard';
 
 import type { GrowthData, GrowthMetric } from '../types/dashboard';
 
@@ -26,7 +28,11 @@ const NUMBER_FORMAT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 
 const formatValue = (value: number | null | undefined, unit: string) =>
   value === null || value === undefined ? '—' : `${NUMBER_FORMAT.format(value)} ${unit}`;
 
-const CustomGrowthCard = ({ data: { days, logs, batches, isPartial } }: CustomGrowthCardProps) => {
+const CustomGrowthCard = ({ data: { range, days, logs, batches } }: CustomGrowthCardProps) => {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [isChangingRange, startRangeChange] = useTransition();
   const [batch, setBatch] = useState(ALL_BATCHES);
   const [metric, setMetric] = useState<GrowthMetric>('weight');
   const points = toGrowthPoints(days, logs, batch, metric);
@@ -35,7 +41,20 @@ const CustomGrowthCard = ({ data: { days, logs, batches, isPartial } }: CustomGr
   const latestPredicted = points.findLast(({ predicted }) => predicted !== null);
   const hasAny = Boolean(latestActual ?? latestPredicted);
   const scope = batch === ALL_BATCHES ? 'All batches' : `Batch ${batch}`;
-  const range = `${days[0]?.label ?? ''} – ${days.at(-1)?.label ?? ''}`;
+  const span = `${days[0]?.label ?? ''} – ${days.at(-1)?.label ?? ''}`;
+  const rangeLabel = GROWTH_RANGE_LABELS[range];
+  const isMonthly = range === '12m';
+  const datePrefix = isMonthly ? 'in' : 'on';
+
+  const handleRangeChange = (value: string) => {
+    const parsed = growthRangeSchema.safeParse(value);
+    if (!parsed.success) return;
+    const next = new URLSearchParams(searchParams);
+    if (parsed.data === DEFAULT_GROWTH_RANGE) next.delete('growth');
+    else next.set('growth', parsed.data);
+    const query = next.toString();
+    startRangeChange(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }));
+  };
 
   const handleMetricChange = (value: string) => {
     const parsed = growthMetricSchema.safeParse(value);
@@ -45,10 +64,22 @@ const CustomGrowthCard = ({ data: { days, logs, batches, isPartial } }: CustomGr
   return (
     <Card className="gap-5 rounded-2xl py-5 sm:py-6">
       <CustomCardHeading
-        title="Predicted vs actual growth"
-        description={`${scope} · last 7 days, ${range} · daily average of logged crabs${isPartial ? ' (newest 500 logs)' : ''}`}
+        title="Actual vs forecast growth"
+        description={`${scope} · ${rangeLabel.toLowerCase()}, ${span} · ${isMonthly ? 'monthly' : 'daily'} average of logged crabs`}
         actions={
           <>
+            <Select value={range} onValueChange={handleRangeChange}>
+              <SelectTrigger aria-label="Date range" className="h-9 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {growthRangeSchema.options.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {GROWTH_RANGE_LABELS[option]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={batch} onValueChange={setBatch}>
               <SelectTrigger aria-label="Batch" className="h-9 bg-card">
                 <SelectValue />
@@ -84,7 +115,10 @@ const CustomGrowthCard = ({ data: { days, logs, batches, isPartial } }: CustomGr
         }
       />
 
-      <CardContent className="flex flex-col gap-4 px-4 sm:px-6">
+      <CardContent
+        aria-busy={isChangingRange}
+        className={cn('flex flex-col gap-4 px-4 transition-opacity sm:px-6', isChangingRange && 'opacity-60')}
+      >
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-sm">
           <ul className="flex items-center gap-5 text-muted-foreground">
             <li className="flex items-center gap-2">
@@ -93,14 +127,14 @@ const CustomGrowthCard = ({ data: { days, logs, batches, isPartial } }: CustomGr
             </li>
             <li className="flex items-center gap-2">
               <span aria-hidden className="w-5 border-t-2 border-dashed border-muted-foreground" />
-              Predicted (model)
+              Forecast (model)
             </li>
           </ul>
           {hasAny && (
             <p className="font-medium tabular-nums">
               Actual {formatValue(latestActual?.actual, unit)}
-              {latestActual && ` on ${latestActual.label}`} · Predicted {formatValue(latestPredicted?.predicted, unit)}
-              {latestPredicted && ` on ${latestPredicted.label}`}
+              {latestActual && ` ${datePrefix} ${latestActual.label}`} · Forecast {formatValue(latestPredicted?.predicted, unit)}
+              {latestPredicted && ` ${datePrefix} ${latestPredicted.label}`}
             </p>
           )}
         </div>
@@ -109,7 +143,7 @@ const CustomGrowthCard = ({ data: { days, logs, batches, isPartial } }: CustomGr
           <CustomGrowthChart points={points} unit={unit} />
         ) : (
           <div className="flex h-72 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-6 text-center text-sm text-muted-foreground md:h-80">
-            No crab logs for {scope.toLowerCase()} in the last 7 days. Logs saved on Scan crab show up here.
+            No crab logs for {scope.toLowerCase()} in the {rangeLabel.toLowerCase()}. Logs saved on Scan crab show up here.
           </div>
         )}
 
@@ -121,9 +155,9 @@ const CustomGrowthCard = ({ data: { days, logs, batches, isPartial } }: CustomGr
           <Table className="mt-3">
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
+                <TableHead>{isMonthly ? 'Month' : 'Date'}</TableHead>
                 <TableHead className="text-right">Actual ({unit})</TableHead>
-                <TableHead className="text-right">Predicted ({unit})</TableHead>
+                <TableHead className="text-right">Forecast ({unit})</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -17,6 +17,16 @@ export const apiLogSchema = z.object({
 });
 export type ApiLog = z.infer<typeof apiLogSchema>;
 
+export const dailyLogSummarySchema = z.object({
+  day: z.iso.date(),
+  batch_id: z.number().int().positive().nullable(),
+  log_type: logTypeSchema,
+  weight_g_avg: z.number().nullable(),
+  weight_g_count: z.number().int().nonnegative(),
+  width_mm_avg: z.number().nullable(),
+  width_mm_count: z.number().int().nonnegative(),
+});
+
 export const loggedCrabIdsSchema = z.array(z.number().int().positive());
 
 export const logsPageSchema = z.object({

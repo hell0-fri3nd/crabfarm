@@ -20,6 +20,7 @@ import CustomGrowthModelAlert from './components/custom-growth-model-alert';
 import CustomSensorTrends from './components/custom-sensor-trends';
 import CustomSummaryStats from './components/custom-summary-stats';
 import CustomWaterNow from './components/custom-water-now';
+import { DEFAULT_GROWTH_RANGE } from './lib/growth-points';
 import { loadGrowth } from './lib/load-growth';
 import {
   PREVIEW_ALERTS,
@@ -27,12 +28,18 @@ import {
   PREVIEW_READINGS,
   PREVIEW_SUMMARY,
 } from './lib/preview-dashboard';
+import { growthRangeSchema } from './types/dashboard';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 
-const GrowthLoader = async () => {
+type DashboardPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+const GrowthLoader = async ({ searchParams }: DashboardPageProps) => {
   await connection();
-  const [result, model, self] = await Promise.all([loadGrowth(new Date()), forecastModelApi.get(), getCurrentUser()]);
+  const range = growthRangeSchema.catch(DEFAULT_GROWTH_RANGE).parse((await searchParams).growth);
+  const [result, model, self] = await Promise.all([loadGrowth(new Date(), range), forecastModelApi.get(), getCurrentUser()]);
 
   return (
     <section aria-label="Crab growth" className="flex flex-col gap-4">
@@ -63,7 +70,7 @@ const GrowthSkeleton = () => (
   </Card>
 );
 
-const DashboardPage = () => (
+const DashboardPage = ({ searchParams }: DashboardPageProps) => (
   <div className="flex w-full flex-col gap-8">
     <CustomBriefing firstName={toFirstName(PREVIEW_USER.name)} summary={PREVIEW_BRIEFING} />
     <CustomSummaryStats stats={PREVIEW_SUMMARY} />
@@ -71,7 +78,7 @@ const DashboardPage = () => (
     <CustomWaterNow readings={PREVIEW_READINGS} />
     <CustomSensorTrends />
     <Suspense fallback={<GrowthSkeleton />}>
-      <GrowthLoader />
+      <GrowthLoader searchParams={searchParams} />
     </Suspense>
   </div>
 );
