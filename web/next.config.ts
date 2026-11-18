@@ -7,6 +7,7 @@ const { API_URL, API_PREFIX } = parseRootEnv();
 
 const nextConfig: NextConfig = {
   /* config options here */
+  output: "standalone",
   experimental: {
     agentFeedback: true,
   },

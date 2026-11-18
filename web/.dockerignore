@@ -29,5 +29,7 @@
 **/values.dev.yaml
 **/build
 **/dist
+**/.env*
+context
 LICENSE
 README.md
