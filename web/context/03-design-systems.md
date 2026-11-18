@@ -33,7 +33,7 @@ Follow this file whenever you design, build or review a page, a component or a `
 | Law | Crabfarm rule |
 |---|---|
 | **Hick's Law**: decision time grows with the number and complexity of choices | One primary action per view. Filters default to 24 h / 7 days / 30 days in a ToggleGroup, with advanced filters in a Popover. Onboarding and Scan are steps (`custom-stepper`), not one long form. |
-| **Miller's Law**: a few chunks fit in working memory | Treat 5–7 as the starting point for groups and visible options. The sidebar's 8 items sit in 4 divider-separated groups. The Dashboard shows 5 sensor tiles. Logs and Activity rows are grouped by day. |
+| **Miller's Law**: a few chunks fit in working memory | Treat 5–7 as the starting point for groups and visible options. The sidebar's 8 items sit in 4 divider-separated groups. The Dashboard shows 6 sensor tiles. Logs and Activity rows are grouped by day. |
 | **Tesler's Law**: complexity can only be moved | The QR scan fills batch, group and crab and **locks** them. The scale fills the weight. The forecast runs in the background. The assistant explains *why* a sensor dropped. Power users can still edit before saving. |
 | **Cognitive load** | Show only what the task needs. Metadata goes in a details view. Use smart defaults (today, last-used batch) and familiar patterns. |
 
@@ -224,7 +224,7 @@ export default RootLayout;
 | Layout | panels pad **24**, grids gap **20**, sections **32** apart, gutters **32** (**16** on phones) |
 | Page width | Portal pages **fill the space between the gutters** at every size (no `max-w-*` cap, no `mx-auto` centring), so page edges line up with the top bar as in the 1440 mockup. Pieces with a natural size cap themselves with breakpoint classes (`max-w-sm md:max-w-md xl:max-w-lg` on the to-scale sticker sheet). The Assistant is the one exception: it keeps `max-w-7xl` so chat lines stay readable. |
 | Radius | **8** inputs-in-groups · **10** controls · **14** cards · **18** dialogs. **Nested shapes are concentric:** inner radius = outer radius − inset, with an even inset on every side (e.g. composer `rounded-2xl` 18 → Send `rounded-xl` 14 at a 4 px inset; override shadcn's negative addon margins) |
-| Motion | **160–240 ms**, on `transform` / `opacity` only, `prefers-reduced-motion` respected |
+| Motion | **160–240 ms**, on `transform` / `opacity` only, `prefers-reduced-motion` respected. Live readings: the value counts to its new number and the meter marker glides, both 240 ms. Connected status dots (Live, Sensors connected) use the same soft `animate-pulse` fade |
 | Applied (responsive) | Top bars `h-16`, gutters `px-4 md:px-8`. Cards `py-5 px-4` on phones, `sm:py-6 sm:px-6`. Tiles and alerts `p-4`, `sm:p-5` / `sm:px-6`. Form fields `FieldGroup gap-6` (label→input 12 inside a field). Sidebar: header block (logo 24 → profile) and nav are separate regions, only the nav scrolls (thin scrollbar), groups 32 apart (`hr my-4`), items 4 apart. Card header controls drop under the title on phones. Primary buttons are full width on phones. |
 
 ## 9. Brand Logo: `custom-brand-logo`
@@ -236,14 +236,14 @@ export default RootLayout;
 
 ## 10. Icons: lucide-react
 
-- **65 icons**, **2 px stroke**, **18 px** in controls and **15 px** in small buttons. Import by name.
+- **69 icons**, **2 px stroke**, **18 px** in controls and **15 px** in small buttons. Import by name.
 - One icon per meaning (Similarity). Icon-only buttons need an `aria-label` and a tooltip.
 
 | Group | Icon → meaning / where |
 |---|---|
 | Navigation & shell | `LayoutDashboard` Dashboard · `ScrollText` Logs, chat sources · `CalendarClock` Feeding, schedules empty · `QrCode` QR stickers · `ScanLine` Scan, start camera · `Bot` Ask AI, Assistant · `Users` Users · `History` Activity · `UserRound` My profile · `Menu` More · `PanelLeftClose` / `PanelLeftOpen` sidebar collapse/expand · `ChevronRight` profile row · `LogOut` sign out · `Sun` / `Moon` theme · `Bell` alerts · `X` close |
 | Status & feedback | `OctagonAlert` High · `TriangleAlert` Medium, warning toast · `Info` Low, info toast · `CircleCheck` success · `CircleX` error toast · `CircleAlert` field error · `Check` done / rule met |
-| Sensors | `Thermometer` temperature · `Droplet` pH · `Waves` salinity · `FlaskConical` ammonia · `Wind` oxygen |
+| Sensors | `Thermometer` temperature · `Droplet` pH · `Waves` salinity · `FlaskConical` ammonia · `GlassWater` turbidity · `Wind` oxygen · `Droplets` water sensors connected or checking · `Unplug` sensors not connected · `WifiOff` live feed offline |
 | Actions | `Play` start/resume · `Pause` pause · `Square` stop · `Plus` add/new · `Trash` delete · `Download` PNG/PDF · `Camera` / `CameraOff` camera on/off · `Scale` scale connected · `RotateCcw` rescan · `Search` search · `Calendar` date range · `FileDown` export CSV · `Send` send · `ThumbsUp` / `ThumbsDown` feedback |
 | Forms & account | `Mail` email · `Lock` password, PIN locked · `Eye` show password · `KeyRound` reset · `UserPlus` add user · `Pencil` edit |
 | Buttons | `Utensils` feed now · `Save` save · `LogIn` sign in · `ArrowLeft` back · `UserX` deactivate · `UserCheck` reactivate, change role · `ChartLine` see trend, chart view · `TrendingUp` forecast growth (Logs) · `RefreshCw` train / retrain the growth model · `LoaderCircle` a background job is running (spins only without reduced motion) · `Rows3` table view · `ChevronDown` load older · `ChevronLeft` previous |
@@ -262,6 +262,7 @@ export default RootLayout;
 | Toast | `Sonner` | every action | success · info · warning · error · with Undo |
 | PIN entry | `InputOTP` | PIN login, Onboarding, Profile | numeric keyboard, `autocomplete="one-time-code"`; empty, partial, wrong (shake + tries left), locked |
 | `custom-severity-badge` | `Badge` + `OctagonAlert` / `TriangleAlert` / `Info` | Dashboard, Logs, Feeding, Scan | High **solid** · Medium **tinted** · Low **outline**, icon + word |
+| `custom-sensor-status-badge` | `custom-severity-badge` + dot | Dashboard, Logs | water sensor status: Danger **solid** + `OctagonAlert` · Warning **tinted** + `TriangleAlert` · Normal green dot + word |
 | `custom-severity-alert` | `Alert` + `custom-severity-badge` | Dashboard, Scan | high, medium, low, success; optional action |
 | `custom-status-pill` | `Badge` | Feeding, Users, top bar | running, paused, stopped, offline, invited, deactivated |
 | `custom-sensor-tile` + `custom-range-meter` | `Card` | Dashboard | in range, watch, out of range, **no reading** (with last-seen time, never "0"), loading. The meter shows the safe band + a marker, not a fill. |
@@ -275,8 +276,8 @@ export default RootLayout;
 | `custom-search-input` | `Input` + `Search` + sr-only `Label` | Logs, Activity, Users | 44 px, `type="search"`, trims, drives a URL param; one component for every search field |
 | `custom-password-input` | `Input` + `Lock` / `Eye` / `EyeOff` | Login, Onboarding (later Profile) | 44 px, optional lock icon, show/hide toggle with `aria-pressed` |
 | `custom-app-sidebar` | `aside` + `Avatar`, `Tooltip`, `Button` + `custom-feeding-status` | portal shell | three CSS modes via the `sidebar-full` / `sidebar-icons` variants (`globals.css`) and `data-sidebar-collapsed` from `custom-app-shell` (zustand `stores/ui-store.ts`, persisted): full (logo + wordmark, profile row, labels, count pill, feeding card), icon rail (48 px targets, count bubble on the icon, tooltips, feeding dot), tablet rail (labels under icons, no collapse) |
-| `custom-top-bar` | `custom-theme-toggle` + `custom-ask-ai-button` | portal shell | sticky; Live pill (`custom-live-status`: Live · Connecting… · Reconnecting… · Offline, word + dot color, `aria-live="polite"`), mark-only logo on phones |
-| `custom-tab-bar` | `Sheet` | portal shell, phones only | Home (alert dot), Feeding, raised Scan (rounded square), Logs, More; the More sheet has a handle, a 44 px close, QR stickers, Assistant, Users, Activity, My profile, then Sign out below a divider |
+| `custom-top-bar` | `custom-theme-toggle` + `custom-ask-ai-button` | portal shell | sticky; device pill (`custom-live-status`: All devices connected · Checking devices… · `<Device>` not connected · No devices connected · Reconnecting… · Live feed offline, word + dot color, `aria-live="polite"`), mark-only logo on phones |
+| `custom-tab-bar` | `Sheet` | portal shell, phones only | Home (alert count), Feeding, raised Scan (rounded square), Logs, More; the More sheet has a handle, a 44 px close, QR stickers, Assistant, Users, Activity, My profile, then Sign out below a divider |
 | `custom-auth-shell` | `custom-bubbles` + `custom-brand-logo` | Login, PIN login, Onboarding | logo top-left, a `headerEnd` slot top-right (theme toggle), full-height column; the page renders its `main` and `custom-footer` |
 | `custom-stepper` | `Check` + connecting line | Onboarding, Scan | done, current (`aria-current="step"`), upcoming; "Step X of Y"; sub-text hidden on phones |
 | `custom-brand-logo` | `next/image` + SVG | sidebar, sign-in, stickers | see §9 |
@@ -307,7 +308,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | **Login** | Sign in | Input, Label, Button, Checkbox, Alert, Sonner | `custom-bubbles`, `custom-theme-switch` | Sun, Moon, Mail, Lock, Eye, CircleCheck |
 | **PIN login** | Unlock | Avatar, InputOTP, Button, Alert | — | Sun, Moon, Lock (device keyboard only) |
 | **Onboarding** | Continue / Finish | Form, Input, InputOTP, ToggleGroup, Button | `custom-stepper`, `custom-password-rules` | Check, CircleAlert, ArrowLeft |
-| **Dashboard** | See trend (on the top alert) | Card, ToggleGroup, Select, Tooltip | `custom-briefing`, `custom-severity-alert`, `custom-sensor-tile`, `custom-range-meter`, `custom-sensor-sparkline`, `custom-growth-chart`, `custom-forecast-model-alert` | RefreshCw, LoaderCircle, Thermometer, Droplet, Waves, FlaskConical, Wind, OctagonAlert, TriangleAlert, Info, CircleCheck, Bot, ChartLine |
+| **Dashboard** | See trend (on the top alert) | Card, ToggleGroup, Select, Tooltip | `custom-briefing`, `custom-severity-alert`, `custom-sensor-tile`, `custom-range-meter`, `custom-water-monitor`, `custom-sensor-connection`, `custom-reading-value`, `custom-water-updates`, `custom-water-value`, `custom-sensor-sparkline`, `custom-growth-chart`, `custom-forecast-model-alert` | ScrollText, RefreshCw, LoaderCircle, Thermometer, Droplet, Droplets, Waves, FlaskConical, GlassWater, Wind, Unplug, WifiOff, OctagonAlert, TriangleAlert, Info, CircleCheck, Bot, ChartLine |
 | **Feeding** | Feed now | Card, Switch, Button, AlertDialog, ToggleGroup, Input, Sonner | `custom-status-pill`, `custom-feeder-row`, `custom-schedule-form`, `custom-feed-bar-chart` | Utensils, Play, Pause, Square, TriangleAlert, Plus, Trash, CalendarClock, CircleCheck |
 | **QR stickers** | Download stickers | Select, ToggleGroup, Button, Table, Sonner | `custom-qr-sticker`, `custom-sticker-sheet`, `custom-print-bar` | Plus, Download, QrCode |
 | **Scan** | Save log | Card, Input, Button, Alert, Sonner | `custom-stepper`, `custom-scan-viewport`, `custom-severity-alert` | Scale, Camera, CameraOff, ScanLine, RotateCcw, Check, TriangleAlert, CircleCheck |

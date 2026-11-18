@@ -17,7 +17,7 @@ One PostgreSQL database, **one Postgres schema per module**, the same way the co
 | `auth` | `authentication` | `users` | live |
 | `audit` | `core/audit` | `audit_events` | live |
 | `crab_management` | `crab_management` | `crabs`, `batches`, `logs` | live (see §6 drift) |
-| `devices` | `devices` | sensors, readings, devices, commands | planned |
+| `devices` | `devices` | `water_sensor_logs` | live (devices and commands planned) |
 
 - A module's tables live only in its schema: `__table_args__ = {"schema": "<schema>"}`.
 - **Modules are isolated: no foreign keys between schemas, ever** (including toward `auth.users`). FKs exist only between tables of the **same** module (§5).
@@ -86,6 +86,20 @@ Indexes: `occurred_at`, `actor_id`, `action`.
 | `log_type` | enum `crab_management.log_type` (`prediction`, `actual`) | no | indexed, stores enum **values** |
 | `width_mm` | `numeric(10,2)` | yes | carapace width; the API accepts `0 < width_mm ≤ 300` |
 | `weight_g` | `numeric(10,2)` | yes | the API accepts `0 < weight_g ≤ 5000`; a log carries width, weight or both |
+| `created_at` | `timestamptz` | no | default `now()` |
+
+### `devices.water_sensor_logs`
+
+Written by the worker: one row per sensor per 30-minute slot.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `id` | `bigint` identity | no | PK |
+| `sensor` | enum `devices.water_sensor_name` (`temperature`, `ph`, `salinity`, `ammonia`, `turbidity`, `oxygen`) | no | indexed |
+| `value` | `numeric(10,3)` | no | in the sensor's unit (°C, pH, ppt, mg/L, NTU, mg/L) |
+| `status` | enum `devices.water_sensor_status` (`normal`, `warning`, `danger`) | no | indexed; a historical snapshot, so a later threshold change doesn't rewrite old logs (§5) |
+| `measured_at` | `timestamptz` | no | when the API side received the reading, indexed |
+| `slot_at` | `timestamptz` | no | start of the logging slot; unique with `sensor` (`uq_water_sensor_logs_sensor`) |
 | `created_at` | `timestamptz` | no | default `now()` |
 
 ### Relationships

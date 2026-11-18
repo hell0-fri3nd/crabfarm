@@ -35,12 +35,19 @@ If code and this document disagree, the code is wrong unless this document is up
 ```
 LIVE DEVICE DATA (one way)
 Device ──MQTT──▶ RabbitMQ ──AMQP──▶ FastAPI GET /<resource>/stream ──SSE──▶ Next.js
-                    └──AMQP──▶ worker (persists water-sensor readings to PostgreSQL; not built yet)
-Built today: the crab scale (ESP32) publishes MQTT crab/weight {"weight": 554.00, "unit": "grams"} every 2 s;
-the StreamHub binds crab.weight on amq.topic, devices/scales serves GET /scales/stream, which emits
+                    └──AMQP──▶ worker (saves water sensor logs every 30 minutes, audits connect/disconnect)
+Built today: the crab scale (ESP32) publishes MQTT crab/scale {"weight": 554.00, "unit": "grams"} every 2 s;
+the StreamHub binds crab.scale on amq.topic, devices/scales serves GET /scales/stream, which emits
 scale.reading {device_id: null, weight_g, received_at (stamped by the API)}, and Scan's Weight (g)
 fills live from it. Live only, nothing stored. SSE, not WebSocket: the data only flows down to the browser.
-Planned: water-quality sensors on devices/sensors, GET /sensors/stream (sensor.reading).
+Built today: the water sensors (ESP32) publish MQTT crab/sensor {"temperature", "ph", "salinity", "ammonia", "turbidity",
+"dissolved_oxygen"}; the StreamHub binds crab.sensor on amq.topic, devices/water_sensors serves GET /water-sensors/stream,
+which emits water_sensor.reading {device_id: null, temperature_c, ph, salinity_ppt, ammonia_mg_l, turbidity_ntu, do_mg_l,
+statuses (normal | warning | danger per sensor), received_at (stamped by the API)}, and the Dashboard's Water now tiles fill
+live from it. The stream stores nothing; the worker keeps the history (§10). Thresholds come from the root .env (WATER_THRESHOLD_<SENSOR>, defaults in core/config.py), read by the API and the worker in devices/water_sensors/thresholds.py; the web gets them from GET /water-sensors/thresholds.
+Device presence: devices/registry serves GET /devices/stream, which emits device.status {device: scale | water_sensors, seen_at, alerts: water sensors reading warning or danger}
+at most every 2 s per device while that device sends valid messages. Devices have no presence signal, so the web's top bar
+treats 10 s of silence as not connected.
 
 CONTROL COMMANDS
 Next.js ──POST──▶ FastAPI POST /devices/{id}/commands ──AMQP──▶ RabbitMQ ──MQTT──▶ Device runs command
@@ -77,7 +84,8 @@ The RabbitMQ MQTT plugin maps MQTT topics onto the `amq.topic` exchange and turn
 | Purpose | MQTT topic (device side) | AMQP routing key (backend side) | Exchange |
 |---|---|---|---|
 | Sensor readings | `farm/{device_id}/sensors/{sensor_type}` | `farm.{device_id}.sensors.{sensor_type}` | `amq.topic` |
-| Crab scale weight (today, one scale, no device id) | `crab/weight` | `crab.weight` (`CRAB_WEIGHT`) | `amq.topic` |
+| Crab scale weight (today, one scale, no device id) | `crab/scale` | `crab.scale` (`CRAB_SCALES`) | `amq.topic` |
+| Water sensors (today, one device, no device id) | `crab/sensor` | `crab.sensor` (`CRAB_SENSORS`) | `amq.topic` |
 | Device commands | `farm/{device_id}/cmd` | `farm.{device_id}.cmd` | `amq.topic` |
 | Device ack/status | `farm/{device_id}/status` | `farm.{device_id}.status` | `amq.topic` |
 | Forecast request | — | `worker.forecast.run` | `crabfarm.events` (topic) |
@@ -113,8 +121,8 @@ api/app/
 ├── devices/                # every MQTT device on the farm
 │   ├── api.py
 │   ├── scales/             # GET /scales/stream: the crab scale's live weight (built, live only, no tables)
-│   ├── sensors/            # water-quality readings, SSE stream, thresholds (planned)
-│   └── registry/           # /devices: device registry, commands (planned)
+│   ├── water_sensors/      # GET /water-sensors/stream (live readings), /water-sensors/logs (saved every 30 min), thresholds
+│   └── registry/           # GET /devices/stream: which devices are sending, connection audit (built, no tables); device registry and commands planned
 ├── artificial_intelligence/
 │   ├── api.py
 │   ├── vision/             # POST /detections/tickets + WS /detections/ws: live boxes + width from the browser webcam (no tables)
@@ -131,7 +139,7 @@ api/app/
 └── worker/
     ├── __main__.py         # python -m app.worker
     ├── runner.py           # starts/stops jobs, handles signals
-    └── jobs/               # sensor_persistence.py, growth_forecast.py
+    └── jobs/               # device_presence_monitor.py, water_sensor_monitor.py (built), growth_forecast.py (planned)
 
 api/ml/                     # OUTSIDE app/: offline training only, never imported by app/
 ├── train_growth_model.py   # trains on every crab and promotes WITHOUT the gate (first model, manual override)
@@ -143,7 +151,7 @@ Domains: `authentication`, `crab_management`, `devices`, `artificial_intelligenc
 
 `audit/events` has no `models` layer: `core.audit` owns `audit.audit_events` and writes it, and this domain only reads it (through `core.audit`'s `AuditEvents`). A STAFF caller only ever sees their own events; the service enforces it, because the rule depends on the query (01 §13).
 
-`system/events` has no `models` layer (like `artificial_intelligence/vision`, `devices/scales` and `assistant/chat`). It's the reference stream: copy its router/services/dependencies when a domain adds its own `/<resource>/stream`.
+`system/events` has no `models` layer (like `artificial_intelligence/vision`, `devices/scales`, `devices/registry` and `assistant/chat`). It's the reference stream: copy its router/services/dependencies when a domain adds its own `/<resource>/stream`.
 To add a domain, update this file first.
 
 ## 5. Resource Anatomy (non-negotiable)
@@ -263,7 +271,11 @@ Browser frames have to go up and per-frame results come back, so detection uses 
 ## 10. Worker
 
 - Separate process: `python -m app.worker`. Same settings and codebase, no FastAPI.
-- **Sensor persistence job:** durable queue bound to `farm.*.sensors.#` → validates → batch-inserts readings through `devices.sensors` services.
+- **Device presence monitor (`jobs/device_presence_monitor.py`), runs 24/7:** audits only connection changes for every device in `devices.registry.DEVICES`, by `actor_type = SYSTEM`, `service = worker`: `scale.connected` / `scale.disconnected` and `water_sensor.connected` / `water_sensor.disconnected` (no valid message for `device_offline_seconds`, 30). It reads each device's last audited state at startup so restarts don't repeat it.
+- **Water sensor monitor (`jobs/water_sensor_monitor.py`), runs 24/7 and doesn't depend on the web app:** an exclusive queue bound to `crab.sensor` keeps only the latest valid reading.
+  - **Logs:** once per `water_sensor_log_interval_minutes` (30) slot on the clock (:00 and :30), it saves all six sensors with their status to `devices.water_sensor_logs`. A slot with no current reading is saved when the sensors return within it, otherwise it stays empty. The unique `(sensor, slot_at)` makes a restart harmless.
+  - Normal, warning and danger are not audited, because the logs already record them.
+- RabbitMQ or PostgreSQL being down restarts the jobs after 5 s.
 - The worker never exposes HTTP.
 - **Detection is not a worker job** ([ADR-0003](../../docs/adr/0003-live-object-detection-over-websocket.md)). Frames come from the browser webcam over the WebSocket (§8), and the **API process** loads YOLO once in `lifespan` through `infrastructure/vision.YoloDetector`.
   - If the model can't load, the API still starts and detection sockets close with 1013.
@@ -318,7 +330,7 @@ assistant/chat/
   - `thread_id` is scoped to the user: the service prefixes or validates it against `current_user.id`, so users can't read each other's threads.
   - History, trimming and summarising are done with LangGraph features (`add_messages` reducer, message trimming inside nodes). Never hand-roll them with your own tables.
   - Domain data the assistant reads (sensors, logs, forecasts) stays in its own domain. The assistant only reads it through tools.
-- Nodes get data **only** through `tools.py`, which calls domain services (`devices.sensors`, `crab_management.logs`, …). Nodes never query the DB or broker directly.
+- Nodes get data **only** through `tools.py`, which calls domain services (`devices.water_sensors`, `crab_management.logs`, …). Nodes never query the DB or broker directly.
 - Tools are read-only. The assistant never sends device commands.
 - **LLM provider is DeepInfra.** `infrastructure/ai/llm.py` exposes `get_chat_model(purpose)`, which returns a `ChatOpenAI` pointed at DeepInfra's OpenAI-compatible API:
   ```python
@@ -351,7 +363,7 @@ Predicts **carapace width and weight for each of the next 7 days**, based on the
 **Rules**
 - **Who runs it:** on demand, **in the API request** (`POST /forecasts`). The model is small (milliseconds per crab), so a worker isn't needed yet. A nightly run for every crab, if added, goes in the worker (`jobs/growth_forecast.py`) and calls the same `ForecastServices.create()`.
 - **Scope:** every crab with enough logged days in the window, or one crab when `crab_id` is sent. Crabs with some logs but too few days are listed in `skipped_crab_ids`; if no crab qualifies, `422 insufficient_data`.
-- **Input window:** the last `forecast_history_days` (14) of actual logs that have both width and weight, read through `LogServices.list_measured()`. Days are calendar days of `created_at` in UTC. Sensor aggregates from `devices.sensors` may be added as features later, read through that domain's service.
+- **Input window:** the last `forecast_history_days` (14) of actual logs that have both width and weight, read through `LogServices.list_measured()`. Days are calendar days of `created_at` in UTC. Sensor aggregates from `devices.water_sensors` may be added as features later, read through that domain's service.
 - **Not enough data:** a crab needs at least `max(forecast_min_logged_days, the model's window_days)` logged days. Never pad or invent rows.
 - **Results are stored as prediction logs:** each predicted day is one `logs` row (`log_type = prediction`, `created_at` = the predicted day at 00:00 UTC, `user_id` = the caller, `batch_id` = the crab's latest batch). Every run **inserts**; earlier predictions are kept, never replaced or deleted.
 - **Old logs, only when asked:** `include_old_logs` also forecasts a crab without enough recent days. `GET /forecasts/readiness` reports these crabs so the web can warn first.

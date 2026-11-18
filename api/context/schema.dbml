@@ -5,7 +5,7 @@
 
 Project crabfarm {
   database_type: 'PostgreSQL'
-  Note: 'One PostgreSQL database, one schema per module: auth, audit, crab_management. No foreign keys between modules; cross-module ids are plain indexed columns.'
+  Note: 'One PostgreSQL database, one schema per module: auth, audit, crab_management, devices. No foreign keys between modules; cross-module ids are plain indexed columns.'
 }
 
 //// ───────────── auth ─────────────
@@ -121,6 +121,40 @@ Table crab_management.logs {
     crab_id  [name: 'ix_crab_management_logs_crab_id']
     user_id  [name: 'ix_crab_management_logs_user_id']
     log_type [name: 'ix_crab_management_logs_log_type']
+  }
+}
+
+//// ───────────── devices ─────────────
+
+Enum devices.water_sensor_name {
+  temperature
+  ph
+  salinity
+  ammonia
+  turbidity
+  oxygen
+}
+
+Enum devices.water_sensor_status {
+  normal
+  warning
+  danger
+}
+
+Table devices.water_sensor_logs {
+  id          bigint        [pk, increment]
+  sensor      devices.water_sensor_name   [not null]
+  value       numeric(10,3) [not null]
+  status      devices.water_sensor_status [not null, note: 'snapshot: the status when logged']
+  measured_at timestamptz   [not null]
+  slot_at     timestamptz   [not null, note: 'start of the 30-minute logging slot']
+  created_at  timestamptz   [not null, default: `now()`]
+
+  indexes {
+    (sensor, slot_at) [unique, name: 'uq_water_sensor_logs_sensor']
+    sensor      [name: 'ix_devices_water_sensor_logs_sensor']
+    status      [name: 'ix_devices_water_sensor_logs_status']
+    measured_at [name: 'ix_devices_water_sensor_logs_measured_at']
   }
 }
 

@@ -22,7 +22,7 @@ Architecture and layering rules are in `01-architecture.md`.
 
 ## 2. Resource Naming
 
-- **Resources are plural nouns in kebab-case:** `/batches`, `/crabs`, `/logs`, `/forecasts`, `/devices`, `/scales`, `/sensors`, `/detections`.
+- **Resources are plural nouns in kebab-case:** `/batches`, `/crabs`, `/logs`, `/forecasts`, `/devices`, `/scales`, `/water-sensors`, `/detections`.
 - **No domain segment in the URL.** The domain is a code concern, so the URL is `/batches`, not `/crab-management/batches`. The resource router's `prefix` is the resource itself, matching `/auth` and `/users` today.
 - **Nest at most one level**, and only when the child can't exist without the parent. Logs are the exception, by decision: one `/logs` router, so a crab's logs are read with `GET /logs/{crab_id}` and created with `POST /logs` (`crab_id` in the body). Cross-cutting queries use the top-level collection with filters: `/logs?batch_id=...`. Model trainings are the second exception, by decision: they only exist to serve forecasts, so they live at `/forecasts/model-trainings` (a sub-collection, not under a forecast id).
 - **Path parameters** are named `{<resource>_id}`: `{batch_id}`, `{device_id}`.
@@ -211,7 +211,7 @@ Used for device commands and forecast runs.
 |---|---|
 | Path | `GET /<resource>/stream`, filtered by query params (`?device_id=`, `?batch_id=`) |
 | Response | `200`, `Content-Type: text/event-stream`, `Cache-Control: no-cache` |
-| Event name | `event: <resource>.<event>`, e.g. `scale.reading`, `sensor.reading`, `device.status`, `forecast.model` |
+| Event name | `event: <resource>.<event>`, e.g. `scale.reading`, `water_sensor.reading`, `device.status`, `forecast.model` |
 | Data | One JSON object per event, validated by a `*Event` schema |
 | Heartbeat | `: ping` comment every 15 s |
 | Errors before streaming | Normal `401`/`403`/`404` JSON. After the stream starts, send `event: error` and close. |
@@ -303,16 +303,17 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 
 | Method | Path | Success | Notable errors |
 |---|---|---|---|
-| GET | `/sensors` | 200 sensor list | — |
-| GET | `/sensors/{sensor_id}/readings` (`?from=&to=&interval=`) | 200 | 404 |
+| GET | `/water-sensors/thresholds` (`AnyRole`; not audited) | 200 `WATER_SENSOR_THRESHOLDS_LISTED` (`[{sensor, warning, danger, normal_min, normal_max, normal_range}]`, bands are `[low, high]` with `null` for no limit; from the root `.env`) | — |
+| GET | `/water-sensors/logs` (`AnyRole`; `?page=&size=` (size defaults to **7**, max 100) `&sensor=` (repeatable) `&status=normal\|warning\|danger&from=&to=&sort=`, `sort` ∈ `±measured_at`, default `-measured_at`) | 200 `WATER_SENSOR_LOGS_LISTED` (a page of `{id, sensor, value, status, measured_at, slot_at, created_at}`; audited as `water_sensor_log.list`) | 422 |
+| GET | `/water-sensors/logs/status-counts` (`AnyRole`; `sensor`, `from`, `to`; not audited) | 200 `WATER_SENSOR_COUNTS_READY` (`{normal, warning, danger}`) | 422 |
 | GET | `/scales/stream` (every role) | 200 SSE `scale.reading` (`{device_id, weight_g, received_at}`; the crab scale, live only), ends at the access token's expiry | 503 broker off or unreachable (`Retry-After`) |
-| GET | `/sensors/stream` (`?sensor_type=`) | 200 SSE `sensor.reading` (water quality) | 503 broker |
+| GET | `/water-sensors/stream` (every role) | 200 SSE `water_sensor.reading` (`{device_id, temperature_c, ph, salinity_ppt, ammonia_mg_l, turbidity_ntu, do_mg_l, statuses, received_at}`, `statuses` maps each sensor to normal, warning or danger; not stored), ends at the access token's expiry | 503 broker off or unreachable (`Retry-After`) |
 | GET | `/devices` | 200 | — |
 | POST | `/devices` | 201 | 409 device id exists |
 | GET / PATCH / DELETE | `/devices/{device_id}` | 200 | 404 |
 | POST | `/devices/{device_id}/commands` | 202 `COMMAND_ACCEPTED` | 404, 400 command not allowed for device, 409 device offline, 503 broker |
 | GET | `/devices/{device_id}/commands/{command_id}` | 200 status | 404 |
-| GET | `/devices/stream` | 200 SSE `device.status` | — |
+| GET | `/devices/stream` (every role) | 200 SSE `device.status` (`{device: scale \| water_sensors, seen_at, alerts: [{sensor, status, value, normal_range}]}`, `alerts` listing water sensors at warning or danger, at most every 2 s per device while it sends valid messages), ends at the access token's expiry | 503 broker off or unreachable (`Retry-After`) |
 
 ### artificial_intelligence (resource `vision`)
 

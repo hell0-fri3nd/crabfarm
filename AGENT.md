@@ -45,7 +45,7 @@ crabfarm/
 ├── docs/ui/{desktop,tablet,phone}/  # page mockups per screen size
 ├── docker-compose.yml       # PostgreSQL 16 + RabbitMQ 4 (management :15672, MQTT :1883 for ESP32, Prometheus :15692)
 ├── api/                     # FastAPI backend + worker (Python ≥ 3.12, Poetry)
-│   ├── app/                 # domains: authentication, crab_management, audit, system, artificial_intelligence (vision), devices (scales), (assistant planned)
+│   ├── app/                 # domains: authentication, crab_management, audit, system, artificial_intelligence (vision), devices (scales, water_sensors, registry), worker, (assistant planned)
 │   ├── migrations/          # Alembic
 │   └── context/             # backend context docs
 └── web/                     # Next.js frontend + BFF (being rewritten; old React Router app removed)
@@ -67,6 +67,7 @@ docker compose up -d
 poetry install
 poetry run alembic upgrade head
 poetry run uvicorn app.main:app --reload --reload-dir . --reload-dir .. --reload-include .env --timeout-graceful-shutdown 3   # also reloads on root .env edits (needs watchfiles, a dev dependency); without the timeout, an open SSE stream blocks every reload
+poetry run python -m app.worker   # 24/7 jobs: 30-minute water sensor logs, connect/disconnect audit for every device
 poetry run alembic revision --autogenerate -m "<verb> <what>"   # then review the file (api/context/04 §7)
 poetry run python -m ml.train_growth_model     # first growth model: trains and promotes without the gate
 poetry run python -m ml.retrain_growth_model   # gated retrain (schedule it weekly; ADR-0004)

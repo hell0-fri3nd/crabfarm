@@ -99,6 +99,9 @@ Each log stores who recorded it. Every role sees every log on the Logs page; onl
 |---|---|:-:|:-:|:-:|
 | System announcements stream | `GET /events/stream` | Yes | Yes | Yes |
 | Crab scale live weight | `GET /scales/stream` | Yes | Yes | Yes |
+| Water sensors live readings | `GET /water-sensors/stream` | Yes | Yes | Yes |
+| Which devices are connected | `GET /devices/stream` | Yes | Yes | Yes |
+| Saved water sensor logs | `GET /water-sensors/logs`, `GET /water-sensors/logs/status-counts` | Yes | Yes | Yes |
 
 ## Web pages
 
@@ -106,8 +109,8 @@ The web app reads the same rules from `web/lib/permissions.ts` to hide what a ro
 
 | Page | Data | Developer | Admin | Staff |
 |---|---|:-:|:-:|:-:|
-| Dashboard | Live growth card (last 7 days of crab logs) · the rest is sample data | Yes | Yes | Yes |
-| Logs | Live (crab logs) · sample (sensor logs) | Yes | Yes | Yes ¹⁰ |
+| Dashboard | Live growth card (last 7 days of crab logs) and water sensor tiles · the rest is sample data | Yes | Yes | Yes |
+| Logs | Live (crab logs and sensor logs) | Yes | Yes | Yes ¹⁰ |
 | Feeding | Sample data | Yes | Yes | Yes |
 | QR stickers | Live | Yes | Yes | Yes ⁶ |
 | Scan crab | Live (save log, recent logs) · camera reads QR in the browser; scale not connected | Yes | Yes | Yes ¹¹ |
@@ -131,7 +134,6 @@ These are in the design but have no endpoints yet, so their roles aren't set. De
 | Edit or delete a single log | `GET`, `PATCH`, `DELETE /logs/{log_id}` | ? | ? | ? |
 | Edit or delete a batch | `GET`, `PATCH`, `DELETE /batches/{batch_id}` | ? | ? | ? |
 | Add, edit or delete a crab | `POST /crabs`, `PATCH`, `DELETE /crabs/{crab_id}` | ? | ? | ? |
-| Water sensors and live readings | `/sensors`, `/sensors/stream` | ? | ? | ? |
 | Devices and commands (feed now, stop) | `/devices`, `/devices/{device_id}/commands` | ? | ? | ? |
 | Cameras and crab detection | `/cameras`, `/detections/stream` | ? | ? | ? |
 | QR scan | `POST /qr/scan` | ? | ? | ? |
