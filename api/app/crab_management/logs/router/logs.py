@@ -62,6 +62,28 @@ def list_logs(
     return result
 
 
+# Declared before /{crab_id}, which would otherwise capture this path
+@router.get(
+    "/crab-ids",
+    response_model=Response[list[int]],
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "log.crab_ids"},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ValidationErrorResponse, "description": "Invalid filters"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error listing logged crabs"},
+    },
+)
+def list_logged_crab_ids(
+    filters: Annotated[ListLogsQuery, Query()],
+    actor: AnyRole,
+    services: LogServicesDep,
+):
+    result = services.list_crab_ids(filters)
+    raise_for(result, "log.crab_ids")
+    return result
+
+
 @router.get(
     "/{crab_id}",
     response_model=Response[Page[Logs]],

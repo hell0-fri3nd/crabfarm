@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 LOG_OUTCOMES = {
     "LOGS_LISTED":       (Outcome.SUCCESS, status.HTTP_200_OK),
+    "LOGGED_CRABS_LISTED": (Outcome.SUCCESS, status.HTTP_200_OK),
     "LOG_CREATED":       (Outcome.SUCCESS, status.HTTP_201_CREATED),
     "LOGS_CREATED":      (Outcome.SUCCESS, status.HTTP_201_CREATED),
     "CRAB_NOT_FOUND":    (Outcome.FAILURE, status.HTTP_404_NOT_FOUND),
@@ -117,6 +118,16 @@ class LogServices:
         request: Request | None = None,
     ) -> Response[Page[Logs]]:
         return self.list(ListLogsQuery(**query.model_dump(), crab_id=crab_id), actor, request)
+
+    def list_crab_ids(self, query: ListLogsQuery) -> Response[Sequence[int]]:
+        """The crabs with at least one log matching the filters. Not audited: every chart view reads it."""
+        try:
+            crab_ids = self.db.exec(self.__filtered(select(Logs.crab_id).distinct(), query).order_by(Logs.crab_id)).all()
+            return Response(success=True, message="Logged crabs retrieved", code="LOGGED_CRABS_LISTED", details=list(crab_ids))
+
+        except Exception:
+            logger.exception("Listing logged crabs failed")
+            return Response(success=False, message=FAILURE_MESSAGES["LOGS_LIST_FAILED"], code="LOGS_LIST_FAILED")
 
     def list_measured(self, crab_id: int | None = None, since: datetime | None = None) -> Sequence[Logs]:
         """Each crab's latest actual log per UTC day that has both width and weight, oldest first;

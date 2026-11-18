@@ -67,6 +67,7 @@ A deactivated user can't sign in, unlock with a PIN, or use their own-account en
 | Feature | Endpoint | Developer | Admin | Staff |
 |---|---|:-:|:-:|:-:|
 | See all logs (filter by batch, crab, type, dates) | `GET /logs` | Yes | Yes | Yes |
+| See which crabs have logs for the chosen filters | `GET /logs/crab-ids` | Yes | Yes | Yes |
 | See one crab's logs | `GET /logs/{crab_id}` | Yes | Yes | Yes |
 | Record a log (width, weight) | `POST /logs` | Yes | Yes | Yes |
 | See recent logs on Scan crab (latest 5) | `GET /audit-events` (`action=log.create`) | Yes | Yes | Own |
