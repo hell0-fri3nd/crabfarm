@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     detection_auth_timeout_seconds: int = Field(default=5, ge=1)
     detection_max_frame_bytes: int = Field(default=600_000, ge=10_000)
     detection_max_sessions: int = Field(default=4, ge=1)
-    detection_ticket_rate_limit: int = Field(default=2, ge=1)
+    detection_ticket_rate_limit: int = Field(default=30, ge=1)
     detection_allowed_origins: list[str] = ["http://localhost:3000"]
     # Width in mm: the crab's sticker (its QR is 0.62 of the sticker's width) is the scale when its QR is in view;
     # otherwise the fixed stand and the camera's field of view across its long side
