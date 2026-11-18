@@ -1,30 +1,32 @@
 'use client';
 
-import { useEventStream } from '@/events/use-event-stream';
+import { toDeviceSummary } from '@/lib/device-status';
 import { cn } from '@/lib/utils';
-import { SYSTEM_EVENT_NAMES, systemEventSchema } from '@/types/events';
+import { useDeviceStatusStore } from '@/stores/device-status-store';
 
-import type { StreamStatus } from '@/events/use-event-stream';
+import type { DeviceSummaryTone } from '@/lib/device-status';
 
-const STATUS_COPY = {
-  connecting: { label: 'Connecting…', dotClass: 'bg-muted-foreground', textClass: 'text-muted-foreground' },
-  open: { label: 'Live', dotClass: 'bg-primary motion-safe:animate-pulse', textClass: 'text-primary' },
-  reconnecting: { label: 'Reconnecting…', dotClass: 'bg-warning', textClass: 'text-warning' },
-  closed: { label: 'Offline', dotClass: 'bg-destructive', textClass: 'text-destructive' },
-} as const satisfies Record<StreamStatus, { label: string; dotClass: string; textClass: string }>;
+const TONE_LOOK = {
+  muted: { dotClass: 'bg-muted-foreground', textClass: 'text-muted-foreground' },
+  connected: { dotClass: 'bg-primary motion-safe:animate-pulse', textClass: 'text-primary' },
+  warning: { dotClass: 'bg-warning', textClass: 'text-warning' },
+  danger: { dotClass: 'bg-destructive', textClass: 'text-destructive' },
+} as const satisfies Record<DeviceSummaryTone, { dotClass: string; textClass: string }>;
 
 const CustomLiveStatus = () => {
-  const { status } = useEventStream({ path: 'events/stream', events: SYSTEM_EVENT_NAMES, schema: systemEventSchema });
-  const { label, dotClass, textClass } = STATUS_COPY[status];
+  const status = useDeviceStatusStore((state) => state.status);
+  const connections = useDeviceStatusStore((state) => state.connections);
+  const { label, tone } = toDeviceSummary(status, connections);
+  const { dotClass, textClass } = TONE_LOOK[tone];
 
   return (
     <p
       role="status"
       aria-live="polite"
-      className="hidden items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs sm:flex"
+      className="hidden min-w-0 items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs sm:flex"
     >
-      <span aria-hidden className={cn('size-2 rounded-full', dotClass)} />
-      <span className={cn('font-semibold', textClass)}>{label}</span>
+      <span aria-hidden className={cn('size-2 shrink-0 rounded-full', dotClass)} />
+      <span className={cn('truncate font-semibold', textClass)}>{label}</span>
     </p>
   );
 };

@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { toInitials } from '@/lib/format';
 import { DASHBOARD_HREF, PROFILE_NAV_ITEM, isActivePath, toAlertLabel, toNavGroups } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
+import { useDashboardAlertCount } from '@/stores/device-status-store';
 import { useUiStore } from '@/stores/ui-store';
 
 import type { ReactNode } from 'react';
@@ -48,8 +49,9 @@ const CustomRailTooltip = ({ label, isEnabled, children }: CustomRailTooltipProp
   </Tooltip>
 );
 
-const CustomAppSidebar = ({ user, alertCount, feeding }: CustomAppSidebarProps) => {
+const CustomAppSidebar = ({ user, alertCount: otherAlertCount, feeding }: CustomAppSidebarProps) => {
   const pathname = usePathname();
+  const alertCount = useDashboardAlertCount(otherAlertCount);
   const isCollapsed = useUiStore((state) => state.isSidebarCollapsed);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
   const toggleLabel = isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';

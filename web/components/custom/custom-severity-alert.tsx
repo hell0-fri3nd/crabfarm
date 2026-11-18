@@ -16,11 +16,12 @@ type CustomSeverityAlertProps = {
   level: Severity;
   title: string;
   description: string;
+  badgeLabel?: string;
   actions?: ReactNode;
   className?: string;
 };
 
-const CustomSeverityAlert = ({ level, title, description, actions, className }: CustomSeverityAlertProps) => {
+const CustomSeverityAlert = ({ level, title, description, badgeLabel, actions, className }: CustomSeverityAlertProps) => {
   const { icon: Icon } = SEVERITY_LOOK[level];
 
   return (
@@ -30,7 +31,7 @@ const CustomSeverityAlert = ({ level, title, description, actions, className }: 
     >
       <Icon aria-hidden />
       <AlertTitle className="flex flex-wrap items-center gap-2 font-semibold">
-        <CustomSeverityBadge level={level} />
+        <CustomSeverityBadge level={level} label={badgeLabel} />
         {title}
       </AlertTitle>
       <AlertDescription className="flex h-full flex-col text-muted-foreground">

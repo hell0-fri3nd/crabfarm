@@ -15,6 +15,7 @@ import {
 } from '@/lib/navigation';
 import { signOut } from '@/app/(protected)/(portal)/profile/actions/sign-out';
 import { cn } from '@/lib/utils';
+import { useDashboardAlertCount } from '@/stores/device-status-store';
 
 type CustomTabBarProps = {
   alertCount: number;
@@ -27,8 +28,9 @@ const TAB_CLASS =
 const SHEET_LINK_CLASS =
   'flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors hover:bg-accent aria-[current=page]:bg-accent aria-[current=page]:font-semibold aria-[current=page]:text-primary';
 
-const CustomTabBar = ({ alertCount, role }: CustomTabBarProps) => {
+const CustomTabBar = ({ alertCount: otherAlertCount, role }: CustomTabBarProps) => {
   const pathname = usePathname();
+  const alertCount = useDashboardAlertCount(otherAlertCount);
   const moreSheetItems = toMoreSheetItems(role);
   const isMoreActive = moreSheetItems.some(({ href }) => isActivePath(pathname, href));
 
@@ -53,7 +55,12 @@ const CustomTabBar = ({ alertCount, role }: CustomTabBarProps) => {
                   <span className="relative">
                     <Icon className="size-5.5" aria-hidden />
                     {hasAlerts && (
-                      <span aria-hidden className="absolute -top-0.5 -right-1 size-2.5 rounded-full bg-destructive ring-2 ring-background" />
+                      <span
+                        aria-hidden
+                        className="absolute -top-2 -right-2.5 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-destructive px-1 text-xs leading-none font-semibold text-white ring-2 ring-background"
+                      >
+                        {alertCount}
+                      </span>
                     )}
                   </span>
                 )}
