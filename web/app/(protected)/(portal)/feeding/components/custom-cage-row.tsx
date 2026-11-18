@@ -11,7 +11,6 @@ import type { Cage } from '../types/feeding';
 type CustomCageRowProps = {
   cage: Cage;
   isPending: boolean;
-  isSystemStopped: boolean;
   onFeed: (cage: Cage) => void;
   onMarkCleared: (cage: Cage) => void;
   onScheduledChange: (cage: Cage, isScheduled: boolean) => void;
@@ -29,10 +28,10 @@ const toStatusLabel = ({ state, last_fed_label, issue_label }: Cage, isPending: 
   return last_fed_label ? `Fed ${last_fed_label}` : 'Not fed yet today';
 };
 
-const CustomCageRow = ({ cage, isPending, isSystemStopped, onFeed, onMarkCleared, onScheduledChange }: CustomCageRowProps) => {
+const CustomCageRow = ({ cage, isPending, onFeed, onMarkCleared, onScheduledChange }: CustomCageRowProps) => {
   const statusId = `cage-${cage.id}-status`;
   const isJammed = cage.state === 'jammed';
-  const canFeed = cage.state === 'ok' && !isSystemStopped && !isPending;
+  const canFeed = cage.state === 'ok' && !isPending;
 
   return (
     <li

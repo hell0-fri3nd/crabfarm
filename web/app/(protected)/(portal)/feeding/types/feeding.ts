@@ -1,8 +1,5 @@
 import { z } from 'zod';
 
-export const systemStateSchema = z.enum(['running', 'paused', 'stopped']);
-export type SystemState = z.infer<typeof systemStateSchema>;
-
 export const cageStateSchema = z.enum(['ok', 'jammed', 'offline']);
 export type CageState = z.infer<typeof cageStateSchema>;
 

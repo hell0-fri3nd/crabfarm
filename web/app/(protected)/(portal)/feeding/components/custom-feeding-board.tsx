@@ -11,10 +11,9 @@ import { notify } from '@/lib/notify';
 
 import CustomCageGroupCard from './custom-cage-group-card';
 import CustomFeedConfirmDialog from './custom-feed-confirm-dialog';
-import CustomSystemControls from './custom-system-controls';
 import { formatClock } from '../lib/feeding-format';
 
-import type { Cage, CageGroup, FeedTarget, SystemState } from '../types/feeding';
+import type { Cage, CageGroup, FeedTarget } from '../types/feeding';
 
 type CustomFeedingBoardProps = {
   groups: CageGroup[];
@@ -28,7 +27,6 @@ const toList = (codes: string[]) =>
   codes.length <= 1 ? (codes[0] ?? '') : `${codes.slice(0, -1).join(', ')} and ${codes.at(-1) ?? ''}`;
 
 const CustomFeedingBoard = ({ groups, initialCages, nextFeed }: CustomFeedingBoardProps) => {
-  const [systemState, setSystemState] = useState<SystemState>('running');
   const [cages, setCages] = useState(initialCages);
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [feedTarget, setFeedTarget] = useState<FeedTarget | null>(null);
@@ -39,7 +37,6 @@ const CustomFeedingBoard = ({ groups, initialCages, nextFeed }: CustomFeedingBoa
     return () => activeTimers.forEach((timer) => window.clearTimeout(timer));
   }, []);
 
-  const isStopped = systemState === 'stopped';
   const nextFeedLabel = `${nextFeed.time_label} ${nextFeed.name}`;
   const scheduledCount = cages.filter(({ is_scheduled }) => is_scheduled).length;
   const jammedCodes = cages.filter(({ state }) => state === 'jammed').map(({ code }) => code);
@@ -92,55 +89,20 @@ const CustomFeedingBoard = ({ groups, initialCages, nextFeed }: CustomFeedingBoa
     timers.current.add(timer);
   };
 
-  const handlePause = () => {
-    setSystemState('paused');
-    notify.undo('Feeding paused', {
-      description: 'Schedules are on hold. Feed now still works.',
-      onUndo: () => setSystemState('running'),
-    });
-  };
-
-  const handleResume = () => {
-    setSystemState('running');
-    notify.success('Feeding resumed', { description: `Next feed ${nextFeedLabel}.` });
-  };
-
-  const handleStop = () => {
-    setSystemState('stopped');
-    notify.warning('Feeding system stopped', { description: 'No cage is fed until you restart it.' });
-  };
-
-  const handleRestart = () => {
-    setSystemState('running');
-    notify.success('Feeding restarted', { description: `Next feed ${nextFeedLabel}.` });
-  };
-
   return (
     <div className="flex w-full flex-col gap-8">
       <CustomPageHeader
         title="Feeding"
         status={
           <>
-            <CustomStatusPill status={systemState} className="text-sm" />
+            <CustomStatusPill status="running" className="text-sm" />
             <span>
-              {systemState === 'running' && `Next feed ${nextFeed.time_label} · ${nextFeed.name}`}
-              {systemState === 'paused' && 'Schedules on hold'}
-              {isStopped && 'No feeds until you restart'}
+              Next feed {nextFeed.time_label} · {nextFeed.name}
             </span>
             <span>
               {scheduledCount} of {cages.length} cages in schedules
             </span>
           </>
-        }
-        actions={
-          <CustomSystemControls
-            state={systemState}
-            nextFeedLabel={nextFeedLabel}
-            onPause={handlePause}
-            onResume={handleResume}
-            onStop={handleStop}
-            onRestart={handleRestart}
-          />
         }
       />
 
@@ -172,7 +134,6 @@ const CustomFeedingBoard = ({ groups, initialCages, nextFeed }: CustomFeedingBoa
             group={group}
             cages={cages.filter(({ group_id }) => group_id === group.id)}
             pendingIds={pendingIds}
-            isSystemStopped={isStopped}
             onFeed={setFeedTarget}
             onMarkCleared={handleMarkCleared}
             onScheduledChange={handleScheduledChange}

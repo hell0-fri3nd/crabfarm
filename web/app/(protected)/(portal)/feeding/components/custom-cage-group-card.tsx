@@ -14,7 +14,6 @@ type CustomCageGroupCardProps = {
   group: CageGroup;
   cages: Cage[];
   pendingIds: string[];
-  isSystemStopped: boolean;
   onFeed: (target: FeedTarget) => void;
   onMarkCleared: (cage: Cage) => void;
   onScheduledChange: (cage: Cage, isScheduled: boolean) => void;
@@ -24,7 +23,6 @@ const CustomCageGroupCard = ({
   group,
   cages,
   pendingIds,
-  isSystemStopped,
   onFeed,
   onMarkCleared,
   onScheduledChange,
@@ -46,7 +44,7 @@ const CustomCageGroupCard = ({
             type="button"
             variant="outline"
             className="h-11 bg-card/60"
-            disabled={isSystemStopped || feedableIds.length === 0}
+            disabled={feedableIds.length === 0}
             onClick={() => onFeed({ label: group.name, cageIds: feedableIds })}
           >
             <Utensils aria-hidden />
@@ -65,7 +63,6 @@ const CustomCageGroupCard = ({
               key={cage.id}
               cage={cage}
               isPending={pendingIds.includes(cage.id)}
-              isSystemStopped={isSystemStopped}
               onFeed={({ code, id }) => onFeed({ label: code, cageIds: [id] })}
               onMarkCleared={onMarkCleared}
               onScheduledChange={onScheduledChange}
