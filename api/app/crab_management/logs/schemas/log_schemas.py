@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Self
 
@@ -34,6 +34,18 @@ class CreateLogRequest(BaseModel):
         if self.width_mm is None and self.weight_g is None:
             raise ValueError("Send width_mm, weight_g or both")
         return self
+
+
+class DailyLogSummary(BaseModel):
+    """One farm day's logs for one batch and log type. The counts let a client combine rows into a fair average."""
+
+    day: date
+    batch_id: int | None
+    log_type: LogType
+    weight_g_avg: float | None
+    weight_g_count: int
+    width_mm_avg: float | None
+    width_mm_count: int
 
 
 class ListCrabLogsQuery(PageQuery):

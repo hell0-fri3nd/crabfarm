@@ -14,7 +14,7 @@ from sqlmodel import (
     select,
 )
 
-from app.core import Page, Response
+from app.core import Page, Response, settings
 from app.core.audit import (
     Actor,
     AuditServices,
@@ -23,6 +23,7 @@ from app.core.audit import (
 from ..models import Logs, LogType
 from ..schemas import (
     CreateLogRequest,
+    DailyLogSummary,
     ListCrabLogsQuery,
     ListLogsQuery,
 )
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 LOG_OUTCOMES = {
     "LOGS_LISTED":       (Outcome.SUCCESS, status.HTTP_200_OK),
     "LOGGED_CRABS_LISTED": (Outcome.SUCCESS, status.HTTP_200_OK),
+    "LOG_SUMMARY_READY": (Outcome.SUCCESS, status.HTTP_200_OK),
     "LOG_CREATED":       (Outcome.SUCCESS, status.HTTP_201_CREATED),
     "LOGS_CREATED":      (Outcome.SUCCESS, status.HTTP_201_CREATED),
     "CRAB_NOT_FOUND":    (Outcome.FAILURE, status.HTTP_404_NOT_FOUND),
@@ -127,6 +129,45 @@ class LogServices:
 
         except Exception:
             logger.exception("Listing logged crabs failed")
+            return Response(success=False, message=FAILURE_MESSAGES["LOGS_LIST_FAILED"], code="LOGS_LIST_FAILED")
+
+    def daily_summary(self, query: ListLogsQuery) -> Response[Sequence[DailyLogSummary]]:
+        """Averages per farm day, batch and log type, so a year of logs reaches a chart as a few hundred rows.
+        Not audited: every Dashboard view reads it."""
+        day = func.date(func.timezone(settings.farm_time_zone, Logs.created_at))
+        try:
+            rows = self.db.exec(
+                self.__filtered(
+                    select(
+                        day,
+                        Logs.batch_id,
+                        Logs.log_type,
+                        func.avg(Logs.weight_g),
+                        func.count(Logs.weight_g),
+                        func.avg(Logs.width_mm),
+                        func.count(Logs.width_mm),
+                    ),
+                    query,
+                )
+                .group_by(day, Logs.batch_id, Logs.log_type)
+                .order_by(day)
+            ).all()
+            summary = [
+                DailyLogSummary(
+                    day=row[0],
+                    batch_id=row[1],
+                    log_type=row[2],
+                    weight_g_avg=row[3],
+                    weight_g_count=row[4],
+                    width_mm_avg=row[5],
+                    width_mm_count=row[6],
+                )
+                for row in rows
+            ]
+            return Response(success=True, message="Log summary ready", code="LOG_SUMMARY_READY", details=summary)
+
+        except Exception:
+            logger.exception("Summarizing logs failed")
             return Response(success=False, message=FAILURE_MESSAGES["LOGS_LIST_FAILED"], code="LOGS_LIST_FAILED")
 
     def list_measured(self, crab_id: int | None = None, since: datetime | None = None) -> Sequence[Logs]:

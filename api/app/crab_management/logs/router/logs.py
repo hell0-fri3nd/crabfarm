@@ -23,6 +23,7 @@ from ..dependencies import LogServicesDep
 from ..models import Logs
 from ..schemas import (
     CreateLogRequest,
+    DailyLogSummary,
     ListCrabLogsQuery,
     ListLogsQuery,
 )
@@ -62,7 +63,28 @@ def list_logs(
     return result
 
 
-# Declared before /{crab_id}, which would otherwise capture this path
+# Declared before /{crab_id}, which would otherwise capture these paths
+@router.get(
+    "/daily-summary",
+    response_model=Response[list[DailyLogSummary]],
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "log.daily_summary"},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: UNAUTHORIZED,
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ValidationErrorResponse, "description": "Invalid filters"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error summarizing logs"},
+    },
+)
+def get_daily_log_summary(
+    filters: Annotated[ListLogsQuery, Query()],
+    actor: AnyRole,
+    services: LogServicesDep,
+):
+    result = services.daily_summary(filters)
+    raise_for(result, "log.daily_summary")
+    return result
+
+
 @router.get(
     "/crab-ids",
     response_model=Response[list[int]],

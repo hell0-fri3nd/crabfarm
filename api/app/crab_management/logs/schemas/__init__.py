@@ -8,6 +8,7 @@ from .forecast_schemas import (
 )
 from .log_schemas import (
     CreateLogRequest,
+    DailyLogSummary,
     ListCrabLogsQuery,
     ListLogsQuery,
     LogSort,
@@ -23,6 +24,7 @@ __all__ = [
     "GrowthDay",
     "PredictedDay",
     "CreateLogRequest",
+    "DailyLogSummary",
     "ListCrabLogsQuery",
     "ListLogsQuery",
     "LogSort",
