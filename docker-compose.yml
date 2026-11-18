@@ -9,7 +9,7 @@ x-api-service: &api-service
     RABBITMQ_ENABLED: "true"
     RABBITMQ_HOST: rabbitmq
     RABBITMQ_PORT: "5672"
-    DETECTION_ALLOWED_ORIGINS: '["${WEB_ORIGIN:-https://localhost}"]'
+    DETECTION_ALLOWED_ORIGINS: '["${WEB_ORIGIN:-https://localhost}","https://localhost:${WEB_PORT:-443}"]'
 
 services:
 
