@@ -15,7 +15,11 @@ import CustomLogsSkeleton from './components/custom-logs-skeleton';
 import CustomLogsView from './components/custom-logs-view';
 import { EMPTY_CRAB_LOG_PAGE } from './lib/crab-log-query';
 import { loadCrabLogChart, loadCrabLogPage, loadLogContext } from './lib/load-crab-logs';
+import { loadSensorLogPage } from './lib/load-sensor-logs';
+import { EMPTY_SENSOR_COUNTS, EMPTY_SENSOR_LOG_PAGE } from './lib/sensor-log-query';
 import { logsSearchParamsSchema } from './types/logs';
+
+import type { LogsSearchParams } from './types/logs';
 
 export const metadata: Metadata = { title: 'Logs' };
 
@@ -23,30 +27,39 @@ type LogsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+const loadCrabTab = async (params: LogsSearchParams, now: Date) => {
+  const loaded = await loadLogContext();
+  if (!loaded.ok) return [loaded, null] as const;
+
+  const isChart = params.view === 'chart';
+  return Promise.all([
+    isChart ? null : loadCrabLogPage(params, loaded.context, now),
+    isChart ? loadCrabLogChart(params, loaded.context, now) : null,
+  ]);
+};
+
 const LogsLoader = async ({ searchParams }: LogsPageProps) => {
   await connection();
   const params = logsSearchParamsSchema.parse(await searchParams);
   const now = new Date();
-  const [loaded, batches, self, model] = await Promise.all([
-    loadLogContext(),
+  const isCrabTab = params.tab === 'crab';
+  const [[crab, chart], sensor, batches, self, model] = await Promise.all([
+    isCrabTab ? loadCrabTab(params, now) : ([null, null] as const),
+    isCrabTab ? null : loadSensorLogPage(params, now),
     batchesApi.list(),
     getCurrentUser(),
     forecastModelApi.get(),
   ]);
-
-  const isChart = params.tab === 'crab' && params.view === 'chart';
-  const [crab, chart] = loaded.ok
-    ? await Promise.all([
-        isChart ? null : loadCrabLogPage(params, loaded.context, now),
-        isChart ? loadCrabLogChart(params, loaded.context, now) : null,
-      ])
-    : [loaded, null];
-  const failure = [crab, chart].find((result) => result && !result.ok);
+  const failure = [crab, chart, sensor].find((result) => result && !result.ok);
 
   if (failure && !failure.ok) {
     return (
       <Card className="py-0">
-        <CustomEmptyState icon={CircleX} title="Couldn't load the crab logs" hint={failure.message || 'Try again in a moment.'} />
+        <CustomEmptyState
+          icon={CircleX}
+          title={isCrabTab ? "Couldn't load the crab logs" : "Couldn't load the sensor logs"}
+          hint={failure.message || 'Try again in a moment.'}
+        />
       </Card>
     );
   }
@@ -59,6 +72,8 @@ const LogsLoader = async ({ searchParams }: LogsPageProps) => {
     <CustomLogsView
       crabPage={crab?.ok ? crab.page : EMPTY_CRAB_LOG_PAGE}
       crabChart={chart?.ok ? chart.chart : null}
+      sensorPage={sensor?.ok ? sensor.page : EMPTY_SENSOR_LOG_PAGE}
+      sensorCounts={sensor?.ok ? sensor.counts : EMPTY_SENSOR_COUNTS}
       batches={batchOptions}
       nowIso={now.toISOString()}
       canRunPrediction={can(self.role, 'forecasts.run')}

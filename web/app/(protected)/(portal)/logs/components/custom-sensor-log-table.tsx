@@ -21,7 +21,7 @@ const CustomSensorLogTable = ({ logs, now }: CustomSensorLogTableProps) => (
             <TableHead className="h-11 pl-4 sm:pl-6">Sensor</TableHead>
             <TableHead className="text-right">Reading</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Safe range</TableHead>
+            <TableHead>Normal range</TableHead>
             <TableHead className="pr-4 sm:pr-6">Measured</TableHead>
           </TableRow>
         </TableHeader>
@@ -35,7 +35,7 @@ const CustomSensorLogTable = ({ logs, now }: CustomSensorLogTableProps) => (
               <TableCell>
                 <CustomSensorStatus log={log} />
               </TableCell>
-              <TableCell className="text-muted-foreground tabular-nums">{log.safe_label}</TableCell>
+              <TableCell className="text-muted-foreground tabular-nums">{log.normal_range}</TableCell>
               <TableCell className="pr-4 text-muted-foreground sm:pr-6">{formatLogTime(log.measured_at, now)}</TableCell>
             </TableRow>
           ))}
@@ -52,7 +52,7 @@ const CustomSensorLogTable = ({ logs, now }: CustomSensorLogTableProps) => (
           </div>
           <p className="text-2xl font-semibold tracking-tight tabular-nums">{formatReading(log)}</p>
           <p className="text-xs text-muted-foreground">
-            Safe {log.safe_label}, {formatLogTime(log.measured_at, now)}
+            Normal {log.normal_range}, {formatLogTime(log.measured_at, now)}
           </p>
         </li>
       ))}

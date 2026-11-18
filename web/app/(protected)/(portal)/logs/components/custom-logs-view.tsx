@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { FileDown, ScrollText, SearchX } from 'lucide-react';
-import { subDays } from 'date-fns';
 
 import CustomEmptyState from '@/components/custom/custom-empty-state';
 import CustomForecastModelAlert from '@/components/custom/custom-forecast-model-alert';
@@ -20,20 +19,22 @@ import CustomLogPagination from './custom-log-pagination';
 import CustomRunPredictionButton from './custom-run-prediction-button';
 import CustomSensorLogTable from './custom-sensor-log-table';
 import { exportCrabLogs } from '../actions/export-crab-logs';
+import { exportSensorLogs } from '../actions/export-sensor-logs';
 import { withCrabName } from '../lib/crab-log-query';
-import { countOutOfRangeSince, crabLogsToCsv, filterSensorLogs, paginate, resolveDateRange, sensorLogsToCsv } from '../lib/log-filters';
-import { PREVIEW_NOW, PREVIEW_SENSOR_LOGS } from '../lib/preview-logs';
+import { crabLogsToCsv, resolveDateRange, sensorLogsToCsv } from '../lib/log-filters';
 import { useLogsSearchParams } from '../lib/use-logs-search-params';
 import { logTabSchema } from '../types/logs';
 
 import type { ModelStatus } from '@/types/forecast-model';
 
 import type { BatchOption } from './custom-log-filters';
-import type { CrabLogChart, CrabLogPage, LogTab } from '../types/logs';
+import type { CrabLogChart, CrabLogPage, LogTab, SensorLogPage, SensorStatusCounts } from '../types/logs';
 
 type CustomLogsViewProps = {
   crabPage: CrabLogPage;
   crabChart: CrabLogChart | null;
+  sensorPage: SensorLogPage;
+  sensorCounts: SensorStatusCounts;
   batches: BatchOption[];
   nowIso: string;
   canRunPrediction: boolean;
@@ -58,9 +59,25 @@ const downloadCsv = (filename: string, csv: string) => {
   URL.revokeObjectURL(url);
 };
 
+const toCrabExport = async (filters: Record<string, string>) => {
+  const result = await exportCrabLogs(filters);
+  if (!result.ok) return result;
+  const { rows, total } = result.data;
+  return { ok: true as const, csv: crabLogsToCsv(rows), count: rows.length, total };
+};
+
+const toSensorExport = async (filters: Record<string, string>) => {
+  const result = await exportSensorLogs(filters);
+  if (!result.ok) return result;
+  const { rows, total } = result.data;
+  return { ok: true as const, csv: sensorLogsToCsv(rows), count: rows.length, total };
+};
+
 const CustomLogsView = ({
   crabPage,
   crabChart,
+  sensorPage,
+  sensorCounts,
   batches,
   nowIso,
   canRunPrediction,
@@ -74,18 +91,16 @@ const CustomLogsView = ({
   const [isExporting, setIsExporting] = useState(false);
   const isCrabTab = params.tab === 'crab';
   const crabTotal = crabChart?.total ?? crabPage.total;
-  const now = isCrabTab ? new Date(nowIso) : PREVIEW_NOW;
+  const now = new Date(nowIso);
   const dateRange = resolveDateRange(params, now);
 
-  const sensorRows = filterSensorLogs(PREVIEW_SENSOR_LOGS, params, dateRange);
-  const sensorPage = paginate(sensorRows, params.page);
-  const visibleCount = isCrabTab ? crabTotal : sensorRows.length;
+  const visibleCount = isCrabTab ? crabTotal : sensorPage.total;
   const hasFilters = params.q !== '' || dateRange.isCustom || params.preset !== '7d' || params.batch !== 'all' || params.level !== 'all' || params.type !== 'all';
   const rangeText = dateRange.label.toLowerCase();
 
   const status = isCrabTab
     ? `${crabTotal} crab ${crabTotal === 1 ? 'log' : 'logs'} · ${rangeText}`
-    : `${PREVIEW_SENSOR_LOGS.length} sensor readings · ${countOutOfRangeSince(PREVIEW_SENSOR_LOGS, subDays(now, 7))} out of range this week`;
+    : `${sensorPage.total} sensor ${sensorPage.total === 1 ? 'log' : 'logs'} · ${sensorCounts.danger} danger, ${sensorCounts.warning} warning · ${rangeText}`;
 
   const handleTabChange = (value: string) => {
     const parsed = logTabSchema.safeParse(value);
@@ -95,40 +110,37 @@ const CustomLogsView = ({
   const exportFilename = `crabfarm-${params.tab}-logs-${rangeText.replaceAll(/[^a-z0-9]+/g, '-')}.csv`;
 
   const handleExport = async () => {
-    if (!isCrabTab) {
-      downloadCsv(exportFilename, sensorLogsToCsv(sensorRows));
-      notify.success('CSV exported', { description: `${sensorRows.length} sensor readings, ${rangeText}` });
-      return;
-    }
-
+    const noun = isCrabTab ? 'crab logs' : 'sensor logs';
     setIsExporting(true);
-    const result = await exportCrabLogs(rawParams);
+    const exported = isCrabTab ? await toCrabExport(rawParams) : await toSensorExport(rawParams);
     setIsExporting(false);
 
-    if (!result.ok) {
-      notify.error("Couldn't export the crab logs", { description: `${result.message} Nothing was downloaded.` });
+    if (!exported.ok) {
+      notify.error(`Couldn't export the ${noun}`, { description: `${exported.message} Nothing was downloaded.` });
       return;
     }
 
-    const { rows, total } = result.data;
-    downloadCsv(exportFilename, crabLogsToCsv(rows));
+    const { csv, count, total } = exported;
+    downloadCsv(exportFilename, csv);
     notify.success('CSV exported', {
-      description:
-        rows.length < total ? `The first ${rows.length} of ${total} crab logs. Narrow the dates for the rest.` : `${rows.length} crab logs, ${rangeText}`,
+      description: count < total ? `The first ${count} of ${total} ${noun}. Narrow the dates for the rest.` : `${count} ${noun}, ${rangeText}`,
     });
   };
 
   const handlePageChange = (page: number) => setParams({ page: page > 1 ? String(page) : null });
 
+  const filteredHint = isCrabTab
+    ? 'Try a wider date range, another batch or type, or a crab code like B1-A1.'
+    : 'Try a wider date range, another level, or a sensor name like Ammonia.';
+  const emptyHint = isCrabTab
+    ? 'Logs appear here after a crab is scanned and weighed.'
+    : 'All six water sensors are saved here every 30 minutes while they are connected.';
+
   const emptyState = (
     <CustomEmptyState
       icon={hasFilters ? SearchX : ScrollText}
       title={hasFilters ? 'No logs match these filters' : 'No logs yet'}
-      hint={
-        hasFilters
-          ? 'Try a wider date range, another batch or type, or a crab code like B1-A1.'
-          : 'Logs appear here after a crab is scanned and weighed, or a sensor reports.'
-      }
+      hint={hasFilters ? filteredHint : emptyHint}
       action={
         hasFilters && (
           <Button type="button" variant="outline" className="h-11 bg-card" onClick={() => setParams(CLEARED_FILTERS)}>
@@ -199,10 +211,14 @@ const CustomLogsView = ({
           )}
         </TabsContent>
 
-        <TabsContent value="sensor" className="flex flex-col gap-5">
+        <TabsContent
+          value="sensor"
+          aria-busy={isPending}
+          className={cn('flex flex-col gap-5 transition-opacity', isPending && 'opacity-60')}
+        >
           {sensorPage.total === 0 ? emptyState : <CustomSensorLogTable logs={sensorPage.rows} now={now} />}
           {sensorPage.total > 0 && (
-            <CustomLogPagination {...sensorPage} noun="readings" onPageChange={handlePageChange} />
+            <CustomLogPagination {...sensorPage} noun="sensor logs" onPageChange={handlePageChange} />
           )}
         </TabsContent>
       </div>

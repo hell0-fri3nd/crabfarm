@@ -1,4 +1,6 @@
-import { endOfDay, format, isSameDay, isWithinInterval, parseISO, startOfDay, subDays } from 'date-fns';
+import { endOfDay, format, isSameDay, parseISO, startOfDay, subDays } from 'date-fns';
+
+import { SENSOR_STATUS_LABELS } from '@/types/sensor';
 
 import type { CrabLog, DatePreset, LevelFilter, LogType, LogTypeFilter, LogsSearchParams, SensorLog } from '../types/logs';
 
@@ -19,10 +21,7 @@ const DATE_PRESET_DAYS = { today: 0, '7d': 6, '30d': 29, '12m': 364 } as const s
 
 export const LEVEL_FILTER_LABELS = {
   all: 'All levels',
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
-  normal: 'In range',
+  ...SENSOR_STATUS_LABELS,
 } as const satisfies Record<LevelFilter, string>;
 
 export type DateRangeWindow = {
@@ -46,49 +45,6 @@ export const resolveDateRange = ({ preset, from, to }: LogsSearchParams, now: Da
     to: endOfDay(now),
     label: DATE_PRESET_LABELS[preset],
     isCustom: false,
-  };
-};
-
-const isInWindow = (iso: string, { from, to }: DateRangeWindow) => isWithinInterval(parseISO(iso), { start: from, end: to });
-
-const matchesQuery = (query: string, ...fields: string[]) => {
-  const needle = query.toLowerCase().replace(/\s+/g, '');
-  return needle === '' || fields.some((field) => field.toLowerCase().replace(/\s+/g, '').includes(needle));
-};
-
-const matchesLevel = (level: LevelFilter, { severity }: SensorLog) => {
-  if (level === 'all') return true;
-  if (level === 'normal') return severity === null;
-  return severity === level;
-};
-
-export const filterSensorLogs = (logs: SensorLog[], params: LogsSearchParams, dateRange: DateRangeWindow) =>
-  logs.filter(
-    (log) => isInWindow(log.measured_at, dateRange) && matchesLevel(params.level, log) && matchesQuery(params.q, log.sensor_label),
-  );
-
-export type PageSlice<T> = {
-  rows: T[];
-  page: number;
-  pageCount: number;
-  start: number;
-  end: number;
-  total: number;
-};
-
-export const paginate = <T>(rows: T[], requestedPage: number): PageSlice<T> => {
-  const pageCount = Math.max(Math.ceil(rows.length / PAGE_SIZE), 1);
-  const page = Math.min(requestedPage, pageCount);
-  const startIndex = (page - 1) * PAGE_SIZE;
-  const pageRows = rows.slice(startIndex, startIndex + PAGE_SIZE);
-
-  return {
-    rows: pageRows,
-    page,
-    pageCount,
-    start: pageRows.length > 0 ? startIndex + 1 : 0,
-    end: startIndex + pageRows.length,
-    total: rows.length,
   };
 };
 
@@ -129,9 +85,6 @@ export const crabLogsToCsv = (logs: CrabLog[]) =>
 
 export const sensorLogsToCsv = (logs: SensorLog[]) =>
   toCsv(
-    ['sensor', 'value', 'unit', 'safe_range', 'severity', 'measured_at'],
-    logs.map((log) => [log.sensor_label, log.value, log.unit, log.safe_label, log.severity ?? 'in range', log.measured_at]),
+    ['sensor', 'value', 'unit', 'normal_range', 'status', 'measured_at'],
+    logs.map((log) => [log.sensor_label, log.value, log.unit, log.normal_range, log.status, log.measured_at]),
   );
-
-export const countOutOfRangeSince = (logs: SensorLog[], since: Date) =>
-  logs.filter(({ severity, measured_at }) => severity === 'high' && parseISO(measured_at) >= since).length;

@@ -49,7 +49,7 @@ export const withCrabName = (query: string, crabName: string) => {
 
 const farmDay = (date: string) => new Date(`${date}T12:00:00+08:00`);
 
-const toDateWindow = ({ preset, from, to }: LogsSearchParams, now: Date): Record<string, string> =>
+export const toDateWindow = ({ preset, from, to }: LogsSearchParams, now: Date): Record<string, string> =>
   from && to
     ? { from: toFarmDayStart(farmDay(from)), to: toFarmDayStart(new Date(farmDay(to).getTime() + DAY_MS)) }
     : { from: toFarmDayStart(new Date(now.getTime() - PRESET_DAYS[preset] * DAY_MS)) };

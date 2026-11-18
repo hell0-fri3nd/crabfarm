@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
 import { logTypeSchema } from '@/types/crab-log';
-import { sensorKindSchema } from '@/types/sensor';
-import { severitySchema } from '@/types/severity';
+import { sensorKindSchema, sensorStatusSchema } from '@/types/sensor';
 
 export const logTabSchema = z.enum(['crab', 'sensor']);
 export type LogTab = z.infer<typeof logTabSchema>;
@@ -13,7 +12,7 @@ export type LogView = z.infer<typeof logViewSchema>;
 export const datePresetSchema = z.enum(['today', '7d', '30d', '12m']);
 export type DatePreset = z.infer<typeof datePresetSchema>;
 
-export const levelFilterSchema = z.enum(['all', 'high', 'medium', 'low', 'normal']);
+export const levelFilterSchema = z.enum(['all', ...sensorStatusSchema.options]);
 export type LevelFilter = z.infer<typeof levelFilterSchema>;
 
 export { sensorKindSchema };
@@ -75,11 +74,23 @@ export const sensorLogSchema = z.object({
   value: z.number(),
   unit: z.string(),
   decimals: z.number().int().min(0),
-  safe_label: z.string(),
-  severity: severitySchema.nullable(),
-  measured_at: z.iso.datetime(),
+  normal_range: z.string(),
+  status: sensorStatusSchema,
+  measured_at: z.iso.datetime({ offset: true }),
 });
 export type SensorLog = z.infer<typeof sensorLogSchema>;
+
+export const sensorLogPageSchema = z.object({
+  rows: z.array(sensorLogSchema),
+  page: z.number().int(),
+  pageCount: z.number().int(),
+  start: z.number().int(),
+  end: z.number().int(),
+  total: z.number().int(),
+});
+export type SensorLogPage = z.infer<typeof sensorLogPageSchema>;
+
+export type { ApiSensorLog, ApiSensorLogsPage, SensorStatusCounts } from '@/types/water-sensor-log';
 
 const dateParamSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
