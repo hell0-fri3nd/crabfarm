@@ -9,6 +9,7 @@ from app.core.audit.models import AuditEvents
 from app.crab_management.batches.models import Batches
 from app.crab_management.crab.models import Crabs
 from app.crab_management.logs.models import Logs
+from app.devices.water_sensors.models import WaterSensorLogs
 
 from alembic import context
 

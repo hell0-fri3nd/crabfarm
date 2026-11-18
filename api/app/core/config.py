@@ -1,11 +1,29 @@
 
 from pathlib import Path
+from typing import Self
 
-from pydantic import Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # api/app/core/config.py -> repo root
 ROOT_DIR = Path(__file__).resolve().parents[3]
+
+type ThresholdBand = tuple[float | None, float | None]
+
+
+class SensorThresholdConfig(BaseModel):
+    """Inclusive [low, high] bands for one water sensor; null means no limit on that side."""
+
+    warning: tuple[ThresholdBand, ...] = ()
+    danger: tuple[ThresholdBand, ...] = ()
+
+    @model_validator(mode="after")
+    def check_bands(self) -> Self:
+        for low, high in (*self.warning, *self.danger):
+            if low is not None and high is not None and low >= high:
+                raise ValueError(f"Threshold band [{low}, {high}] must go from low to high")
+        return self
+
 
 class Settings(BaseSettings):
     
@@ -74,6 +92,35 @@ class Settings(BaseSettings):
     forecast_training_timeout_minutes: int = Field(default=30, ge=1)
     forecast_status_poll_seconds: float = Field(default=5, gt=0)
     forecast_status_refresh_seconds: float = Field(default=60, gt=0)
+
+    water_threshold_temperature: SensorThresholdConfig = SensorThresholdConfig(
+        warning=((24.1, 24.5), (35.1, 35.5)),
+        danger=((None, 24.1), (35.5, None)),
+    )
+    water_threshold_ph: SensorThresholdConfig = SensorThresholdConfig(
+        warning=((7.1, 7.4), (9.1, 9.5)),
+        danger=((None, 7.1), (9.5, None)),
+    )
+    water_threshold_salinity: SensorThresholdConfig = SensorThresholdConfig(
+        warning=((14.5, 14.9), (20.1, 20.5)),
+        danger=((None, 14.5), (20.5, None)),
+    )
+    water_threshold_ammonia: SensorThresholdConfig = SensorThresholdConfig(
+        warning=((1.0, 3.0),),
+        danger=((3.0, None),),
+    )
+    water_threshold_turbidity: SensorThresholdConfig = SensorThresholdConfig(
+        warning=((10, 20), (40, 50)),
+        danger=((None, 10), (50, None)),
+    )
+    water_threshold_oxygen: SensorThresholdConfig = SensorThresholdConfig(
+        warning=((4.5, 4.9), (12.1, 12.5)),
+        danger=((0, 4.5), (12.5, None)),
+    )
+
+    water_sensor_log_interval_minutes: int = Field(default=30, ge=1, le=60)
+    # Longer than the Dashboard's 10 s, so a Wi-Fi blip doesn't fill the audit trail
+    device_offline_seconds: float = Field(default=30, gt=0)
 
     # Given to new and reset users; onboarding forces both to be changed on first sign-in
     default_user_password: str = Field(default="@HelloFriend1234", min_length=8, max_length=128)
