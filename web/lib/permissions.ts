@@ -5,6 +5,7 @@ export const PERMISSIONS = {
   'users.manage': ['DEVELOPER', 'ADMIN'],
   'users.manage_developers': ['DEVELOPER'],
   'batches.create': ['DEVELOPER', 'ADMIN'],
+  'schedules.manage': ['DEVELOPER', 'ADMIN'],
   'activity.view_everyone': ['DEVELOPER', 'ADMIN'],
   'forecasts.run': ['DEVELOPER', 'ADMIN'],
   'forecasts.retrain': ['DEVELOPER', 'ADMIN'],

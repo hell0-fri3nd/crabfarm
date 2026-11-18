@@ -15,24 +15,22 @@ import type { FeedTarget } from '../types/feeding';
 
 type CustomFeedConfirmDialogProps = {
   target: FeedTarget | null;
-  cageCodes: string[];
-  skippedNote: string | null;
+  cageNames: string[];
   onConfirm: () => void;
   onCancel: () => void;
 };
 
-const toList = (codes: string[]) =>
-  codes.length <= 1 ? (codes[0] ?? '') : `${codes.slice(0, -1).join(', ')} and ${codes.at(-1) ?? ''}`;
+const toList = (names: string[]) =>
+  names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`;
 
-const CustomFeedConfirmDialog = ({ target, cageCodes, skippedNote, onConfirm, onCancel }: CustomFeedConfirmDialogProps) => (
+const CustomFeedConfirmDialog = ({ target, cageNames, onConfirm, onCancel }: CustomFeedConfirmDialogProps) => (
   <AlertDialog open={target !== null} onOpenChange={(isOpen) => !isOpen && onCancel()}>
     <AlertDialogContent>
       <AlertDialogHeader>
         <AlertDialogTitle>Feed {target?.label} now?</AlertDialogTitle>
         <AlertDialogDescription>
-          This drops one portion into {cageCodes.length === 1 ? 'cage' : 'cages'} {toList(cageCodes)} right away. It
+          This drops one portion into {cageNames.length === 1 ? 'cage' : 'cages'} {toList(cageNames)} right away. It
           can&apos;t be undone, and it doesn&apos;t change the schedules.
-          {skippedNote && <span className="mt-2 block">{skippedNote}</span>}
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>

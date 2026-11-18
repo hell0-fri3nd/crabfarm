@@ -1,70 +1,134 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarClock, Plus, Trash } from 'lucide-react';
+import { CalendarClock, Plus } from 'lucide-react';
 
 import CustomCardHeading from '@/components/custom/custom-card-heading';
 import CustomEmptyState from '@/components/custom/custom-empty-state';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Switch } from '@/components/ui/switch';
 import { notify } from '@/lib/notify';
-import { cn } from '@/lib/utils';
 
 import CustomScheduleForm from './custom-schedule-form';
-import { ALL_GROUPS_TARGET, SCHEDULE_DAY_LABELS, formatTimeInput } from '../lib/feeding-format';
+import CustomScheduleRow from './custom-schedule-row';
+import { createSchedule } from '../actions/create-schedule';
+import { deleteSchedule } from '../actions/delete-schedule';
+import { restoreSchedule } from '../actions/restore-schedule';
+import { setScheduleEnabled } from '../actions/set-schedule-enabled';
+import { updateSchedule } from '../actions/update-schedule';
+import {
+  SCHEDULE_DAY_LABELS,
+  formatTimeInput,
+  sortSchedules,
+  toGroupsLabel,
+  toScheduleFormValues,
+} from '../lib/feeding-format';
 
 import type { CageGroup, Schedule, ScheduleFormInput } from '../types/feeding';
 
 type CustomScheduleListProps = {
   initialSchedules: Schedule[];
   groups: CageGroup[];
+  canManage: boolean;
 };
 
-const CustomScheduleList = ({ initialSchedules, groups }: CustomScheduleListProps) => {
+const FORM_FIELDS = new Set(['name', 'time', 'feed_time', 'days', 'group_codes']);
+
+const CustomScheduleList = ({ initialSchedules, groups, canManage }: CustomScheduleListProps) => {
   const [schedules, setSchedules] = useState(initialSchedules);
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
 
-  const setEnabled = (id: string, isEnabled: boolean) =>
-    setSchedules((current) => current.map((schedule) => (schedule.id === id ? { ...schedule, is_enabled: isEnabled } : schedule)));
+  const openAddForm = () => {
+    setEditingSchedule(null);
+    setIsFormOpen(true);
+  };
 
-  const handleToggle = (schedule: Schedule, isEnabled: boolean) => {
-    setEnabled(schedule.id, isEnabled);
-    if (isEnabled) return;
+  const openEditForm = (schedule: Schedule) => {
+    setEditingSchedule(schedule);
+    setIsFormOpen(true);
+  };
+
+  const setPending = (id: string, isPending: boolean) =>
+    setPendingIds((current) => (isPending ? [...current, id] : current.filter((pendingId) => pendingId !== id)));
+
+  const replaceSchedule = (schedule: Schedule) =>
+    setSchedules((current) => current.map((item) => (item.id === schedule.id ? schedule : item)));
+
+  const handleSave = async (values: ScheduleFormInput) => {
+    const result = editingSchedule ? await updateSchedule(editingSchedule.id, values) : await createSchedule(values);
+    if (!result.ok) {
+      const fieldErrors = result.errors.filter(({ field }) => FORM_FIELDS.has(field));
+      if (fieldErrors.length === 0) {
+        notify.error(`Couldn't ${editingSchedule ? 'save' : 'add'} the schedule`, { description: result.message });
+      }
+      return fieldErrors;
+    }
+
+    const schedule = result.data;
+    setSchedules((current) => sortSchedules([...current.filter(({ id }) => id !== schedule.id), schedule]));
+    setIsFormOpen(false);
+    notify.success(editingSchedule ? 'Schedule updated' : 'Schedule added', {
+      description: `${schedule.name} · ${formatTimeInput(schedule.feed_time)}, ${SCHEDULE_DAY_LABELS[schedule.days].toLowerCase()}`,
+    });
+    return [];
+  };
+
+  const handleToggle = async (schedule: Schedule, isEnabled: boolean) => {
+    replaceSchedule({ ...schedule, is_enabled: isEnabled });
+    setPending(schedule.id, true);
+    const result = await setScheduleEnabled({ id: schedule.id, is_enabled: isEnabled });
+    setPending(schedule.id, false);
+
+    if (!result.ok) {
+      replaceSchedule(schedule);
+      notify.error(`Couldn't turn ${isEnabled ? 'on' : 'off'} ${schedule.name}`, { description: result.message });
+      return;
+    }
+
+    replaceSchedule(result.data);
+    if (isEnabled) {
+      notify.success(`${schedule.name} turned on`);
+      return;
+    }
     notify.undo(`${schedule.name} turned off`, {
-      description: `The ${schedule.time_label} feed won't run until you switch it back on.`,
-      onUndo: () => setEnabled(schedule.id, true),
+      description: `The ${formatTimeInput(schedule.feed_time)} feed won't run until you switch it back on.`,
+      onUndo: () => void handleToggle(result.data, true),
     });
   };
 
-  const handleDelete = (schedule: Schedule) => {
-    const index = schedules.findIndex(({ id }) => id === schedule.id);
+  const handleRestore = async (schedule: Schedule) => {
+    const result = await restoreSchedule(schedule.id);
+    if (!result.ok) {
+      notify.error(`Couldn't restore ${schedule.name}`, { description: result.message });
+      return;
+    }
+    setSchedules((current) => sortSchedules([...current, result.data]));
+    notify.success(`${schedule.name} restored`);
+  };
+
+  const handleDelete = async (schedule: Schedule) => {
+    setPending(schedule.id, true);
+    const result = await deleteSchedule(schedule.id);
+    setPending(schedule.id, false);
+
+    if (!result.ok) {
+      notify.error(`Couldn't delete ${schedule.name}`, { description: result.message });
+      return;
+    }
+
     setSchedules((current) => current.filter(({ id }) => id !== schedule.id));
     notify.undo(`${schedule.name} deleted`, {
-      description: `${schedule.time_label} · ${schedule.days_label} · ${schedule.target_label}`,
-      onUndo: () => setSchedules((current) => current.toSpliced(index, 0, schedule)),
+      description: `${formatTimeInput(schedule.feed_time)} · ${SCHEDULE_DAY_LABELS[schedule.days]} · ${toGroupsLabel(schedule.group_codes, groups)}`,
+      onUndo: () => void handleRestore(schedule),
     });
   };
 
-  const handleAdd = ({ name, time, days, target }: ScheduleFormInput) => {
-    const schedule: Schedule = {
-      id: `${name.toLowerCase().replace(/\W+/g, '-')}-${Date.now()}`,
-      name,
-      time_label: formatTimeInput(time),
-      days_label: SCHEDULE_DAY_LABELS[days],
-      target_label: target === ALL_GROUPS_TARGET ? 'All groups' : (groups.find(({ id }) => id === target)?.name ?? target),
-      is_enabled: true,
-    };
-    setSchedules((current) => [...current, schedule]);
-    setIsFormOpen(false);
-    notify.success('Schedule added', {
-      description: `${schedule.name} · ${schedule.time_label}, ${schedule.days_label.toLowerCase()}`,
-    });
-  };
-
-  const addButton = (
-    <Button type="button" variant="outline" className="h-11 bg-card/60" onClick={() => setIsFormOpen(true)}>
+  // Hidden, not disabled, for roles that can't manage schedules: the same decision as New batch (03 §16)
+  const addButton = canManage && (
+    <Button type="button" variant="outline" className="h-11 bg-card/60" onClick={openAddForm}>
       <Plus aria-hidden />
       Add schedule
     </Button>
@@ -82,45 +146,22 @@ const CustomScheduleList = ({ initialSchedules, groups }: CustomScheduleListProp
           <CustomEmptyState
             icon={CalendarClock}
             title="No feeding schedules"
-            hint="Cages only feed when someone presses Feed now. Add a schedule to feed them on time."
+            hint={canManage ? 'Add one to feed your cages on time.' : 'Ask an admin to add one.'}
             action={addButton}
           />
         ) : (
           <ul className="divide-y divide-border">
             {schedules.map((schedule) => (
-              <li key={schedule.id} className="flex items-center gap-3 py-3 sm:gap-6">
-                <p
-                  className={cn(
-                    'w-20 shrink-0 text-lg font-semibold tracking-tight tabular-nums sm:w-24',
-                    !schedule.is_enabled && 'text-muted-foreground',
-                  )}
-                >
-                  {schedule.time_label}
-                </p>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{schedule.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {schedule.days_label} · {schedule.target_label}
-                    {!schedule.is_enabled && ' · Off'}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="size-11 shrink-0 bg-card/60 text-muted-foreground hover:text-destructive"
-                  aria-label={`Delete the ${schedule.name} schedule`}
-                  onClick={() => handleDelete(schedule)}
-                >
-                  <Trash aria-hidden />
-                </Button>
-                <Switch
-                  checked={schedule.is_enabled}
-                  onCheckedChange={(isChecked) => handleToggle(schedule, isChecked)}
-                  aria-label={`${schedule.name} schedule on`}
-                  className="relative ml-1 h-6 w-11 after:absolute after:-inset-2.5 [&>span]:size-5"
-                />
-              </li>
+              <CustomScheduleRow
+                key={schedule.id}
+                schedule={schedule}
+                groups={groups}
+                isPending={pendingIds.includes(schedule.id)}
+                canManage={canManage}
+                onToggle={(item, isEnabled) => void handleToggle(item, isEnabled)}
+                onEdit={openEditForm}
+                onDelete={(item) => void handleDelete(item)}
+              />
             ))}
           </ul>
         )}
@@ -129,10 +170,17 @@ const CustomScheduleList = ({ initialSchedules, groups }: CustomScheduleListProp
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add a feeding schedule</DialogTitle>
-            <DialogDescription>Cages switched on get one portion at this time.</DialogDescription>
+            <DialogTitle>{editingSchedule ? `Edit ${editingSchedule.name}` : 'Add a feeding schedule'}</DialogTitle>
+            <DialogDescription>Active cages in these groups get one portion at this time.</DialogDescription>
           </DialogHeader>
-          <CustomScheduleForm groups={groups} onSubmit={handleAdd} />
+          <CustomScheduleForm
+            key={editingSchedule?.id ?? 'new'}
+            groups={groups}
+            initialValues={editingSchedule ? toScheduleFormValues(editingSchedule) : undefined}
+            submitLabel={editingSchedule ? 'Save changes' : undefined}
+            pendingLabel={editingSchedule ? 'Saving…' : undefined}
+            onSubmit={handleSave}
+          />
         </DialogContent>
       </Dialog>
     </Card>

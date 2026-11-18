@@ -1,34 +1,31 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown } from 'lucide-react';
+import { CircleX } from 'lucide-react';
 
+import CustomEmptyState from '@/components/custom/custom-empty-state';
 import CustomPageHeader from '@/components/custom/custom-page-header';
-import CustomSeverityAlert from '@/components/custom/custom-severity-alert';
-import CustomStatusPill from '@/components/custom/custom-status-pill';
-import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { notify } from '@/lib/notify';
 
 import CustomCageGroupCard from './custom-cage-group-card';
 import CustomFeedConfirmDialog from './custom-feed-confirm-dialog';
-import { formatClock } from '../lib/feeding-format';
+import { setCageActive } from '../actions/set-cage-active';
+import { formatClock, toCageGroups } from '../lib/feeding-format';
 
-import type { Cage, CageGroup, FeedTarget } from '../types/feeding';
+import type { Cage, FeedTarget } from '../types/feeding';
 
 type CustomFeedingBoardProps = {
-  groups: CageGroup[];
   initialCages: Cage[];
-  nextFeed: { time_label: string; name: string };
 };
 
 const DEVICE_CONFIRM_MS = 1500;
 
-const toList = (codes: string[]) =>
-  codes.length <= 1 ? (codes[0] ?? '') : `${codes.slice(0, -1).join(', ')} and ${codes.at(-1) ?? ''}`;
-
-const CustomFeedingBoard = ({ groups, initialCages, nextFeed }: CustomFeedingBoardProps) => {
+const CustomFeedingBoard = ({ initialCages }: CustomFeedingBoardProps) => {
   const [cages, setCages] = useState(initialCages);
-  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const [feedingIds, setFeedingIds] = useState<string[]>([]);
+  const [savingIds, setSavingIds] = useState<string[]>([]);
+  const [fedLabels, setFedLabels] = useState<Record<string, string>>({});
   const [feedTarget, setFeedTarget] = useState<FeedTarget | null>(null);
   const timers = useRef(new Set<number>());
 
@@ -37,51 +34,47 @@ const CustomFeedingBoard = ({ groups, initialCages, nextFeed }: CustomFeedingBoa
     return () => activeTimers.forEach((timer) => window.clearTimeout(timer));
   }, []);
 
-  const nextFeedLabel = `${nextFeed.time_label} ${nextFeed.name}`;
-  const scheduledCount = cages.filter(({ is_scheduled }) => is_scheduled).length;
-  const jammedCodes = cages.filter(({ state }) => state === 'jammed').map(({ code }) => code);
-  const targetCodes = cages.filter(({ id }) => feedTarget?.cageIds.includes(id)).map(({ code }) => code);
-  const skippedCodes = feedTarget
-    ? cages
-        .filter(({ group_id, state }) => groups.find(({ name }) => name === feedTarget.label)?.id === group_id && state !== 'ok')
-        .map(({ code }) => code)
-    : [];
+  const groups = toCageGroups(cages);
+  const scheduledCount = cages.filter(({ is_active }) => is_active).length;
+  const targetNames = cages.filter(({ id }) => feedTarget?.cageIds.includes(id)).map(({ cage_name }) => cage_name);
 
-  const updateCage = (id: string, changes: Partial<Cage>) =>
-    setCages((current) => current.map((cage) => (cage.id === id ? { ...cage, ...changes } : cage)));
+  const replaceCage = (cage: Cage) => setCages((current) => current.map((item) => (item.id === cage.id ? cage : item)));
 
-  const handleScheduledChange = (cage: Cage, isScheduled: boolean) => {
-    updateCage(cage.id, { is_scheduled: isScheduled });
-    if (isScheduled) return;
-    notify.undo(`${cage.code} left the schedules`, {
+  const handleActiveChange = async (cage: Cage, isActive: boolean) => {
+    replaceCage({ ...cage, is_active: isActive });
+    setSavingIds((current) => [...current, cage.id]);
+    const result = await setCageActive({ id: cage.id, is_active: isActive });
+    setSavingIds((current) => current.filter((id) => id !== cage.id));
+
+    if (!result.ok) {
+      replaceCage(cage);
+      notify.error(`Couldn't update ${cage.cage_name}`, { description: result.message });
+      return;
+    }
+
+    replaceCage(result.data);
+    if (isActive) {
+      notify.success(`${cage.cage_name} is back in the schedules`);
+      return;
+    }
+    notify.undo(`${cage.cage_name} left the schedules`, {
       description: "It won't be fed on a schedule until you switch it back on.",
-      onUndo: () => updateCage(cage.id, { is_scheduled: true }),
+      onUndo: () => void handleActiveChange(result.data, true),
     });
-  };
-
-  const handleGoToCage = (code: string) => {
-    const row = document.getElementById(`cage-${code}`);
-    row?.scrollIntoView({ block: 'center' });
-    row?.focus({ preventScroll: true });
-  };
-
-  const handleMarkCleared = (cage: Cage) => {
-    updateCage(cage.id, { state: 'ok', issue_label: null });
-    notify.success(`${cage.code} cleared`, { description: `It rejoins the ${nextFeedLabel} feed.` });
   };
 
   const handleConfirmFeed = () => {
     if (!feedTarget) return;
     const { label, cageIds } = feedTarget;
     setFeedTarget(null);
-    setPendingIds((current) => [...current, ...cageIds]);
+    setFeedingIds((current) => [...current, ...cageIds]);
 
     // Simulated dispenser confirmation; "Fed" only shows once the device reports back
     const timer = window.setTimeout(() => {
       timers.current.delete(timer);
       const fedAt = formatClock(new Date());
-      setCages((current) => current.map((cage) => (cageIds.includes(cage.id) ? { ...cage, last_fed_label: fedAt } : cage)));
-      setPendingIds((current) => current.filter((id) => !cageIds.includes(id)));
+      setFedLabels((current) => ({ ...current, ...Object.fromEntries(cageIds.map((id) => [id, fedAt])) }));
+      setFeedingIds((current) => current.filter((id) => !cageIds.includes(id)));
       notify.success(`${label} fed`, {
         description: `${fedAt} · one portion${cageIds.length > 1 ? ` in each of ${cageIds.length} cages` : ''}`,
       });
@@ -94,61 +87,36 @@ const CustomFeedingBoard = ({ groups, initialCages, nextFeed }: CustomFeedingBoa
       <CustomPageHeader
         title="Feeding"
         status={
-          <>
-            <CustomStatusPill status="running" className="text-sm" />
-            <span>
-              Next feed {nextFeed.time_label} · {nextFeed.name}
-            </span>
-            <span>
-              {scheduledCount} of {cages.length} cages in schedules
-            </span>
-          </>
+          <span>
+            {scheduledCount} of {cages.length} cages in schedules
+          </span>
         }
       />
 
-      {jammedCodes.length > 0 && (
-        <CustomSeverityAlert
-          level="medium"
-          title={`${toList(jammedCodes)} ${jammedCodes.length === 1 ? 'is' : 'are'} jammed`}
-          description="Clear the chute, then mark the cage cleared so it rejoins the next feed."
-          actions={jammedCodes.map((code) => (
-            <Button
-              key={code}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 bg-card/60 text-foreground"
-              onClick={() => handleGoToCage(code)}
-            >
-              <ArrowDown aria-hidden />
-              Go to {code}
-            </Button>
+      {cages.length === 0 ? (
+        <Card className="py-0">
+          <CustomEmptyState icon={CircleX} title="No cages yet" hint="Cages appear here once they are added to the farm." />
+        </Card>
+      ) : (
+        <section aria-label="Cages by group" className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {groups.map((group) => (
+            <CustomCageGroupCard
+              key={group.id}
+              group={group}
+              cages={cages.filter(({ group_code }) => group_code === group.id)}
+              feedingIds={feedingIds}
+              savingIds={savingIds}
+              fedLabels={fedLabels}
+              onFeed={setFeedTarget}
+              onActiveChange={(cage, isActive) => void handleActiveChange(cage, isActive)}
+            />
           ))}
-        />
+        </section>
       )}
-
-      <section aria-label="Cages by group" className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {groups.map((group) => (
-          <CustomCageGroupCard
-            key={group.id}
-            group={group}
-            cages={cages.filter(({ group_id }) => group_id === group.id)}
-            pendingIds={pendingIds}
-            onFeed={setFeedTarget}
-            onMarkCleared={handleMarkCleared}
-            onScheduledChange={handleScheduledChange}
-          />
-        ))}
-      </section>
 
       <CustomFeedConfirmDialog
         target={feedTarget}
-        cageCodes={targetCodes}
-        skippedNote={
-          skippedCodes.length > 0
-            ? `${toList(skippedCodes)} ${skippedCodes.length === 1 ? 'is' : 'are'} skipped until ${skippedCodes.length === 1 ? 'it is' : 'they are'} working again.`
-            : null
-        }
+        cageNames={targetNames}
         onConfirm={handleConfirmFeed}
         onCancel={() => setFeedTarget(null)}
       />

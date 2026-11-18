@@ -1,85 +1,56 @@
 'use client';
 
-import { CircleCheck, Utensils } from 'lucide-react';
+import { Utensils } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { cn } from '@/lib/utils';
 
 import type { Cage } from '../types/feeding';
 
 type CustomCageRowProps = {
   cage: Cage;
-  isPending: boolean;
+  fedLabel: string | undefined;
+  isFeeding: boolean;
+  isSaving: boolean;
   onFeed: (cage: Cage) => void;
-  onMarkCleared: (cage: Cage) => void;
-  onScheduledChange: (cage: Cage, isScheduled: boolean) => void;
+  onActiveChange: (cage: Cage, isActive: boolean) => void;
 };
 
-const STATUS_DOT = {
-  ok: 'bg-primary',
-  jammed: 'bg-warning',
-  offline: 'bg-muted-foreground',
-} as const satisfies Record<Cage['state'], string>;
-
-const toStatusLabel = ({ state, last_fed_label, issue_label }: Cage, isPending: boolean) => {
-  if (isPending) return 'Feeding…';
-  if (state !== 'ok') return issue_label ?? 'Needs attention';
-  return last_fed_label ? `Fed ${last_fed_label}` : 'Not fed yet today';
+const toStatusLabel = ({ is_active }: Cage, fedLabel: string | undefined, isFeeding: boolean) => {
+  if (isFeeding) return 'Feeding…';
+  if (fedLabel) return `Fed ${fedLabel}`;
+  return is_active ? 'In schedules' : 'Not in schedules';
 };
 
-const CustomCageRow = ({ cage, isPending, onFeed, onMarkCleared, onScheduledChange }: CustomCageRowProps) => {
+const CustomCageRow = ({ cage, fedLabel, isFeeding, isSaving, onFeed, onActiveChange }: CustomCageRowProps) => {
   const statusId = `cage-${cage.id}-status`;
-  const isJammed = cage.state === 'jammed';
-  const canFeed = cage.state === 'ok' && !isPending;
 
   return (
-    <li
-      id={`cage-${cage.code}`}
-      tabIndex={-1}
-      className={cn(
-        'flex scroll-mt-24 items-center gap-2 py-2.5 outline-none',
-        isJammed && '-mx-2 rounded-lg border-transparent bg-warning/10 px-2',
-        cage.state === 'offline' && 'opacity-70',
-      )}
-    >
+    <li className="flex items-center gap-2 py-2.5">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold">{cage.code}</p>
-        <p
-          id={statusId}
-          className={cn(
-            'flex items-center gap-1.5 text-xs',
-            isJammed ? 'font-semibold text-warning' : 'text-muted-foreground',
-          )}
-        >
-          {cage.state !== 'ok' && <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[cage.state])} />}
-          <span className="truncate">{toStatusLabel(cage, isPending)}</span>
+        <p className="text-sm font-semibold">{cage.cage_name}</p>
+        <p id={statusId} className="truncate text-xs text-muted-foreground">
+          {toStatusLabel(cage, fedLabel, isFeeding)}
         </p>
       </div>
 
-      {isJammed ? (
-        <Button type="button" variant="outline" className="h-11 bg-card/60 px-3" onClick={() => onMarkCleared(cage)}>
-          <CircleCheck aria-hidden />
-          Mark cleared
-        </Button>
-      ) : (
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-11 px-3 text-muted-foreground hover:text-foreground"
-          disabled={!canFeed}
-          aria-describedby={statusId}
-          onClick={() => onFeed(cage)}
-        >
-          <Utensils aria-hidden />
-          {isPending ? 'Feeding…' : 'Feed now'}
-        </Button>
-      )}
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-11 px-3 text-muted-foreground hover:text-foreground"
+        disabled={isFeeding}
+        aria-describedby={statusId}
+        onClick={() => onFeed(cage)}
+      >
+        <Utensils aria-hidden />
+        {isFeeding ? 'Feeding…' : 'Feed now'}
+      </Button>
 
       <Switch
-        checked={cage.is_scheduled}
-        onCheckedChange={(isChecked) => onScheduledChange(cage, isChecked)}
-        aria-label={`Include ${cage.code} in schedules`}
+        checked={cage.is_active}
+        disabled={isSaving}
+        onCheckedChange={(isChecked) => onActiveChange(cage, isChecked)}
+        aria-label={`Include ${cage.cage_name} in schedules`}
         className="relative ml-1 h-6 w-11 after:absolute after:-inset-2.5 [&>span]:size-5"
       />
     </li>
