@@ -261,8 +261,8 @@ Endpoints name their allowed roles with the aliases from `app.core` (01 §13):
 | Alias | Roles | Used for |
 |---|---|---|
 | `DeveloperOnly` | `DEVELOPER` | nothing yet |
-| `DeveloperOrAdmin` | `DEVELOPER`, `ADMIN` (the farm admin) | every `/users` endpoint, `POST /batches` |
-| `AnyRole` | every role | `GET /batches`, crabs (including `POST /crabs/sticker-downloads`), logs, `GET /audit-events` (rows scoped by role in the service) |
+| `DeveloperOrAdmin` | `DEVELOPER`, `ADMIN` (the farm admin) | every `/users` endpoint, `POST /batches`, `POST /schedules`, `DELETE /schedules/{schedule_id}`, `POST /schedules/{schedule_id}/restore` |
+| `AnyRole` | every role | `GET /batches`, `GET /cages`, `PATCH /cages/{cage_id}`, `GET /schedules`, `PATCH /schedules/{schedule_id}`, crabs (including `POST /crabs/sticker-downloads`), logs, `GET /audit-events` (rows scoped by role in the service) |
 
 `/events/stream` only needs a signed-in user (router-level `get_current_user`).
 
@@ -308,6 +308,13 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 | GET | `/water-sensors/logs/status-counts` (`AnyRole`; `sensor`, `from`, `to`; not audited) | 200 `WATER_SENSOR_COUNTS_READY` (`{normal, warning, danger}`) | 422 |
 | GET | `/scales/stream` (every role) | 200 SSE `scale.reading` (`{device_id, weight_g, received_at}`; the crab scale, live only), ends at the access token's expiry | 503 broker off or unreachable (`Retry-After`) |
 | GET | `/water-sensors/stream` (every role) | 200 SSE `water_sensor.reading` (`{device_id, temperature_c, ph, salinity_ppt, ammonia_mg_l, turbidity_ntu, do_mg_l, statuses, received_at}`, `statuses` maps each sensor to normal, warning or danger; not stored), ends at the access token's expiry | 503 broker off or unreachable (`Retry-After`) |
+| GET | `/cages` (`AnyRole`; `?page=&size=` (size defaults to **100**, max 100); audited as `cage.list`) | 200 `CAGES_LISTED` (a page of `{id, group_code, cage_name, is_active, created_at, updated_at}`, ordered by group, then cage number) | 422 |
+| PATCH | `/cages/{cage_id}` (`AnyRole`; `{is_active}`, the only field: whether schedules feed this cage; audited as `cage.update` with before and after) | 200 `CAGE_UPDATED` (the cage) | 404 `cage_not_found` (`path.cage_id`), 422 |
+| GET | `/schedules` (`AnyRole`; `?page=&size=`; audited as `schedule.list`) | 200 `SCHEDULES_LISTED` (a page of schedules without soft-deleted ones, earliest `feed_time` first; an empty page is still 200) | 422 |
+| POST | `/schedules` (`DeveloperOrAdmin`; `{name, feed_time, days?, group_codes[1–26]}`, `feed_time` is farm-clock `HH:MM` with no time zone, on the hour or half hour, `days` ∈ `every-day` (default), `weekdays`, `weekends`, `mon-wed-fri-sun`, repeated `group_codes` are merged; audited as `schedule.create`) | 201 `SCHEDULE_CREATED` (`{id, name, feed_time, days, group_codes, is_enabled, user_id, created_at, updated_at}`) | 403 `STAFF`, 404 `schedule_group_not_found` (`group_codes`): a group has no cages, 422 |
+| PATCH | `/schedules/{schedule_id}` (`AnyRole`; any of `{name, feed_time, days, group_codes, is_enabled}`, at least one, with the same rules as create. Every role may send `is_enabled` alone; the other fields need DEVELOPER or ADMIN, checked in the service; audited as `schedule.update` with before and after) | 200 `SCHEDULE_UPDATED` (the schedule) | 403 `schedule_edit_forbidden` (`body`), 404 `schedule_not_found` (`path.schedule_id`, also for a deleted schedule), 404 `schedule_group_not_found` (`group_codes`), 422 |
+| DELETE | `/schedules/{schedule_id}` (`DeveloperOrAdmin`; soft delete; audited as `schedule.delete`) | 200 `SCHEDULE_DELETED` | 403 `STAFF`, 404 `schedule_not_found` |
+| POST | `/schedules/{schedule_id}/restore` (`DeveloperOrAdmin`, no body; undoes a delete, idempotent; audited as `schedule.restore`) | 200 `SCHEDULE_RESTORED` (the schedule) | 403 `STAFF`, 404 `schedule_not_found` |
 | GET | `/devices` | 200 | — |
 | POST | `/devices` | 201 | 409 device id exists |
 | GET / PATCH / DELETE | `/devices/{device_id}` | 200 | 404 |
@@ -335,6 +342,8 @@ Who sees what: `STAFF` always gets only their own events (the service forces `ac
 
 | Method | Path | Success | Notable errors |
 |---|---|---|---|
+| GET | `/dashboard/summary` (`AnyRole`; not audited) | 200 `DASHBOARD_SUMMARY_READY` (`{crabs_logged_today, crabs_total, next_feed: {schedule_name, feed_time, at, day_offset} \| null}`; different crabs with an actual log since the farm day began; the next run of an enabled schedule with an active cage) | 500 |
+| GET | `/dashboard/stream` (every role) | 200 SSE `dashboard.summary` (the same object, first at once and then on each change), ends at the access token's expiry; reads PostgreSQL, so it works with the broker off | — |
 | GET | `/events/stream` (every role) | 200 SSE `system.announcement`, `system.test` (data: `SystemEvent {type, message, occurred_at}`), ends at the access token's expiry | 503 broker unreachable (`Retry-After`) |
 
 ### assistant

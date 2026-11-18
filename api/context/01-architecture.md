@@ -122,6 +122,7 @@ api/app/
 │   ├── api.py
 │   ├── scales/             # GET /scales/stream: the crab scale's live weight (built, live only, no tables)
 │   ├── water_sensors/      # GET /water-sensors/stream (live readings), /water-sensors/logs (saved every 30 min), thresholds
+│   ├── feeding/            # /cages (list, in or out of schedules) and /schedules (list, create, on/off, delete, restore) built; the APScheduler worker job planned, ADR-0006
 │   └── registry/           # GET /devices/stream: which devices are sending, connection audit (built, no tables); device registry and commands planned
 ├── artificial_intelligence/
 │   ├── api.py
@@ -132,6 +133,7 @@ api/app/
 │   └── events/             # GET /audit-events: filtered, paginated, scoped by role
 ├── system/                 # cross-cutting live channel (no tables)
 │   ├── api.py
+│   ├── dashboard/          # GET /dashboard/summary, /dashboard/stream: crabs logged today and next feed
 │   └── events/             # GET /events/stream: system.<type> events over SSE
 ├── assistant/
 │   ├── api.py
@@ -240,6 +242,7 @@ Never call a sync `Session` directly inside an `async def`.
 - Filtering (by device, pond or camera) happens in the hub, not in RabbitMQ bindings per client.
 - **Built:** `infrastructure/messaging` (`RabbitClient`, `publish()`, `topics.py`) and `infrastructure/streaming` (`StreamHub`, `event_stream()`, `format_event()`). The FastAPI `lifespan` connects the client, declares `crabfarm.events` and starts one hub bound to the keys streams need (today `system.#`); add a domain's keys there. The broker is **off by default** (`rabbitmq_enabled=false`) until a feature needs it; set `RABBITMQ_ENABLED=true` to connect. While it's off or unreachable at startup the API still starts, and stream endpoints answer `503` + `Retry-After` until a restart. Live detection never uses the broker.
 - **Growth model status ([ADR-0005](../../docs/adr/0005-growth-model-status-over-sse.md)):** the hub also binds `forecast.#`. `ModelStatusWatcher` (`logs/services/model_status_services.py`, started in the lifespan only when the hub is ready) checks `ModelRegistry.fingerprint()` every `forecast_status_poll_seconds` (5) and recomputes anyway every `forecast_status_refresh_seconds` (60, new logs make a model due). It publishes a `ModelStatus` on `forecast.model` only when it differs from the last one. `GET /forecasts/stream` sends the caller's snapshot first (read by a sync dependency, off the event loop), then every `forecast.model` event. The retrain process stays broker-free.
+- **Dashboard summary:** `GET /dashboard/stream` doesn't use the hub, because its figures come from PostgreSQL. Each connection re-reads them off the event loop every `dashboard_poll_seconds` (3) and sends `dashboard.summary` only when they change.
 - **Per client:** a bounded queue (`sse_client_queue_size`, oldest dropped when full), a `retry: 5000` frame first, `: ping` every `sse_heartbeat_seconds`, every broker body validated by the stream's `*Event` schema (invalid ones are logged and dropped), and the stream **ends when the access token expires**, so the client reconnects with a fresh token.
 - **Auth:** the browser never calls FastAPI; the Next.js BFF (`/api/stream/...`) sends the access token as `Authorization: Bearer`, so stream endpoints use the normal `get_current_user` + `require_roles`. Cookie or `?token=` auth is only needed if a non-BFF client ever streams directly.
 - SSE is one-way. All client actions go through normal `POST` endpoints.

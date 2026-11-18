@@ -81,6 +81,19 @@ Each log stores who recorded it. Every role sees every log on the Logs page; onl
 
 9. Staff can't list users, so the Logs page shows "You" on their own logs and "Teammate" on everyone else's.
 
+### Feeding
+
+| Feature | Endpoint | Developer | Admin | Staff |
+|---|---|:-:|:-:|:-:|
+| See cages and their groups | `GET /cages` | Yes | Yes | Yes |
+| Put a cage in or out of schedules | `PATCH /cages/{cage_id}` | Yes | Yes | Yes |
+| See feeding schedules | `GET /schedules` | Yes | Yes | Yes |
+| Turn a schedule on or off | `PATCH /schedules/{schedule_id}` | Yes | Yes | Yes |
+| Create a feeding schedule | `POST /schedules` | Yes | Yes | No |
+| Edit a schedule's name, time, days or groups | `PATCH /schedules/{schedule_id}` | Yes | Yes | No |
+| Delete a schedule, or undo the delete | `DELETE /schedules/{schedule_id}`, `POST /schedules/{schedule_id}/restore` | Yes | Yes | No |
+| Feed a cage or a group now | Simulated on the page; no endpoint yet | Yes | Yes | Yes |
+
 ### Activity (audit trail)
 
 | Feature | Endpoint | Developer | Admin | Staff |
@@ -101,6 +114,7 @@ Each log stores who recorded it. Every role sees every log on the Logs page; onl
 | Crab scale live weight | `GET /scales/stream` | Yes | Yes | Yes |
 | Water sensors live readings | `GET /water-sensors/stream` | Yes | Yes | Yes |
 | Which devices are connected | `GET /devices/stream` | Yes | Yes | Yes |
+| Dashboard summary, live | `GET /dashboard/summary`, `GET /dashboard/stream` | Yes | Yes | Yes |
 | Saved water sensor logs | `GET /water-sensors/logs`, `GET /water-sensors/logs/status-counts` | Yes | Yes | Yes |
 
 ## Web pages
@@ -109,9 +123,9 @@ The web app reads the same rules from `web/lib/permissions.ts` to hide what a ro
 
 | Page | Data | Developer | Admin | Staff |
 |---|---|:-:|:-:|:-:|
-| Dashboard | Live growth card (last 7 days of crab logs) and water sensor tiles · the rest is sample data | Yes | Yes | Yes |
+| Dashboard | Live summary, growth card (last 7 days of crab logs) and water sensor tiles · the briefing is sample text | Yes | Yes | Yes |
 | Logs | Live (crab logs and sensor logs) | Yes | Yes | Yes ¹⁰ |
-| Feeding | Sample data | Yes | Yes | Yes |
+| Feeding | Live cages and schedules · Feed now is simulated | Yes | Yes | Yes ¹² |
 | QR stickers | Live | Yes | Yes | Yes ⁶ |
 | Scan crab | Live (save log, recent logs) · camera reads QR in the browser; scale not connected | Yes | Yes | Yes ¹¹ |
 | Assistant | Sample data | Yes | Yes | Yes |
@@ -124,6 +138,7 @@ The web app reads the same rules from `web/lib/permissions.ts` to hide what a ro
 8. Staff see only their own events and have no Person filter. Developers and Admins see the whole team and can narrow it to themselves or one person. Every role gets the type chips (Sign-ins, Crab logs, Batches, QR stickers, Users, Security), date range, result and search, and can click a row to see its details. **See all downloads** on QR stickers opens Activity on the QR stickers type.
 10. Staff see every crab log, but "Logged by" reads "You" or "Teammate" instead of a name (⁹).
 11. Staff see only their own logs in the recent list ("Your recent logs"); Developers and Admins see everyone's latest 5 with a By column.
+12. Staff can feed and turn schedules on or off. Add schedule and the edit and delete buttons are hidden.
 
 ## Planned features (roles not decided yet)
 
@@ -134,7 +149,8 @@ These are in the design but have no endpoints yet, so their roles aren't set. De
 | Edit or delete a single log | `GET`, `PATCH`, `DELETE /logs/{log_id}` | ? | ? | ? |
 | Edit or delete a batch | `GET`, `PATCH`, `DELETE /batches/{batch_id}` | ? | ? | ? |
 | Add, edit or delete a crab | `POST /crabs`, `PATCH`, `DELETE /crabs/{crab_id}` | ? | ? | ? |
-| Devices and commands (feed now, stop) | `/devices`, `/devices/{device_id}/commands` | ? | ? | ? |
+| Device commands for feed now and feed group | `/devices/{device_id}/commands` | Yes | Yes | Yes |
+| Manage devices | `/devices` | ? | ? | ? |
 | Cameras and crab detection | `/cameras`, `/detections/stream` | ? | ? | ? |
 | QR scan | `POST /qr/scan` | ? | ? | ? |
 | Assistant chat | `POST /assistant/chat` | ? | ? | ? |

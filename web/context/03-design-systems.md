@@ -41,7 +41,7 @@ Follow this file whenever you design, build or review a page, a component or a `
 
 | Law | Crabfarm rule |
 |---|---|
-| **Fitts' Law**: time to hit depends on size and distance | Primary actions are **44 px** tall. On phones, **Scan** is the raised center tab and primary buttons sit at the bottom within thumb reach. Extend hit areas with padding. Keep **Stop system** / **Deactivate** away from **Feed now** / **Save**. |
+| **Fitts' Law**: time to hit depends on size and distance | Primary actions are **44 px** tall. On phones, **Scan** is the raised center tab and primary buttons sit at the bottom within thumb reach. Extend hit areas with padding. Keep **Deactivate** away from **Save**. |
 | **Doherty Threshold**: productivity drops past ~400 ms | Acknowledge every interaction within **100 ms** (pressed state). Show a skeleton for anything over **400 ms**, and determinate progress (with cancel where possible) for anything over **3 s**. See §4 Response time. |
 
 ### Behavior and memory
@@ -289,7 +289,6 @@ export default RootLayout;
 | Chart | Recharts parts | Component |
 |---|---|---|
 | Actual vs forecast growth | `LineChart`, 2× `Line` (actual solid, forecast dashed), `XAxis`, `YAxis`, `CartesianGrid`, `Tooltip`, `Legend` | `custom-growth-chart` |
-| Feed per day | `BarChart`, `Bar`, `ReferenceLine` (plan), axes, `Tooltip`; days under plan are **striped** (not color alone) | `custom-feed-bar-chart` |
 | Each sensor over time | `LineChart`, `Line`, `ReferenceArea` (safe band), hidden fixed-domain `YAxis`, `Tooltip` | `custom-sensor-sparkline` |
 | Range meter | plain CSS bar, renders before Recharts | `custom-range-meter` |
 
@@ -309,7 +308,7 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | **PIN login** | Unlock | Avatar, InputOTP, Button, Alert | — | Sun, Moon, Lock (device keyboard only) |
 | **Onboarding** | Continue / Finish | Form, Input, InputOTP, ToggleGroup, Button | `custom-stepper`, `custom-password-rules` | Check, CircleAlert, ArrowLeft |
 | **Dashboard** | See trend (on the top alert) | Card, ToggleGroup, Select, Tooltip | `custom-briefing`, `custom-severity-alert`, `custom-sensor-tile`, `custom-range-meter`, `custom-water-monitor`, `custom-sensor-connection`, `custom-reading-value`, `custom-water-updates`, `custom-water-value`, `custom-sensor-sparkline`, `custom-growth-chart`, `custom-forecast-model-alert` | ScrollText, RefreshCw, LoaderCircle, Thermometer, Droplet, Droplets, Waves, FlaskConical, GlassWater, Wind, Unplug, WifiOff, OctagonAlert, TriangleAlert, Info, CircleCheck, Bot, ChartLine |
-| **Feeding** | Feed now | Card, Switch, Button, AlertDialog, ToggleGroup, Input, Sonner | `custom-status-pill`, `custom-feeder-row`, `custom-schedule-form`, `custom-feed-bar-chart` | Utensils, Play, Pause, Square, TriangleAlert, Plus, Trash, CalendarClock, CircleCheck |
+| **Feeding** | Feed now | Card, Switch, Button, AlertDialog, ToggleGroup, Input, Sonner | `custom-status-pill`, `custom-feeder-row`, `custom-schedule-form` | Utensils, TriangleAlert, Plus, Trash, CalendarClock, CircleCheck |
 | **QR stickers** | Download stickers | Select, ToggleGroup, Button, Table, Sonner | `custom-qr-sticker`, `custom-sticker-sheet`, `custom-print-bar` | Plus, Download, QrCode |
 | **Scan** | Save log | Card, Input, Button, Alert, Sonner | `custom-stepper`, `custom-scan-viewport`, `custom-severity-alert` | Scale, Camera, CameraOff, ScanLine, RotateCcw, Check, TriangleAlert, CircleCheck |
 | **Logs** | Export CSV | Tabs, Input, Select, Popover, Calendar, Table, Pagination, ToggleGroup, Chart | `custom-severity-badge`, `custom-empty-state`, `custom-crab-log-chart`, `custom-measure-chart`, `custom-run-prediction-button`, `custom-forecast-model-alert` | Search, Calendar, FileDown, TrendingUp, RefreshCw, LoaderCircle, OctagonAlert, TriangleAlert, Info, Rows3, ChartLine |
@@ -343,7 +342,6 @@ A feature's own `custom-` components live in its domain `components/` until a se
 | Turn a feeder off, delete a schedule | Yes | Nothing | Toast with **Undo**, 6 s |
 | Save a crab log | Yes | IDs locked from the QR, values prefilled | Toast with Undo, scanner ready for the next crab |
 | Feed a cage or group now | **No** | `AlertDialog` naming the cages | Toast · success after the device confirms; the row shows "Fed 9:42 PM" |
-| Stop the feeding system | Restart only | `AlertDialog`, destructive confirm | Status pill changes, toast · warning |
 | Deactivate a user, reset credentials, change a role | Partly | `AlertDialog` naming the person | Toast; deactivate offers Undo |
 | Forecast crabs from old logs | No | `AlertDialog` with the logs' age and why the numbers are rough; **Cancel** focused | Toast · success, says which crabs used old logs |
 | Apply an assistant suggestion | Depends | Preview card, then the **same** `AlertDialog` as the manual action | Toast + Activity entry tagged Assistant |
