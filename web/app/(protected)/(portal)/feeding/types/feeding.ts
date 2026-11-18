@@ -30,12 +30,6 @@ export const scheduleSchema = z.object({
 });
 export type Schedule = z.infer<typeof scheduleSchema>;
 
-export const feedDaySchema = z.object({
-  day: z.string(),
-  dispensed_kg: z.number().nonnegative(),
-});
-export type FeedDay = z.infer<typeof feedDaySchema>;
-
 export const SCHEDULE_DAYS = ['every-day', 'weekdays', 'mon-wed-fri', 'weekends'] as const;
 
 export const scheduleFormSchema = z.object({

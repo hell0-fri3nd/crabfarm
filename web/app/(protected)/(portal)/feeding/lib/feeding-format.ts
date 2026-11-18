@@ -17,5 +17,3 @@ export const SCHEDULE_DAY_LABELS = {
 } as const satisfies Record<(typeof SCHEDULE_DAYS)[number], string>;
 
 export const ALL_GROUPS_TARGET = 'all';
-
-export const formatKg = (value: number) => `${value.toFixed(2)} kg`;

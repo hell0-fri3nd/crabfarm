@@ -1,12 +1,10 @@
-import { cageGroupSchema, cageSchema, feedDaySchema, scheduleSchema } from '../types/feeding';
+import { cageGroupSchema, cageSchema, scheduleSchema } from '../types/feeding';
 
 import type { Cage } from '../types/feeding';
 
 // Preview data shaped like the API until Feeding reads /devices, /devices/stream and the schedules resource
 
 export const PREVIEW_NEXT_FEED = { time_label: '6:00 AM', name: 'Morning' } as const;
-
-export const PREVIEW_PLAN_KG = 1.4;
 
 export const PREVIEW_GROUPS = cageGroupSchema.array().parse(
   ['A', 'B', 'C', 'D', 'E'].map((letter) => ({ id: letter, name: `Group ${letter}` })),
@@ -40,14 +38,4 @@ export const PREVIEW_SCHEDULES = scheduleSchema.array().parse([
   { id: 'morning', time_label: '6:00 AM', name: 'Morning', days_label: 'Every day', target_label: 'All groups', is_enabled: true },
   { id: 'group-d-top-up', time_label: '12:00 PM', name: 'Group D top-up', days_label: 'Mon, Wed, Fri', target_label: 'Group D', is_enabled: false },
   { id: 'evening', time_label: '6:00 PM', name: 'Evening', days_label: 'Every day', target_label: 'All groups', is_enabled: true },
-]);
-
-export const PREVIEW_FEED_DAYS = feedDaySchema.array().parse([
-  { day: 'Thu', dispensed_kg: 1.42 },
-  { day: 'Fri', dispensed_kg: 1.41 },
-  { day: 'Sat', dispensed_kg: 1.32 },
-  { day: 'Sun', dispensed_kg: 1.43 },
-  { day: 'Mon', dispensed_kg: 1.4 },
-  { day: 'Tue', dispensed_kg: 1.41 },
-  { day: 'Wed', dispensed_kg: 1.3 },
 ]);
