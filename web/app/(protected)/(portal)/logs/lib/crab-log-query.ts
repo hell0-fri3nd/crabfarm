@@ -25,6 +25,28 @@ const parseCrabCode = (query: string): CrabCodeFilter | null => {
   return crabGroup && crabNumber ? { crab_name: `${crabGroup}${Number(crabNumber)}` } : null;
 };
 
+export const toNamedCrab = (query: string, crabs: Crab[]) => {
+  const name = parseCrabCode(query)?.crab_name;
+  return name === undefined ? undefined : crabs.find((crab) => crab.name === name);
+};
+
+export const toChartCrabs = (crabs: Crab[], loggedCrabIds: number[]) =>
+  crabs
+    .filter(({ id, name }) => loggedCrabIds.includes(id) && parseCrabCode(name)?.crab_name === name)
+    .toSorted((left, right) => left.name.localeCompare(right.name, 'en', { numeric: true }));
+
+export const withoutCrabName = (query: string) => {
+  const code = parseCrabCode(query);
+  if (!code) return query;
+  return code.batch_id === undefined ? '' : `B${code.batch_id}`;
+};
+
+// Picking a crab keeps a batch typed in the search box, so the chart stays inside that batch
+export const withCrabName = (query: string, crabName: string) => {
+  const batchId = parseCrabCode(query)?.batch_id;
+  return batchId === undefined ? crabName : `B${batchId}-${crabName}`;
+};
+
 const farmDay = (date: string) => new Date(`${date}T12:00:00+08:00`);
 
 const toDateWindow = ({ preset, from, to }: LogsSearchParams, now: Date): Record<string, string> =>

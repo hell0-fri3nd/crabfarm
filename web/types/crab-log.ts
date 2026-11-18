@@ -17,6 +17,8 @@ export const apiLogSchema = z.object({
 });
 export type ApiLog = z.infer<typeof apiLogSchema>;
 
+export const loggedCrabIdsSchema = z.array(z.number().int().positive());
+
 export const logsPageSchema = z.object({
   items: z.array(apiLogSchema),
   total: z.number().int().nonnegative(),

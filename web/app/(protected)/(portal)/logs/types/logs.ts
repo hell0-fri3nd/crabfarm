@@ -47,26 +47,23 @@ export const crabLogPageSchema = z.object({
 });
 export type CrabLogPage = z.infer<typeof crabLogPageSchema>;
 
-export const chartBucketSchema = z.enum(['day', 'hour', 'minute', 'second']);
-export type ChartBucket = z.infer<typeof chartBucketSchema>;
-
-export const chartSeriesSchema = z.enum(['actual', 'prediction']);
-export type ChartSeries = z.infer<typeof chartSeriesSchema>;
-
 export const chartPointSchema = z.object({
-  bucket_key: z.string(),
+  day: z.string(),
   label: z.string(),
   actual_weight_g: z.number().nullable(),
-  predicted_weight_g: z.number().nullable(),
+  forecast_weight_g: z.number().nullable(),
   actual_width_mm: z.number().nullable(),
-  predicted_width_mm: z.number().nullable(),
+  forecast_width_mm: z.number().nullable(),
 });
 export type ChartPoint = z.infer<typeof chartPointSchema>;
 
 export const crabLogChartSchema = z.object({
-  bucket: chartBucketSchema,
+  crab_name: z.string().nullable(),
+  crab_code: z.string().nullable(),
+  crab_names: z.array(z.string()),
   points: z.array(chartPointSchema),
   plotted: z.number().int(),
+  crab_total: z.number().int(),
   total: z.number().int(),
 });
 export type CrabLogChart = z.infer<typeof crabLogChartSchema>;

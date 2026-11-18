@@ -4,7 +4,7 @@ import type { CrabLog, DatePreset, LevelFilter, LogType, LogTypeFilter, LogsSear
 
 export const PAGE_SIZE = 7;
 
-export const LOG_TYPE_LABELS = { actual: 'Actual', prediction: 'Prediction' } as const satisfies Record<LogType, string>;
+export const LOG_TYPE_LABELS = { actual: 'Actual', prediction: 'Forecast' } as const satisfies Record<LogType, string>;
 
 export const LOG_TYPE_FILTER_LABELS = { all: 'All types', ...LOG_TYPE_LABELS } as const satisfies Record<LogTypeFilter, string>;
 

@@ -2,76 +2,72 @@
 
 import CustomCardHeading from '@/components/custom/custom-card-heading';
 import { Card, CardContent } from '@/components/ui/card';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import CustomLegendSwatch from './custom-legend-swatch';
 import CustomMeasureChart from './custom-measure-chart';
-import { chartSeriesSchema } from '../types/logs';
 
-import type { ChartBucket, ChartSeries, CrabLogChart } from '../types/logs';
+import type { CrabLogChart } from '../types/logs';
 
 type CustomCrabLogChartProps = {
   chart: CrabLogChart;
-  series: ChartSeries;
-  onSeriesChange: (series: ChartSeries) => void;
+  onCrabChange: (crabName: string) => void;
 };
 
-const SERIES_LABELS = { actual: 'Actual', prediction: 'Predicted' } as const satisfies Record<ChartSeries, string>;
+const pluralizeDays = (count: number) => `${count} ${count === 1 ? 'day' : 'days'}`;
 
-const SERIES_LEGEND = {
-  actual: 'Actual (solid, logged on Scan)',
-  prediction: 'Predicted (dashed, from the forecast)',
-} as const satisfies Record<ChartSeries, string>;
+const countDays = ({ points }: CrabLogChart, kind: 'actual' | 'forecast') =>
+  points.filter((point) => point[`${kind}_weight_g`] !== null || point[`${kind}_width_mm`] !== null).length;
 
-const BUCKET_LABELS = { day: 'day', hour: 'hour', minute: 'minute', second: 'second' } as const satisfies Record<ChartBucket, string>;
+const toDescription = (chart: CrabLogChart) => {
+  if (!chart.crab_code) return 'No crab logs match these filters.';
 
-const CHIP =
-  'h-11 rounded-full border border-border bg-card px-4 font-semibold data-[state=on]:border-primary/60 data-[state=on]:bg-primary/15 data-[state=on]:text-primary sm:h-9';
+  const coverage = `${chart.crab_code}: ${pluralizeDays(countDays(chart, 'actual'))} logged, ${pluralizeDays(countDays(chart, 'forecast'))} forecast.`;
+  return chart.plotted < chart.crab_total
+    ? `${coverage} Showing the newest ${chart.plotted} of ${chart.crab_total} logs.`
+    : coverage;
+};
 
-const pluralize = (count: number, noun: string) => `${count} ${count === 1 ? noun : `${noun}s`}`;
-
-const CustomCrabLogChart = ({ chart: { bucket, points, plotted, total }, series, onSeriesChange }: CustomCrabLogChartProps) => {
-  const per = BUCKET_LABELS[bucket];
-  const span = `${pluralize(plotted, 'log')} over ${pluralize(points.length, per)}`;
-
-  const handleSeries = (value: string) => {
-    const parsed = chartSeriesSchema.safeParse(value);
-    if (parsed.success) onSeriesChange(parsed.data);
-  };
-
-  return (
-    <Card className="gap-5 rounded-2xl py-5 sm:py-6">
-      <CustomCardHeading
-        title="Growth over time"
-        description={
-          plotted < total
-            ? `Newest ${plotted} of ${total} logs, averaged per ${per}. Narrow the dates to plot the rest.`
-            : `${span[0]?.toUpperCase() ?? ''}${span.slice(1)}, averaged per ${per}.`
-        }
-        actions={
-          <ToggleGroup type="single" spacing={2} value={series} onValueChange={handleSeries} aria-label="Line to show">
-            {chartSeriesSchema.options.map((option) => (
-              <ToggleGroupItem key={option} value={option} className={CHIP}>
-                {SERIES_LABELS[option]}
-              </ToggleGroupItem>
+const CustomCrabLogChart = ({ chart, onCrabChange }: CustomCrabLogChartProps) => (
+  <Card className="gap-5 rounded-2xl py-5 sm:py-6">
+    <CustomCardHeading
+      title="Crab growth"
+      description={toDescription(chart)}
+      actions={
+        <Select value={chart.crab_name ?? undefined} onValueChange={onCrabChange} disabled={chart.crab_names.length === 0}>
+          <SelectTrigger aria-label="Crab" className="w-full bg-card data-[size=default]:h-11 sm:w-36">
+            <span className="text-muted-foreground">Crab</span>
+            <SelectValue placeholder="None" />
+          </SelectTrigger>
+          <SelectContent>
+            {chart.crab_names.map((name) => (
+              <SelectItem key={name} value={name}>
+                {name}
+              </SelectItem>
             ))}
-          </ToggleGroup>
-        }
-      />
-      <CardContent className="flex flex-col gap-6 px-4 sm:px-6">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-          <CustomMeasureChart points={points} measure="weight_g" series={series} />
-          <CustomMeasureChart points={points} measure="width_mm" series={series} />
-        </div>
-        {plotted > 0 && (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CustomLegendSwatch isDashed={series === 'prediction'} />
-            {SERIES_LEGEND[series]}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
+          </SelectContent>
+        </Select>
+      }
+    />
+    <CardContent className="flex flex-col gap-6 px-4 sm:px-6">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <CustomMeasureChart points={chart.points} measure="weight_g" crabName={chart.crab_name} />
+        <CustomMeasureChart points={chart.points} measure="width_mm" crabName={chart.crab_name} />
+      </div>
+      {chart.plotted > 0 && (
+        <ul className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+          <li className="flex items-center gap-2">
+            <CustomLegendSwatch isDashed={false} />
+            Actual (logged on Scan)
+          </li>
+          <li className="flex items-center gap-2">
+            <CustomLegendSwatch isDashed />
+            Forecast (from the growth model)
+          </li>
+        </ul>
+      )}
+    </CardContent>
+  </Card>
+);
 
 export default CustomCrabLogChart;

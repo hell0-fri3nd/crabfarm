@@ -9,7 +9,17 @@ import { can } from '@/lib/permissions';
 import type { ApiResult } from '@/types/api';
 
 import { toChartPoints } from './chart-points';
-import { EMPTY_CRAB_LOG_PAGE, toCrabLog, toCrabLogPage, toLogsQuery, toPageCount } from './crab-log-query';
+import {
+  EMPTY_CRAB_LOG_PAGE,
+  toChartCrabs,
+  toCrabLog,
+  toCrabLogPage,
+  toLogsQuery,
+  toNamedCrab,
+  toPageCount,
+  withCrabName,
+  withoutCrabName,
+} from './crab-log-query';
 
 import type { LogContext } from './crab-log-query';
 import type { CrabLog, CrabLogChart, CrabLogPage, LogsSearchParams } from '../types/logs';
@@ -73,7 +83,7 @@ export const loadAllCrabLogs = async (
   return { ok: true, rows, total };
 };
 
-// The chart plots daily averages, so the newest 500 logs cover any range a farm logs by hand
+// One crab logs about once a day, so its newest 500 logs cover more than a year
 const MAX_CHART_PAGES = 5;
 
 export const loadCrabLogChart = async (
@@ -81,10 +91,56 @@ export const loadCrabLogChart = async (
   context: LogContext,
   now: Date,
 ): Promise<{ ok: true; chart: CrabLogChart } | { ok: false; message: string }> => {
-  // The chart shows one series at a time; "all" falls back to the logged (actual) line
-  const series = params.type === 'prediction' ? 'prediction' : 'actual';
-  const result = await loadAllCrabLogs({ ...params, type: series }, context, now, MAX_CHART_PAGES);
+  const filters: LogsSearchParams = { ...params, type: 'all' };
+  const emptyChart: CrabLogChart = {
+    crab_name: null,
+    crab_code: null,
+    crab_names: [],
+    points: [],
+    plotted: 0,
+    crab_total: 0,
+    total: 0,
+  };
+
+  const matchingQuery = toLogsQuery(filters, context.crabs, now, 1, 1);
+  const newestActualQuery = toLogsQuery({ ...filters, type: 'actual' }, context.crabs, now, 1, 1);
+  // The picker ignores the crab in the search box, so another crab can still be chosen
+  const availableQuery = toLogsQuery({ ...filters, q: withoutCrabName(params.q) }, context.crabs, now, 1, 1);
+  if (!matchingQuery || !newestActualQuery || !availableQuery) return { ok: true, chart: emptyChart };
+
+  const [matching, newestActual, loggedCrabIds] = await Promise.all([
+    crabLogsApi.list(matchingQuery),
+    crabLogsApi.list(newestActualQuery),
+    crabLogsApi.listCrabIds(availableQuery),
+  ]);
+  if (!matching.ok) return failed(matching);
+  if (!newestActual.ok) return failed(newestActual);
+  if (!loggedCrabIds.ok) return failed(loggedCrabIds);
+
+  const availableCrabs = toChartCrabs(context.crabs, loggedCrabIds.data);
+  const namedCrab = toNamedCrab(params.q, context.crabs);
+  // Without a crab in the search box, open on the crab someone measured most recently
+  const newestCrab = availableCrabs.find(({ id }) => id === newestActual.data.items[0]?.crab_id);
+  const crab = namedCrab ?? newestCrab ?? availableCrabs[0];
+  const availableNames = availableCrabs.map(({ name }) => name);
+  if (!crab) return { ok: true, chart: { ...emptyChart, crab_names: availableNames, total: matching.data.total } };
+
+  // A crab typed in the search box stays selectable so the picker can show it, even with no logs here
+  const crab_names = availableNames.includes(crab.name) ? availableNames : [crab.name, ...availableNames];
+
+  const result = await loadAllCrabLogs({ ...filters, q: withCrabName(params.q, crab.name) }, context, now, MAX_CHART_PAGES);
   if (!result.ok) return result;
 
-  return { ok: true, chart: { ...toChartPoints(result.rows), plotted: result.rows.length, total: result.total } };
+  return {
+    ok: true,
+    chart: {
+      crab_name: crab.name,
+      crab_code: result.rows[0]?.crab_code ?? crab.name,
+      crab_names,
+      points: toChartPoints(result.rows),
+      plotted: result.rows.length,
+      crab_total: result.total,
+      total: matching.data.total,
+    },
+  };
 };

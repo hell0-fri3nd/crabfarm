@@ -1,63 +1,40 @@
-import { FARM_TIME_ZONE } from '@/lib/format';
+import { FARM_TIME_ZONE, toFarmDayKey } from '@/lib/format';
 
-import type { ChartBucket, ChartPoint, CrabLog, LogType } from '../types/logs';
+import type { ChartPoint, CrabLog, LogType } from '../types/logs';
 
-const BUCKETS: ChartBucket[] = ['day', 'hour', 'minute', 'second'];
+type Measure = 'weight_g' | 'width_mm';
 
-const keyFormat = new Intl.DateTimeFormat('en-CA', {
+const dayLabel = new Intl.DateTimeFormat('en-US', { timeZone: FARM_TIME_ZONE, month: 'short', day: 'numeric' });
+const dayLabelWithYear = new Intl.DateTimeFormat('en-US', {
   timeZone: FARM_TIME_ZONE,
+  month: 'short',
+  day: 'numeric',
   year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hourCycle: 'h23',
 });
 
-const KEY_LENGTH = { day: 10, hour: 13, minute: 16, second: 19 } as const satisfies Record<ChartBucket, number>;
+const toOneDecimal = (value: number) => Math.round(value * 10) / 10;
 
-const toKey = (iso: string, bucket: ChartBucket) => {
-  const parts = Object.fromEntries(keyFormat.formatToParts(new Date(iso)).map(({ type, value }) => [type, value]));
-  const full = `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
-  return full.slice(0, KEY_LENGTH[bucket]);
+// The growth model reads a crab's latest log of each day as that day's measurement, so the chart does too
+const latestValue = (dayLogs: CrabLog[], type: LogType, measure: Measure) => {
+  const value = dayLogs
+    .filter((log) => log.log_type === type && log[measure] !== null)
+    .toSorted((left, right) => right.logged_at.localeCompare(left.logged_at))[0]?.[measure];
+  return value === undefined || value === null ? null : toOneDecimal(value);
 };
 
-const LABEL_FORMATS = {
-  day: new Intl.DateTimeFormat('en-US', { timeZone: FARM_TIME_ZONE, month: 'short', day: 'numeric' }),
-  hour: new Intl.DateTimeFormat('en-US', { timeZone: FARM_TIME_ZONE, hour: 'numeric' }),
-  minute: new Intl.DateTimeFormat('en-US', { timeZone: FARM_TIME_ZONE, hour: 'numeric', minute: '2-digit' }),
-  second: new Intl.DateTimeFormat('en-US', { timeZone: FARM_TIME_ZONE, hour: 'numeric', minute: '2-digit', second: '2-digit' }),
-} as const satisfies Record<ChartBucket, Intl.DateTimeFormat>;
+export const toChartPoints = (logs: CrabLog[]): ChartPoint[] => {
+  const days = Object.entries(Object.groupBy(logs, ({ logged_at }) => toFarmDayKey(logged_at))).toSorted(
+    ([left], [right]) => left.localeCompare(right),
+  );
+  const spansYears = new Set(days.map(([day]) => day.slice(0, 4))).size > 1;
+  const labelFormat = spansYears ? dayLabelWithYear : dayLabel;
 
-const dayLabel = LABEL_FORMATS.day;
-
-const average = (values: number[]) =>
-  values.length === 0 ? null : Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
-
-const measuresOf = (logs: CrabLog[], type: LogType, key: 'weight_g' | 'width_mm') =>
-  logs.flatMap((log) => (log.log_type === type && log[key] !== null ? [log[key]] : []));
-
-export const toChartPoints = (logs: CrabLog[]): { bucket: ChartBucket; points: ChartPoint[] } => {
-  const distinctCount = (step: ChartBucket) => new Set(logs.map(({ logged_at }) => toKey(logged_at, step))).size;
-  // Coarsest step that still gives two points: logs on several days plot per day, one busy day per hour, and so on
-  const bucket = BUCKETS.find((step) => distinctCount(step) >= 2) ?? 'day';
-  const spansDays = distinctCount('day') > 1;
-
-  const points = Object.entries(Object.groupBy(logs, ({ logged_at }) => toKey(logged_at, bucket)))
-    .toSorted(([left], [right]) => left.localeCompare(right))
-    .map(([key, bucketLogs = []]) => {
-      const at = new Date(bucketLogs[0]?.logged_at ?? Date.now());
-      const time = LABEL_FORMATS[bucket].format(at);
-      return {
-        bucket_key: key,
-        label: bucket !== 'day' && spansDays ? `${dayLabel.format(at)}, ${time}` : time,
-        actual_weight_g: average(measuresOf(bucketLogs, 'actual', 'weight_g')),
-        predicted_weight_g: average(measuresOf(bucketLogs, 'prediction', 'weight_g')),
-        actual_width_mm: average(measuresOf(bucketLogs, 'actual', 'width_mm')),
-        predicted_width_mm: average(measuresOf(bucketLogs, 'prediction', 'width_mm')),
-      };
-    });
-
-  return { bucket, points };
+  return days.map(([day, dayLogs = []]) => ({
+    day,
+    label: labelFormat.format(new Date(`${day}T12:00:00+08:00`)),
+    actual_weight_g: latestValue(dayLogs, 'actual', 'weight_g'),
+    forecast_weight_g: latestValue(dayLogs, 'prediction', 'weight_g'),
+    actual_width_mm: latestValue(dayLogs, 'actual', 'width_mm'),
+    forecast_width_mm: latestValue(dayLogs, 'prediction', 'width_mm'),
+  }));
 };

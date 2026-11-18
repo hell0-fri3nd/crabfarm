@@ -20,6 +20,7 @@ import CustomLogPagination from './custom-log-pagination';
 import CustomRunPredictionButton from './custom-run-prediction-button';
 import CustomSensorLogTable from './custom-sensor-log-table';
 import { exportCrabLogs } from '../actions/export-crab-logs';
+import { withCrabName } from '../lib/crab-log-query';
 import { countOutOfRangeSince, crabLogsToCsv, filterSensorLogs, paginate, resolveDateRange, sensorLogsToCsv } from '../lib/log-filters';
 import { PREVIEW_NOW, PREVIEW_SENSOR_LOGS } from '../lib/preview-logs';
 import { useLogsSearchParams } from '../lib/use-logs-search-params';
@@ -189,8 +190,7 @@ const CustomLogsView = ({
           {crabChart && (
             <CustomCrabLogChart
               chart={crabChart}
-              series={params.type === 'prediction' ? 'prediction' : 'actual'}
-              onSeriesChange={(type) => setParams({ type: type === 'actual' ? null : type })}
+              onCrabChange={(crabName) => setParams({ q: withCrabName(params.q, crabName) })}
             />
           )}
           {crabTotal > 0 && !crabChart && <CustomCrabLogTable logs={crabPage.rows} now={now} />}
