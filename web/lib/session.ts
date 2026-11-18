@@ -71,6 +71,7 @@ export const getSignedInName = async () => (await cookies()).get(USER_NAME_COOKI
 export const clearSessionCookies = async () => {
   const cookieStore = await cookies();
   [ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, USER_NAME_COOKIE].forEach((name) =>
-    cookieStore.delete({ name, path: env.COOKIE_PATH }),
+    // Browsers ignore a __Host- or __Secure- cookie sent without Secure, even one that deletes it
+    cookieStore.delete({ name, ...BASE_COOKIE_OPTIONS }),
   );
 };
