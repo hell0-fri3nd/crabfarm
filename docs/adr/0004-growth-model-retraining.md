@@ -1,6 +1,6 @@
 # ADR-0004: Scheduled retraining of the growth model, promoted only when it beats the current one
 
-**Status:** Accepted (API built; web button and the weekly task pending)
+**Status:** Accepted (API and web built; the weekly task pending)
 **Date:** 2026-11-17
 **Deciders:** API maintainers
 **Extends:** `api/context/01-architecture.md` §12 (Growth Forecast)
@@ -138,7 +138,7 @@ Files plus a manifest replace a model registry. One `current.json` gives version
 3. [x] Add `ml/retrain_growth_model.py`: data check, train, gate, versioned save, atomic `current.json`, keep the last 5. `train_growth_model.py` stays for manual runs.
 4. [x] Change `load_growth_forecaster()` to reload when `current.json` names a new version (checked at most every `forecast_reload_seconds`, 60).
 4a. [x] Add the training lock and per-training records to the retrain script, then `POST /forecasts/model-trainings` (202, starts the script as a separate process, 409 while one runs), `GET /forecasts/model-trainings` and `GET /forecasts/model-trainings/{training_id}`, all `DeveloperOrAdmin`.
-4b. [ ] Web: a **Retrain model** button next to **Run prediction** on the Logs page (DEVELOPER and ADMIN only) that polls the latest status and shows the scores and why a model was or wasn't promoted.
+4b. [x] (Built per [ADR-0005](0005-growth-model-status-over-sse.md): **Retrain model** lives in the model alert on Logs and the Dashboard, shown when the model is missing or due, and the status arrives over SSE instead of polling.) Web: a **Retrain model** button next to **Run prediction** on the Logs page (DEVELOPER and ADMIN only) that polls the latest status and shows the scores and why a model was or wasn't promoted.
 5. [ ] Register the weekly task (Task Scheduler on the server) and document the command in `AGENT.md` §2.
 6. [x] Update `api/context/01-architecture.md` §12 once this ADR is accepted.
 7. [ ] Later: move the schedule into the worker, and add a `system.model_promoted` event so the dashboard can show the active model version.

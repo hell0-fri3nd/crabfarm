@@ -11,13 +11,14 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core import settings, register_exception_handlers
 
-from app.infrastructure.messaging import CRAB_WEIGHT, RabbitClient, SYSTEM_EVENTS
+from app.infrastructure.messaging import CRAB_WEIGHT, FORECAST_EVENTS, RabbitClient, SYSTEM_EVENTS
 from app.infrastructure.streaming import StreamHub
 from app.infrastructure.vision import YoloDetector
 
 from app.system import ROUTERS as SYSTEM_ROUTERS
 from app.authentication import ROUTERS as AUTH_ROUTERS
 from app.crab_management import ROUTERS as CRAB_ROUTERS
+from app.crab_management.logs import ModelStatusWatcher
 from app.audit import ROUTERS as AUDIT_ROUTERS
 from app.artificial_intelligence import ROUTERS as AI_ROUTERS
 from app.devices import ROUTERS as DEVICES_ROUTERS
@@ -29,12 +30,15 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     broker = RabbitClient()
     app.state.broker = app.state.hub = None
+    watcher: ModelStatusWatcher | None = None
     if settings.rabbitmq_enabled:
         try:
             await broker.connect()
-            hub = StreamHub(broker, bindings=[SYSTEM_EVENTS], device_bindings=[CRAB_WEIGHT])
+            hub = StreamHub(broker, bindings=[SYSTEM_EVENTS, FORECAST_EVENTS], device_bindings=[CRAB_WEIGHT])
             await hub.start()
             app.state.broker, app.state.hub = broker, hub
+            watcher = ModelStatusWatcher(broker)
+            watcher.start()
         except (AMQPError, OSError):
             # Auth and CRUD keep working without the broker; stream endpoints answer 503 until a restart
             logger.exception("RabbitMQ unreachable at startup; live streams are disabled")
@@ -50,6 +54,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     detector.close()
+    if watcher is not None:
+        await watcher.stop()
     if app.state.hub is not None:
         await app.state.hub.stop()
     await broker.close()

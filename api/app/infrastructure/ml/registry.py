@@ -116,6 +116,18 @@ class ModelRegistry:
             if stale.name != served:
                 stale.unlink(missing_ok=True)
 
+    def fingerprint(self) -> tuple[int | None, int | None, int | None]:
+        """Changes whenever a model is promoted, a training starts or ends, or a training record is rewritten."""
+
+        def modified(path: Path) -> int | None:
+            try:
+                return path.stat().st_mtime_ns
+            except FileNotFoundError:
+                return None
+
+        latest_record = max((modified(path) or 0 for path in self.trainings_dir.glob("*.json")), default=None)
+        return modified(self.current_path), modified(self.lock_path), latest_record
+
     def record_training(self, training: TrainingStatus) -> None:
         self.__write_atomically(self.trainings_dir / f"{training.training_id}.json", training.model_dump_json(indent=2))
         for stale in self.list_trainings()[TRAININGS_KEPT:]:

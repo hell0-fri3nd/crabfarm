@@ -11,6 +11,7 @@ from .log_schemas import (
     ListLogsQuery,
     LogSort,
 )
+from .model_status_schemas import ModelState, ModelStatus
 from .training_schemas import ListModelTrainingsQuery
 
 __all__ = [
@@ -24,4 +25,6 @@ __all__ = [
     "ListLogsQuery",
     "LogSort",
     "ListModelTrainingsQuery",
+    "ModelState",
+    "ModelStatus",
 ]

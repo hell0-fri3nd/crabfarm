@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     forecast_keep_models: int = Field(default=5, ge=1)
     # A lock older than this belongs to a training that died, so the next one may take it over
     forecast_training_timeout_minutes: int = Field(default=30, ge=1)
+    forecast_status_poll_seconds: float = Field(default=5, gt=0)
+    forecast_status_refresh_seconds: float = Field(default=60, gt=0)
 
     # Given to new and reset users; onboarding forces both to be changed on first sign-in
     default_user_password: str = Field(default="@HelloFriend1234", min_length=8, max_length=128)

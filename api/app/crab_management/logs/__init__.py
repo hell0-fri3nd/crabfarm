@@ -14,6 +14,7 @@ from .schemas import (
 from .services import (
     ForecastServices,
     LogServices,
+    ModelStatusWatcher,
     ModelTrainingServices,
 )
 
@@ -27,6 +28,7 @@ __all__ = [
     "CreateForecastRequest",
     "ForecastResult",
     "GrowthDay",
+    "ModelStatusWatcher",
     "PredictedDay",
     "ForecastServices",
     "LogServices",

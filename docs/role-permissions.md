@@ -72,6 +72,7 @@ A deactivated user can't sign in, unlock with a PIN, or use their own-account en
 | See recent logs on Scan crab (latest 5) | `GET /audit-events` (`action=log.create`) | Yes | Yes | Own |
 | See who recorded each log, by name | `GET /users` | Yes | Yes | No ⁹ |
 | Run the 7-day growth forecast (all crabs, or one), saved as prediction logs | `POST /forecasts` | Yes | Yes | No |
+| See whether the growth model is missing, due for a retrain or retraining (live) | `GET /forecasts/model`, `GET /forecasts/stream` | Yes | Yes | Yes |
 | Retrain the growth model (ADR-0004), and see past trainings and their results | `POST /forecasts/model-trainings`, `GET /forecasts/model-trainings`, `GET /forecasts/model-trainings/{training_id}` | Yes | Yes | No |
 
 Each log stores who recorded it. Every role sees every log on the Logs page; only the names behind "Logged by" depend on the role.

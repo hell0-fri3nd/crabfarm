@@ -7,6 +7,7 @@ from fastapi import (
     Request,
     status,
 )
+from fastapi.responses import StreamingResponse
 
 from app.core import (
     DeveloperOrAdmin,
@@ -17,12 +18,20 @@ from app.core import (
     get_current_user,
 )
 from app.core.exceptions import AUDIT_ACTION_KEY
-from ..dependencies import ForecastServicesDep
-from ..schemas import CreateForecastRequest, ForecastResult
+from ..dependencies import (
+    CurrentModelStatusDep,
+    ForecastServicesDep,
+    ModelStatusServicesDep,
+    ModelStatusStreamDep,
+    TokenExpiry,
+)
+from ..schemas import CreateForecastRequest, ForecastResult, ModelStatus
 from ..services import FORECAST_ERRORS, FORECAST_OUTCOMES
 
 # The model only appears when someone trains one, so clients shouldn't retry quickly
 MODEL_RETRY_AFTER_SECONDS = "3600"
+
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 router = APIRouter(
     prefix="/forecasts",
@@ -61,3 +70,40 @@ def create_forecast(
     result = services.create(payload, actor, request)
     raise_for(result, "forecast.create")
     return result
+
+
+@router.get(
+    "/model",
+    response_model=Response[ModelStatus],
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "forecast_model.read"},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing, invalid or expired access token"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error reading the model status"},
+    },
+)
+def get_forecast_model(services: ModelStatusServicesDep):
+    return services.get()
+
+
+@router.get(
+    "/stream",
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "forecast.stream"},
+    responses={
+        status.HTTP_200_OK: {
+            "content": {"text/event-stream": {}},
+            "description": "SSE stream of `forecast.model` events (data: ModelStatus): the current status first, then each change; `: ping` every 15 s",
+        },
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing, invalid or expired token"},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse, "description": "Broker off or unreachable"},
+    },
+)
+async def stream_forecast_model(
+    request: Request,
+    stream: ModelStatusStreamDep,
+    first: CurrentModelStatusDep,
+    until: TokenExpiry,
+) -> StreamingResponse:
+    return StreamingResponse(stream.stream(request, first, until), media_type="text/event-stream", headers=SSE_HEADERS)

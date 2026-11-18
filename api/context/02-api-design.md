@@ -211,7 +211,7 @@ Used for device commands and forecast runs.
 |---|---|
 | Path | `GET /<resource>/stream`, filtered by query params (`?device_id=`, `?batch_id=`) |
 | Response | `200`, `Content-Type: text/event-stream`, `Cache-Control: no-cache` |
-| Event name | `event: <resource>.<event>`, e.g. `scale.reading`, `sensor.reading`, `device.status`, `forecast.completed` |
+| Event name | `event: <resource>.<event>`, e.g. `scale.reading`, `sensor.reading`, `device.status`, `forecast.model` |
 | Data | One JSON object per event, validated by a `*Event` schema |
 | Heartbeat | `: ping` comment every 15 s |
 | Errors before streaming | Normal `401`/`403`/`404` JSON. After the stream starts, send `event: error` and close. |
@@ -290,6 +290,8 @@ User management is for `DEVELOPER` and `ADMIN`, not `STAFF`. Creating, editing, 
 | POST | `/logs` (`AnyRole`; `{crab_id, batch_id?, log_type = actual, width_mm?, weight_g?}`, at least one measurement) | 201 `LOG_CREATED` (`user_id` = the caller) | 404 `crab_not_found` (`crab_id`), 404 `batch_not_found` (`batch_id`), read from the foreign-key violation on insert (no lookup first), 422 |
 | GET / PATCH / DELETE | `/logs/{log_id}` | 200 | 404 |
 | POST | `/forecasts` (`DeveloperOrAdmin`; body optional: `{}` = every crab with enough logged days, `{crab_id}` = one crab) | 201 `FORECAST_CREATED` (`{model_version, forecasts: [{crab_id, batch_id, window_start, window_end, points: [{day_offset, day, predicted_width_mm, predicted_weight_g}] × 7}], skipped_crab_ids, already_forecast_crab_ids}`; each point is also inserted as a `log_type = prediction` log) | 400 `forecast_insufficient_data` (`crab_id`), 409 `forecast_already_exists` (`crab_id`): the crab's (or every eligible crab's) earlier forecast still covers the coming days, 503 `FORECAST_MODEL_UNAVAILABLE` (`Retry-After: 3600`), 500 |
+| GET | `/forecasts/model` (any role; not audited; ADR-0005) | 200 `FORECAST_MODEL_STATUS` (`{state: training \| missing \| due \| ready, version, trained_at, new_logged_days, retrain_after_days, training: TrainingStatus \| null}`) | — |
+| GET | `/forecasts/stream` (any role; SSE) | 200 `text/event-stream`: `forecast.model` (data: the same `ModelStatus`), the current one first, then each change | 503 broker off or unreachable (`Retry-After: 30`) |
 | POST | `/forecasts/model-trainings` (`DeveloperOrAdmin`, no body; ADR-0004; audited as `model_training.create`) | 202 `MODEL_TRAINING_QUEUED` (`TrainingStatus`, `status = queued`): a gated retrain runs in its own process | 409 a training is already running (plain detail), 500 process couldn't start |
 | GET | `/forecasts/model-trainings` (`DeveloperOrAdmin`; `?page=&size=&status=&sort=`, `sort` ∈ `±started_at`, default `-started_at`; audited as `model_training.list`) | 200 `MODEL_TRAININGS_LISTED` (a page of `TrainingStatus`) | 422 bad page, status or sort |
 | GET | `/forecasts/model-trainings/{training_id}` (`DeveloperOrAdmin`; not audited, polled while a training runs) | 200 `MODEL_TRAINING_FOUND` (`{training_id (UUID), status: queued | running | succeeded | failed | insufficient_data, outcome: promoted | rejected | skipped | null, trigger, started_by, started_at, finished_at, version, scores: {challenger, champion, baseline: {mae_width_mm, mae_weight_g, mape_pct}}, reason}`) | 404 `model_training_not_found` (`path.training_id`), 422 not a UUID |
