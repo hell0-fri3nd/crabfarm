@@ -16,7 +16,6 @@ import { cn } from '@/lib/utils';
 import type { Batch, Crab } from '@/types/crab-management';
 
 import CustomDetectionOverlay from './custom-detection-overlay';
-import CustomMeasurementSteps from './custom-measurement-steps';
 import { useCameraDevices } from './use-camera-devices';
 import { useDetectionSocket } from './use-detection-socket';
 import { useFrameCapture } from './use-frame-capture';
@@ -250,10 +249,6 @@ const CustomScanViewport = ({ batches, crabs, sticker, onScan, onMeasure }: Cust
             )}
           </div>
         </div>
-
-        {isDetecting && detection.result?.measurement && (
-          <CustomMeasurementSteps result={detection.result} medianMm={width.widthMm} samples={width.samples} />
-        )}
 
         {readError && (
           <p role="alert" className="text-sm text-destructive">

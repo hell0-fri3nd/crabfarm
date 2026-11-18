@@ -32,12 +32,11 @@ export const useSteadyWidth = (result: DetectionResult | null) => {
   if (tracked.result !== result) setTracked(track(tracked, result));
 
   const { widths } = tracked;
-  if (widths.length === 0) return { widthMm: null, isSteady: false, samples: 0 };
+  if (widths.length === 0) return { widthMm: null, isSteady: false };
 
   const spread = Math.max(...widths) - Math.min(...widths);
   return {
     widthMm: toMedian(widths),
     isSteady: widths.length >= MIN_SAMPLES && spread <= STEADY_SPREAD_MM,
-    samples: widths.length,
   };
 };
