@@ -55,3 +55,6 @@
 /api/app/devices/feeding/__pycache__
 /api/app/devices/feeding/models/__pycache__
 /api/app/system/dashboard/__pycache__
+/api/app/devices/feeding/router/__pycache__
+/api/app/devices/feeding/schemas/__pycache__
+/api/app/devices/feeding/services/__pycache__
