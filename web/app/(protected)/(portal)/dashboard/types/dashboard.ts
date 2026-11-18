@@ -1,13 +1,10 @@
 import { z } from 'zod';
 
-import { sensorKindSchema } from '@/types/sensor';
+import { sensorKindSchema, sensorStatusSchema } from '@/types/sensor';
 import { severitySchema } from '@/types/severity';
 
 export { sensorKindSchema };
 export type { SensorKind } from '@/types/sensor';
-
-export const trendRangeSchema = z.enum(['24h', '7d', '30d']);
-export type TrendRange = z.infer<typeof trendRangeSchema>;
 
 export const growthMetricSchema = z.enum(['weight', 'width']);
 export type GrowthMetric = z.infer<typeof growthMetricSchema>;
@@ -51,7 +48,7 @@ export const sensorReadingSchema = z.object({
   safe_label: z.string(),
   change_label: z.string(),
   last_seen_label: z.string().nullable(),
-  severity: severitySchema.nullable(),
+  status: sensorStatusSchema.nullable(),
 });
 export type SensorReading = z.infer<typeof sensorReadingSchema>;
 

@@ -1,4 +1,4 @@
-import { Droplet, FlaskConical, Thermometer, Waves, Wind } from 'lucide-react';
+import { Droplet, FlaskConical, GlassWater, Thermometer, Waves, Wind } from 'lucide-react';
 
 import type { LucideIcon } from 'lucide-react';
 
@@ -9,5 +9,6 @@ export const SENSOR_ICONS = {
   ph: Droplet,
   salinity: Waves,
   ammonia: FlaskConical,
+  turbidity: GlassWater,
   oxygen: Wind,
 } as const satisfies Record<SensorKind, LucideIcon>;

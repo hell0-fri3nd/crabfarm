@@ -34,6 +34,10 @@ const SENSOR_SHAPES = {
     label: 'Ammonia', unit: 'mg/L', decimals: 2, safe_label: '< 0.5', base: 0.32, swing: 0.32,
     isOutOfRange: (value) => value >= 0.5, isWatch: (value) => value >= 0.42,
   },
+  turbidity: {
+    label: 'Turbidity', unit: 'NTU', decimals: 1, safe_label: 'Not set', base: 10.6, swing: 2.4,
+    isOutOfRange: () => false, isWatch: () => false,
+  },
   oxygen: {
     label: 'Oxygen', unit: 'mg/L', decimals: 1, safe_label: '≥ 5', base: 6.2, swing: 1.1,
     isOutOfRange: (value) => value < 5, isWatch: (value) => value < 5.6,

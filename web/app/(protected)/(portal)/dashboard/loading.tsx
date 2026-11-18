@@ -1,7 +1,7 @@
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const TILE_KEYS = ['temperature', 'ph', 'salinity', 'ammonia', 'oxygen'];
+const TILE_KEYS = ['temperature', 'ph', 'salinity', 'ammonia', 'turbidity', 'oxygen'];
 const STAT_KEYS = ['cages', 'crabs', 'batch', 'next-feed'];
 
 const DashboardLoading = () => (
@@ -29,7 +29,7 @@ const DashboardLoading = () => (
     <Skeleton className="h-28 w-full rounded-xl" />
     <Card className="gap-5 rounded-2xl px-6">
       <Skeleton className="h-6 w-32" />
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {TILE_KEYS.map((key) => (
           <Skeleton key={key} className="h-40 rounded-xl" />
         ))}

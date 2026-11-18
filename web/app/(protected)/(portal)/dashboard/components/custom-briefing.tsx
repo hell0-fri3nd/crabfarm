@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Bot, CalendarClock, ChartLine } from 'lucide-react';
+import { Bot, CalendarClock, Waves } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -16,9 +16,9 @@ const CustomBriefing = ({ firstName, summary }: CustomBriefingProps) => (
     <p className="max-w-prose text-base leading-relaxed sm:text-lg">{summary}</p>
     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
       <Button asChild className="h-11 w-full px-5 sm:w-auto">
-        <Link href="#sensor-trends">
-          <ChartLine aria-hidden />
-          See ammonia trend
+        <Link href="#water-now">
+          <Waves aria-hidden />
+          Check the water
         </Link>
       </Button>
       <Button asChild variant="outline" className="h-11 w-full bg-card/60 px-5 sm:w-auto">

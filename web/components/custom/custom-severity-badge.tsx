@@ -21,16 +21,17 @@ export const SEVERITY_LOOK = {
 
 type CustomSeverityBadgeProps = {
   level: Severity;
+  label?: string;
   className?: string;
 };
 
-const CustomSeverityBadge = ({ level, className }: CustomSeverityBadgeProps) => {
-  const { label, icon: Icon, className: lookClassName } = SEVERITY_LOOK[level];
+const CustomSeverityBadge = ({ level, label, className }: CustomSeverityBadgeProps) => {
+  const { label: levelLabel, icon: Icon, className: lookClassName } = SEVERITY_LOOK[level];
 
   return (
     <Badge variant="outline" className={cn('gap-1 px-2 py-0.5 font-semibold', lookClassName, className)}>
       <Icon aria-hidden />
-      {label}
+      {label ?? levelLabel}
     </Badge>
   );
 };

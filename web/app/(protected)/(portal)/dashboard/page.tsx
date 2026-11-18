@@ -5,6 +5,8 @@ import { CircleX } from 'lucide-react';
 import type { Metadata } from 'next';
 
 import { forecastModelApi } from '@/api/forecast-model-api';
+import { waterSensorLogsApi } from '@/api/water-sensor-logs-api';
+import { waterSensorThresholdsApi } from '@/api/water-sensor-thresholds-api';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import CustomEmptyState from '@/components/custom/custom-empty-state';
@@ -12,22 +14,18 @@ import { getCurrentUser } from '@/lib/auth';
 import { toFirstName } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import { PREVIEW_USER } from '@/lib/preview';
+import { toWaterSensorInfos } from '@/lib/water-sensors';
 
 import CustomAlertList from './components/custom-alert-list';
 import CustomBriefing from './components/custom-briefing';
 import CustomGrowthCard from './components/custom-growth-card';
 import CustomGrowthModelAlert from './components/custom-growth-model-alert';
-import CustomSensorTrends from './components/custom-sensor-trends';
 import CustomSummaryStats from './components/custom-summary-stats';
-import CustomWaterNow from './components/custom-water-now';
+import CustomWaterMonitor from './components/custom-water-monitor';
+import CustomWaterUpdates from './components/custom-water-updates';
 import { DEFAULT_GROWTH_RANGE } from './lib/growth-points';
 import { loadGrowth } from './lib/load-growth';
-import {
-  PREVIEW_ALERTS,
-  PREVIEW_BRIEFING,
-  PREVIEW_READINGS,
-  PREVIEW_SUMMARY,
-} from './lib/preview-dashboard';
+import { PREVIEW_ALERTS, PREVIEW_BRIEFING, PREVIEW_SUMMARY } from './lib/preview-dashboard';
 import { growthRangeSchema } from './types/dashboard';
 
 export const metadata: Metadata = { title: 'Dashboard' };
@@ -59,6 +57,48 @@ const GrowthLoader = async ({ searchParams }: DashboardPageProps) => {
   );
 };
 
+// Ten 30-minute logs of six sensors each
+const WATER_UPDATE_ROWS = 60;
+
+const WaterLoadError = ({ title, message }: { title: string; message: string }) => (
+  <Card className="py-0">
+    <CustomEmptyState icon={CircleX} title={title} hint={`${message} The rest of the dashboard still works.`} />
+  </Card>
+);
+
+const WaterLoader = async () => {
+  await connection();
+  const [thresholds, logs] = await Promise.all([
+    waterSensorThresholdsApi.list(),
+    waterSensorLogsApi.list(new URLSearchParams({ page: '1', size: String(WATER_UPDATE_ROWS), sort: '-measured_at' })),
+  ]);
+
+  if (!thresholds.ok) return <WaterLoadError title="Couldn't load the water sensors" message={thresholds.message} />;
+
+  const sensors = toWaterSensorInfos(thresholds.data);
+
+  return (
+    <>
+      <CustomWaterMonitor sensors={sensors} />
+      {logs.ok ? (
+        <CustomWaterUpdates logs={logs.data.items} now={new Date()} sensors={sensors} />
+      ) : (
+        <WaterLoadError title="Couldn't load the sensor logs" message={logs.message} />
+      )}
+    </>
+  );
+};
+
+const WaterSkeleton = () => (
+  <Card className="gap-5 rounded-2xl px-4 py-5 sm:px-6 sm:py-6" aria-busy="true">
+    <p className="sr-only" role="status">
+      Loading the water sensors…
+    </p>
+    <Skeleton className="h-6 w-56" />
+    <Skeleton className="h-72 w-full rounded-xl" />
+  </Card>
+);
+
 const GrowthSkeleton = () => (
   <Card className="gap-5 rounded-2xl px-4 py-5 sm:px-6 sm:py-6" aria-busy="true">
     <p className="sr-only" role="status">
@@ -75,8 +115,9 @@ const DashboardPage = ({ searchParams }: DashboardPageProps) => (
     <CustomBriefing firstName={toFirstName(PREVIEW_USER.name)} summary={PREVIEW_BRIEFING} />
     <CustomSummaryStats stats={PREVIEW_SUMMARY} />
     <CustomAlertList alerts={PREVIEW_ALERTS} />
-    <CustomWaterNow readings={PREVIEW_READINGS} />
-    <CustomSensorTrends />
+    <Suspense fallback={<WaterSkeleton />}>
+      <WaterLoader />
+    </Suspense>
     <Suspense fallback={<GrowthSkeleton />}>
       <GrowthLoader searchParams={searchParams} />
     </Suspense>

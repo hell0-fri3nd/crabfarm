@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const logTypeSchema = z.enum(['actual', 'prediction']);
 export type LogType = z.infer<typeof logTypeSchema>;
 
-const apiDecimalSchema = z.union([z.string(), z.number()]).pipe(z.coerce.number());
+export const apiDecimalSchema =z.union([z.string(), z.number()]).pipe(z.coerce.number());
 
 export const apiLogSchema = z.object({
   id: z.number().int().positive(),
