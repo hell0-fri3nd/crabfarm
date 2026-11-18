@@ -16,6 +16,7 @@ import { can } from '@/lib/permissions';
 import { PREVIEW_USER } from '@/lib/preview';
 import { toWaterSensorInfos } from '@/lib/water-sensors';
 
+import { dashboardApi } from './api/dashboard-api';
 import CustomAlertList from './components/custom-alert-list';
 import CustomBriefing from './components/custom-briefing';
 import CustomGrowthCard from './components/custom-growth-card';
@@ -25,7 +26,7 @@ import CustomWaterMonitor from './components/custom-water-monitor';
 import CustomWaterUpdates from './components/custom-water-updates';
 import { DEFAULT_GROWTH_RANGE } from './lib/growth-points';
 import { loadGrowth } from './lib/load-growth';
-import { PREVIEW_BRIEFING, PREVIEW_SUMMARY } from './lib/preview-dashboard';
+import { PREVIEW_BRIEFING } from './lib/preview-dashboard';
 import { growthRangeSchema } from './types/dashboard';
 
 export const metadata: Metadata = { title: 'Dashboard' };
@@ -89,6 +90,29 @@ const WaterLoader = async () => {
   );
 };
 
+const SummaryLoader = async () => {
+  const summary = await dashboardApi.summary();
+  if (!summary.ok) return <WaterLoadError title="Couldn't load the summary" message={summary.message} />;
+
+  return <CustomSummaryStats initialSummary={summary.data} />;
+};
+
+const SUMMARY_SKELETON_KEYS = ['water', 'crabs', 'next-feed'];
+
+const SummarySkeleton = () => (
+  <Card className="grid grid-cols-1 gap-6 px-6 py-5 sm:grid-cols-3" aria-busy="true">
+    <p className="sr-only" role="status">
+      Loading the summary…
+    </p>
+    {SUMMARY_SKELETON_KEYS.map((key) => (
+      <div key={key} className="flex flex-col gap-2">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-8 w-16" />
+      </div>
+    ))}
+  </Card>
+);
+
 const WaterSkeleton = () => (
   <Card className="gap-5 rounded-2xl px-4 py-5 sm:px-6 sm:py-6" aria-busy="true">
     <p className="sr-only" role="status">
@@ -113,7 +137,9 @@ const GrowthSkeleton = () => (
 const DashboardPage = ({ searchParams }: DashboardPageProps) => (
   <div className="flex w-full flex-col gap-8">
     <CustomBriefing firstName={toFirstName(PREVIEW_USER.name)} summary={PREVIEW_BRIEFING} />
-    <CustomSummaryStats stats={PREVIEW_SUMMARY} />
+    <Suspense fallback={<SummarySkeleton />}>
+      <SummaryLoader />
+    </Suspense>
     <CustomAlertList />
     <Suspense fallback={<WaterSkeleton />}>
       <WaterLoader />

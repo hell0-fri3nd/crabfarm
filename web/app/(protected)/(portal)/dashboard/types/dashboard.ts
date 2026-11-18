@@ -12,13 +12,27 @@ export type GrowthMetric = z.infer<typeof growthMetricSchema>;
 export const growthRangeSchema = z.enum(['7d', '30d', '12m']);
 export type GrowthRange = z.infer<typeof growthRangeSchema>;
 
-export const summaryStatSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  value: z.string(),
-  unit: z.string().nullable(),
+export const dashboardSummarySchema = z.object({
+  crabs_logged_today: z.number().int().nonnegative(),
+  crabs_total: z.number().int().nonnegative(),
+  next_feed: z
+    .object({
+      schedule_name: z.string(),
+      feed_time: z.string(),
+      at: z.string(),
+      day_offset: z.number().int().nonnegative(),
+    })
+    .nullable(),
 });
-export type SummaryStat = z.infer<typeof summaryStatSchema>;
+export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
+
+export type SummaryStat = {
+  id: string;
+  label: string;
+  value: string;
+  unit: string | null;
+  tone?: 'warning' | 'danger';
+};
 
 export const sensorReadingSchema = z.object({
   kind: sensorKindSchema,
