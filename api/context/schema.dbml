@@ -158,7 +158,59 @@ Table devices.water_sensor_logs {
   }
 }
 
+Enum devices.schedule_days {
+  "every-day"
+  weekdays
+  weekends
+  "mon-wed-fri-sun"
+}
+
+Table devices.cages {
+  id         uuid        [pk, note: 'uuid4 from app']
+  group_code varchar(10) [not null, note: 'A..E, same letters as crab groups']
+  cage_name  varchar(50) [not null, unique, note: 'same value as the crab name, e.g. A1']
+  is_active  boolean     [not null, default: true, note: 'false = schedules skip this cage']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`, note: 'onupdate now()']
+
+  indexes {
+    group_code [name: 'ix_devices_cages_group_code']
+  }
+
+  Note: 'Seeded with one active cage per crab name (A1..E5). CHECK ck_cages_name_in_group: left(cage_name, 1) = group_code.'
+}
+
+Table devices.schedules {
+  id         uuid        [pk, note: 'uuid4 from app']
+  name       varchar(40) [not null]
+  feed_time  time        [not null, note: 'farm clock (farm_time_zone)']
+  days       devices.schedule_days [not null, default: 'every-day']
+  is_enabled boolean     [not null, default: true]
+  user_id    uuid        [not null, note: 'auth.users.id — no FK (cross-module)']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`, note: 'onupdate now()']
+  deleted_at timestamptz [null, note: 'soft delete']
+
+  indexes {
+    is_enabled [name: 'ix_devices_schedules_is_enabled']
+    user_id    [name: 'ix_devices_schedules_user_id']
+  }
+}
+
+Table devices.schedule_groups {
+  schedule_id uuid        [not null]
+  group_code  varchar(10) [not null, note: 'matches cages.group_code; the service checks that cages exist in this group']
+
+  indexes {
+    (schedule_id, group_code) [pk, name: 'pk_schedule_groups']
+    group_code [name: 'ix_devices_schedule_groups_group_code']
+  }
+
+  Note: 'The groups a schedule feeds. The service requires at least one, so a schedule with no rows feeds nothing.'
+}
+
 //// ───────────── relationships (within a module only) ─────────────
 
 Ref fk_logs_batch_id_batches: crab_management.logs.batch_id > crab_management.batches.id
 Ref fk_logs_crab_id_crabs:    crab_management.logs.crab_id > crab_management.crabs.id
+Ref fk_schedule_groups_schedule_id_schedules: devices.schedule_groups.schedule_id > devices.schedules.id [delete: cascade]

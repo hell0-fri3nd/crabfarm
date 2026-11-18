@@ -1,10 +1,10 @@
 # 04 — Database Schema
 
 The PostgreSQL schema, naming rules, and normalization/denormalization rules.
-**Diagram:** [`schema.dbml`](schema.dbml). Paste it into https://dbdiagram.io.
+**Diagram:** [`schema.dbml`](schema.dbml), plus [`feeding.dbml`](feeding.dbml) for the feeding tables alone. Paste either into https://dbdiagram.io.
 **Source of truth:** the SQLModel models (`app/**/models.py`) and the Alembic migrations (`api/migrations/versions`).
 
-> **Rule:** every change to a model or migration updates **this file and `schema.dbml` in the same commit**.
+> **Rule:** every change to a model or migration updates **this file and `schema.dbml` in the same commit**. A change to `cages`, `schedules` or `schedule_groups` also updates `feeding.dbml`.
 
 ---
 
@@ -17,7 +17,7 @@ One PostgreSQL database, **one Postgres schema per module**, the same way the co
 | `auth` | `authentication` | `users` | live |
 | `audit` | `core/audit` | `audit_events` | live |
 | `crab_management` | `crab_management` | `crabs`, `batches`, `logs` | live (see §6 drift) |
-| `devices` | `devices` | `water_sensor_logs` | live (devices and commands planned) |
+| `devices` | `devices` | `water_sensor_logs`, `cages`, `schedules`, `schedule_groups` | live (device commands planned) |
 
 - A module's tables live only in its schema: `__table_args__ = {"schema": "<schema>"}`.
 - **Modules are isolated: no foreign keys between schemas, ever** (including toward `auth.users`). FKs exist only between tables of the **same** module (§5).
@@ -102,6 +102,46 @@ Written by the worker: one row per sensor per 30-minute slot.
 | `slot_at` | `timestamptz` | no | start of the logging slot; unique with `sensor` (`uq_water_sensor_logs_sensor`) |
 | `created_at` | `timestamptz` | no | default `now()` |
 
+### `devices.cages`
+
+A cage and whether it can be fed ([ADR-0006](../../docs/adr/0006-feeding-schedules-and-cages.md)). Seeded with one active cage per crab name (`A1`…`E5`).
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `id` | `uuid` | no | PK, `uuid4()` (app) |
+| `group_code` | `varchar(10)` | no | group letter `A`…`E`, indexed |
+| `cage_name` | `varchar(50)` | no | unique; the same value as the crab's `name` |
+| `is_active` | `boolean` | no | default `true`; `false` = schedules skip this cage (the page's **Scheduled** switch). Feed now still works |
+| `created_at`, `updated_at` | `timestamptz` | no | default `now()`; `updated_at` has `onupdate=now()` |
+
+`ck_cages_name_in_group` requires `left(cage_name, 1) = group_code`, so `A1` can only be in group `A`.
+
+`cage_name` is the cage's own value and has no link to `crab_management.crabs`, so renaming a crab doesn't rename its cage. A rename must change both.
+
+### `devices.schedules`
+
+A repeating feed, matching the Feeding page's schedule form.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `id` | `uuid` | no | PK, `uuid4()` (app) |
+| `name` | `varchar(40)` | no | |
+| `feed_time` | `time` | no | wall-clock time on the farm clock (`farm_time_zone`); the API accepts only `:00` and `:30` |
+| `days` | enum `devices.schedule_days` (`every-day`, `weekdays`, `weekends`, `mon-wed-fri-sun`) | no | default `every-day` |
+| `is_enabled` | `boolean` | no | default `true`, indexed |
+| `user_id` | `uuid` | no | who created it; refers to `auth.users.id`, indexed, **no FK** (cross-module, §5) |
+| `created_at`, `updated_at` | `timestamptz` | no | default `now()`; `updated_at` has `onupdate=now()` |
+| `deleted_at` | `timestamptz` | yes | soft delete, so a deleted schedule can be restored |
+
+### `devices.schedule_groups`
+
+The groups a schedule feeds, one row per group. "All groups" is one row for each group. `POST /schedules` requires at least one, so a schedule with no rows feeds nothing.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `schedule_id` | `uuid` | no | PK part, FK → `schedules.id` (`ON DELETE CASCADE`) |
+| `group_code` | `varchar(10)` | no | PK part, indexed; matches `cages.group_code`, which repeats per cage and so can't be an FK target. The service checks that the group has cages |
+
 ### Relationships
 
 ```
@@ -109,9 +149,14 @@ Within crab_management (real FKs):
 crab_management.batches 1 ──< crab_management.logs (logs.batch_id, optional)
 crab_management.crabs   1 ──< crab_management.logs (logs.crab_id)
 
+Within devices:
+devices.schedules 1 ──< devices.schedule_groups (real FK, schedule_groups.schedule_id)
+devices.schedule_groups >──< devices.cages      (matched on group_code, no FK)
+
 Across modules (plain IDs, no FK):
 crab_management.batches.user_id ··· auth.users.id
 crab_management.logs.user_id    ··· auth.users.id
+devices.schedules.user_id       ··· auth.users.id
 audit.audit_events.actor_id     ··· auth.users.id
 ```
 
