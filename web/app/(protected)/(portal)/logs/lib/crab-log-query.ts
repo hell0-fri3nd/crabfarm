@@ -7,7 +7,7 @@ import { PAGE_SIZE } from './log-filters';
 import type { ApiLog, CrabLog, CrabLogPage, LogsPage, LogsSearchParams } from '../types/logs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const PRESET_DAYS = { today: 0, '7d': 6, '30d': 29 } as const;
+const PRESET_DAYS = { today: 0, '7d': 6, '30d': 29, '12m': 364 } as const;
 
 const BATCH_AND_CRAB = /^B(\d{1,9})(?:-?([A-Z])-?(\d{1,3}))?$/;
 const CRAB_ONLY = /^([A-Z])-?(\d{1,3})$/;

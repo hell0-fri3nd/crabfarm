@@ -10,7 +10,7 @@ export type LogTab = z.infer<typeof logTabSchema>;
 export const logViewSchema = z.enum(['table', 'chart']);
 export type LogView = z.infer<typeof logViewSchema>;
 
-export const datePresetSchema = z.enum(['today', '7d', '30d']);
+export const datePresetSchema = z.enum(['today', '7d', '30d', '12m']);
 export type DatePreset = z.infer<typeof datePresetSchema>;
 
 export const levelFilterSchema = z.enum(['all', 'high', 'medium', 'low', 'normal']);

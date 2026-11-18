@@ -12,9 +12,10 @@ export const DATE_PRESET_LABELS = {
   today: 'Today',
   '7d': 'Last 7 days',
   '30d': 'Last 30 days',
+  '12m': 'Last 12 months',
 } as const satisfies Record<DatePreset, string>;
 
-const DATE_PRESET_DAYS = { today: 0, '7d': 6, '30d': 29 } as const satisfies Record<DatePreset, number>;
+const DATE_PRESET_DAYS = { today: 0, '7d': 6, '30d': 29, '12m': 364 } as const satisfies Record<DatePreset, number>;
 
 export const LEVEL_FILTER_LABELS = {
   all: 'All levels',
