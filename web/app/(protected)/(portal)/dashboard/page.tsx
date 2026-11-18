@@ -25,7 +25,7 @@ import CustomWaterMonitor from './components/custom-water-monitor';
 import CustomWaterUpdates from './components/custom-water-updates';
 import { DEFAULT_GROWTH_RANGE } from './lib/growth-points';
 import { loadGrowth } from './lib/load-growth';
-import { PREVIEW_ALERTS, PREVIEW_BRIEFING, PREVIEW_SUMMARY } from './lib/preview-dashboard';
+import { PREVIEW_BRIEFING, PREVIEW_SUMMARY } from './lib/preview-dashboard';
 import { growthRangeSchema } from './types/dashboard';
 
 export const metadata: Metadata = { title: 'Dashboard' };
@@ -114,7 +114,7 @@ const DashboardPage = ({ searchParams }: DashboardPageProps) => (
   <div className="flex w-full flex-col gap-8">
     <CustomBriefing firstName={toFirstName(PREVIEW_USER.name)} summary={PREVIEW_BRIEFING} />
     <CustomSummaryStats stats={PREVIEW_SUMMARY} />
-    <CustomAlertList alerts={PREVIEW_ALERTS} />
+    <CustomAlertList />
     <Suspense fallback={<WaterSkeleton />}>
       <WaterLoader />
     </Suspense>

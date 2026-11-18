@@ -3,4 +3,4 @@ export const PREVIEW_USER = { name: 'Art Lisboa', role: 'Admin' } as const;
 
 export const PREVIEW_FEEDING = { isOn: true, nextFeedLabel: '6:00 AM' } as const;
 
-export const PREVIEW_HIGH_ALERT_COUNT = 1;
+export const PREVIEW_HIGH_ALERT_COUNT = 0;

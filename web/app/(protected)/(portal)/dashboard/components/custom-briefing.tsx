@@ -24,7 +24,7 @@ const CustomBriefing = ({ firstName, summary }: CustomBriefingProps) => (
       <Button asChild variant="outline" className="h-11 w-full bg-card/60 px-5 sm:w-auto">
         <Link href="/feeding">
           <CalendarClock aria-hidden />
-          Check C4 and E2
+          Open Feeding
         </Link>
       </Button>
       <Button asChild variant="ghost" className="h-11 w-full px-4 text-muted-foreground sm:w-auto">

@@ -20,21 +20,6 @@ export const summaryStatSchema = z.object({
 });
 export type SummaryStat = z.infer<typeof summaryStatSchema>;
 
-export const alertActionSchema = z.object({
-  label: z.string(),
-  href: z.string(),
-  kind: z.enum(['ask', 'feeding']),
-});
-
-export const dashboardAlertSchema = z.object({
-  id: z.string(),
-  severity: severitySchema,
-  title: z.string(),
-  description: z.string(),
-  action: alertActionSchema.nullable(),
-});
-export type DashboardAlert = z.infer<typeof dashboardAlertSchema>;
-
 export const sensorReadingSchema = z.object({
   kind: sensorKindSchema,
   label: z.string(),
