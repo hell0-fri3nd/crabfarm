@@ -61,8 +61,9 @@ class Settings(BaseSettings):
     detection_width_offset_mm: float = Field(default=-5.0, ge=-100, le=100)
 
     # Versioned growth checkpoints + current.json (the served one), relative to api/ unless absolute (ADR-0004)
+    farm_time_zone: str = "Asia/Manila"
     forecast_model_dir: str = "ml/models/growth"
-    forecast_history_days: int = Field(default=7, ge=2)
+    forecast_history_days: int = Field(default=14, ge=2)
     forecast_horizon_days: int = Field(default=7, ge=1, le=7)
     forecast_min_logged_days: int = Field(default=7, ge=2)
     forecast_reload_seconds: float = Field(default=60, ge=0)

@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import (
     date,
     datetime,
@@ -10,6 +11,7 @@ from datetime import (
 from decimal import Decimal
 from itertools import groupby
 from operator import attrgetter
+from zoneinfo import ZoneInfo
 
 import numpy as np
 from fastapi import Request, status
@@ -27,6 +29,7 @@ from ..models import Logs, LogType
 from ..schemas import (
     CrabForecast,
     CreateForecastRequest,
+    ForecastReadiness,
     ForecastResult,
     GrowthDay,
     PredictedDay,
@@ -39,6 +42,7 @@ logger = logging.getLogger(__name__)
 FORECAST_OUTCOMES = {
     "FORECAST_READY":              (Outcome.SUCCESS, status.HTTP_200_OK),
     "FORECAST_CREATED":            (Outcome.SUCCESS, status.HTTP_201_CREATED),
+    "FORECAST_READINESS":          (Outcome.SUCCESS, status.HTTP_200_OK),
     "FORECAST_INSUFFICIENT_DATA":  (Outcome.FAILURE, status.HTTP_400_BAD_REQUEST),
     "FORECAST_ALREADY_EXISTS":     (Outcome.FAILURE, status.HTTP_409_CONFLICT),
     "FORECAST_MODEL_UNAVAILABLE":  (Outcome.ERROR,   status.HTTP_503_SERVICE_UNAVAILABLE),
@@ -53,6 +57,18 @@ FORECAST_ERRORS = {
 }
 
 FAILURE_MESSAGES = {code: message for code, (_, message) in FORECAST_ERRORS.items()}
+
+
+@dataclass(slots=True, frozen=True)
+class ForecastPlan:
+    """Who can be forecast now, each with their latest logged days. `old` crabs lack enough recent days."""
+
+    recent: dict[int, list[GrowthDay]]
+    old: dict[int, list[GrowthDay]]
+    already_forecast: frozenset[int]
+    too_few_recent: list[int]
+    too_few_ever: list[int]
+    latest_batch: dict[int, int | None]
 
 
 class ForecastServices:
@@ -74,6 +90,10 @@ class ForecastServices:
     @staticmethod
     def __failed(code: str) -> Response:
         return Response(success=False, message=FAILURE_MESSAGES[code], code=code)
+
+    @staticmethod
+    def __today() -> date:
+        return datetime.now(ZoneInfo(settings.farm_time_zone)).date()
 
     @staticmethod
     def __start_of(day: date) -> datetime:
@@ -101,23 +121,93 @@ class ForecastServices:
     def to_rows(days: list[GrowthDay]) -> np.ndarray:
         return np.array([(day.width_mm, day.weight_g) for day in days], dtype=np.float32)
 
+    @staticmethod
+    def __first_day(days: list[GrowthDay], today: date) -> date:
+        """Today, or tomorrow when the crab was already measured today."""
+        return max(days[-1].day + timedelta(days=1), today)
+
     @classmethod
-    def __forecast_crab(cls, forecaster: GrowthForecaster, crab_id: int, batch_id: int | None, days: list[GrowthDay]) -> CrabForecast:
+    def __forecast_crab(
+        cls,
+        forecaster: GrowthForecaster,
+        crab_id: int,
+        batch_id: int | None,
+        days: list[GrowthDay],
+        today: date,
+    ) -> CrabForecast:
         predicted = forecaster.forecast(cls.to_rows(days), settings.forecast_horizon_days)
-        last_day = days[-1].day
+        first_day = cls.__first_day(days, today)
         points = [
             PredictedDay(
                 day_offset=offset,
-                day=last_day + timedelta(days=offset),
+                day=first_day + timedelta(days=offset - 1),
                 predicted_width_mm=round(float(width_mm), 2),
                 predicted_weight_g=round(float(weight_g), 2),
             )
             for offset, (width_mm, weight_g) in enumerate(predicted, start=1)
         ]
-        return CrabForecast(crab_id=crab_id, batch_id=batch_id, window_start=days[0].day, window_end=last_day, points=points)
+        return CrabForecast(crab_id=crab_id, batch_id=batch_id, window_start=days[0].day, window_end=days[-1].day, points=points)
 
-    def forecast(self, crab_id: int | None = None) -> Response[ForecastResult]:
-        """The next days of every crab with enough recent logged days (or only `crab_id`). Stores nothing."""
+    def __plan(self, forecaster: GrowthForecaster, crab_id: int | None, today: date) -> ForecastPlan:
+        since = datetime.now(timezone.utc) - timedelta(days=settings.forecast_history_days)
+        logs = self.logs.list_measured(crab_id=crab_id)
+        min_days = max(settings.forecast_min_logged_days, forecaster.window_days)
+        history = self.build_features(logs)
+        recent_days = self.build_features(log for log in logs if log.created_at >= since)
+
+        # The input is each crab's latest logged days, even from earlier months; only the forecast dates follow today
+        latest_days = {crab: days[-settings.forecast_history_days:] for crab, days in history.items()}
+        has_recent_days = {crab for crab, days in recent_days.items() if len(days) >= min_days}
+        recent = {crab: latest_days[crab] for crab in has_recent_days}
+        old = {
+            crab: days
+            for crab, days in latest_days.items()
+            if crab not in has_recent_days and len(days) >= min_days
+        }
+
+        # An earlier forecast still reaching this one's first day would overlap it
+        last_predicted = self.logs.last_predicted_days([*recent, *old])
+        already_forecast = frozenset(
+            crab
+            for crab, days in (recent | old).items()
+            if crab in last_predicted and last_predicted[crab] >= self.__first_day(days, today)
+        )
+        return ForecastPlan(
+            recent=recent,
+            old=old,
+            already_forecast=already_forecast,
+            too_few_recent=[crab for crab in recent_days if crab not in recent],
+            too_few_ever=[crab for crab in history if crab not in recent and crab not in old],
+            latest_batch={log.crab_id: log.batch_id for log in logs},
+        )
+
+    def readiness(self) -> Response[ForecastReadiness]:
+        """Lets the web warn before forecasting from old logs. Stores nothing and isn't audited."""
+        try:
+            forecaster = self.forecaster
+        except FileNotFoundError:
+            return self.__failed("FORECAST_MODEL_UNAVAILABLE")
+
+        try:
+            plan = self.__plan(forecaster, None, self.__today())
+            old = [days[-1].day for crab, days in plan.old.items() if crab not in plan.already_forecast]
+            details = ForecastReadiness(
+                recent_crabs=len(plan.recent.keys() - plan.already_forecast),
+                old_log_crabs=len(old),
+                already_forecast_crabs=len(plan.already_forecast),
+                skipped_crabs=len(plan.too_few_ever),
+                oldest_last_log=min(old, default=None),
+                newest_last_log=max(old, default=None),
+            )
+            return Response(success=True, message="Forecast readiness", code="FORECAST_READINESS", details=details)
+
+        except Exception:
+            logger.exception("Checking forecast readiness failed")
+            return self.__failed("FORECAST_FAILED")
+
+    def forecast(self, crab_id: int | None = None, include_old_logs: bool = False) -> Response[ForecastResult]:
+        """The coming days of every crab with enough recent logged days (or only `crab_id`). With `include_old_logs`,
+        also crabs whose latest logged days are older. Stores nothing."""
         try:
             forecaster = self.forecaster
         except FileNotFoundError:
@@ -125,33 +215,27 @@ class ForecastServices:
             return self.__failed("FORECAST_MODEL_UNAVAILABLE")
 
         try:
-            since = datetime.now(timezone.utc) - timedelta(days=settings.forecast_history_days)
-            logs = self.logs.list_measured(crab_id=crab_id, since=since)
-            latest_batch = {log.crab_id: log.batch_id for log in logs}
-            min_days = max(settings.forecast_min_logged_days, forecaster.window_days)
-            days_by_crab = self.build_features(logs)
-            eligible = {crab: days for crab, days in days_by_crab.items() if len(days) >= min_days}
+            today = self.__today()
+            plan = self.__plan(forecaster, crab_id, today)
+            eligible = plan.recent | plan.old if include_old_logs else plan.recent
             if not eligible:
                 return self.__failed("FORECAST_INSUFFICIENT_DATA")
 
-            # A new forecast starts the day after the crab's last logged day; an earlier forecast reaching that day overlaps it
-            last_predicted = self.logs.last_predicted_days(eligible)
-            already_forecast = sorted(
-                crab for crab, days in eligible.items()
-                if crab in last_predicted and last_predicted[crab] > days[-1].day
-            )
+            already_forecast = sorted(crab for crab in eligible if crab in plan.already_forecast)
             if len(already_forecast) == len(eligible):
                 return self.__failed("FORECAST_ALREADY_EXISTS")
 
+            forecasts = [
+                self.__forecast_crab(forecaster, crab, plan.latest_batch[crab], days, today)
+                for crab, days in eligible.items()
+                if crab not in plan.already_forecast
+            ]
             result = ForecastResult(
                 model_version=forecaster.version,
-                forecasts=[
-                    self.__forecast_crab(forecaster, crab, latest_batch[crab], days)
-                    for crab, days in eligible.items()
-                    if crab not in already_forecast
-                ],
-                skipped_crab_ids=[crab for crab, days in days_by_crab.items() if len(days) < min_days],
+                forecasts=forecasts,
+                skipped_crab_ids=plan.too_few_ever if include_old_logs else plan.too_few_recent,
                 already_forecast_crab_ids=already_forecast,
+                old_log_crab_ids=[forecast.crab_id for forecast in forecasts if forecast.crab_id in plan.old],
             )
             return Response(success=True, message="Forecast ready", code="FORECAST_READY", details=result)
 
@@ -163,7 +247,7 @@ class ForecastServices:
         """Forecasts and inserts each predicted day as a prediction log."""
         action = "forecast.create"
         target_label = f"crab {payload.crab_id}" if payload.crab_id else "all crabs"
-        result = self.forecast(payload.crab_id)
+        result = self.forecast(payload.crab_id, payload.include_old_logs)
         if not result:
             self.audit.record_target(action, result.code, request, actor, target_type="crab", target_label=target_label)
             return result
@@ -207,6 +291,7 @@ class ForecastServices:
                     "crab_ids": [forecast.crab_id for forecast in result.details.forecasts],
                     "skipped_crab_ids": result.details.skipped_crab_ids,
                     "already_forecast_crab_ids": result.details.already_forecast_crab_ids,
+                    "old_log_crab_ids": result.details.old_log_crab_ids,
                     "predicted_logs": len(predictions),
                 }
             },

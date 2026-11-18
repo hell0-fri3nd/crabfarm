@@ -1,6 +1,7 @@
 from .forecast_schemas import (
     CrabForecast,
     CreateForecastRequest,
+    ForecastReadiness,
     ForecastResult,
     GrowthDay,
     PredictedDay,
@@ -17,6 +18,7 @@ from .training_schemas import ListModelTrainingsQuery
 __all__ = [
     "CrabForecast",
     "CreateForecastRequest",
+    "ForecastReadiness",
     "ForecastResult",
     "GrowthDay",
     "PredictedDay",

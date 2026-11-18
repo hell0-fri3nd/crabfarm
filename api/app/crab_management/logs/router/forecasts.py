@@ -25,7 +25,7 @@ from ..dependencies import (
     ModelStatusStreamDep,
     TokenExpiry,
 )
-from ..schemas import CreateForecastRequest, ForecastResult, ModelStatus
+from ..schemas import CreateForecastRequest, ForecastReadiness, ForecastResult, ModelStatus
 from ..services import FORECAST_ERRORS, FORECAST_OUTCOMES
 
 # The model only appears when someone trains one, so clients shouldn't retry quickly
@@ -69,6 +69,24 @@ def create_forecast(
 ):
     result = services.create(payload, actor, request)
     raise_for(result, "forecast.create")
+    return result
+
+
+@router.get(
+    "/readiness",
+    response_model=Response[ForecastReadiness],
+    status_code=status.HTTP_200_OK,
+    openapi_extra={AUDIT_ACTION_KEY: "forecast.readiness"},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing, invalid or expired access token"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Only DEVELOPER and ADMIN can run forecasts"},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Unexpected error checking the logs"},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse, "description": "The growth model isn't trained yet (Retry-After)"},
+    },
+)
+def get_forecast_readiness(actor: DeveloperOrAdmin, services: ForecastServicesDep):
+    result = services.readiness()
+    raise_for(result, "forecast.readiness")
     return result
 
 
