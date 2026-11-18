@@ -21,11 +21,12 @@ import type { PinInput } from '../types/auth';
 
 type CustomPinFormProps = {
   name: string;
+  returnTo?: string;
 };
 
 const PIN_SLOTS = Array.from({ length: PIN_LENGTH }, (_, index) => index);
 
-const CustomPinForm = ({ name }: CustomPinFormProps) => {
+const CustomPinForm = ({ name, returnTo = DASHBOARD_HREF }: CustomPinFormProps) => {
   const router = useRouter();
   const form = useForm<PinInput>({
     resolver: zodResolver(pinSchema),
@@ -39,7 +40,7 @@ const CustomPinForm = ({ name }: CustomPinFormProps) => {
 
     if (result.ok) {
       form.resetField('pin');
-      router.replace(result.data.needs_onboarding ? ONBOARDING_HREF : DASHBOARD_HREF);
+      router.replace(result.data.needs_onboarding ? ONBOARDING_HREF : returnTo);
       return;
     }
 

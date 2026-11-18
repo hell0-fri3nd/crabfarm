@@ -6,7 +6,7 @@ import { connection } from 'next/server';
 import { z } from 'zod';
 
 import { env } from '@/lib/env';
-import { END_SESSION_HREF, PIN_HREF } from '@/lib/routes';
+import { END_SESSION_HREF, PAGE_PATH_HEADER, toPinHref } from '@/lib/routes';
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/lib/session';
 import { apiErrorSchema, apiResponse } from '@/types/api';
 import type { ApiResult } from '@/types/api';
@@ -52,7 +52,8 @@ const buildHeaders = async (hasBody: boolean, isAuthenticated: boolean, bearerTo
 
 const leaveRejectedSession = async () => {
   const hasRefreshToken = (await cookies()).has(REFRESH_TOKEN_COOKIE);
-  redirect(hasRefreshToken ? PIN_HREF : END_SESSION_HREF);
+  if (!hasRefreshToken) redirect(END_SESSION_HREF);
+  redirect(toPinHref((await requestHeaders()).get(PAGE_PATH_HEADER)));
 };
 
 const readJson = async (response: Response): Promise<unknown> => {
