@@ -5,9 +5,11 @@ import { FileDown, ScrollText, SearchX } from 'lucide-react';
 import { subDays } from 'date-fns';
 
 import CustomEmptyState from '@/components/custom/custom-empty-state';
+import CustomForecastModelAlert from '@/components/custom/custom-forecast-model-alert';
 import CustomPageHeader from '@/components/custom/custom-page-header';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useForecastModelStream } from '@/events/use-forecast-model-stream';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +25,8 @@ import { PREVIEW_NOW, PREVIEW_SENSOR_LOGS } from '../lib/preview-logs';
 import { useLogsSearchParams } from '../lib/use-logs-search-params';
 import { logTabSchema } from '../types/logs';
 
+import type { ModelStatus } from '@/types/forecast-model';
+
 import type { BatchOption } from './custom-log-filters';
 import type { CrabLogChart, CrabLogPage, LogTab } from '../types/logs';
 
@@ -32,7 +36,12 @@ type CustomLogsViewProps = {
   batches: BatchOption[];
   nowIso: string;
   canRunPrediction: boolean;
+  canRetrain: boolean;
+  modelStatus: ModelStatus | null;
+  selfId: string;
 };
+
+const MODEL_ALERT_ID = 'growth-model-alert';
 
 const TAB_LABELS = { crab: 'Crab logs', sensor: 'Sensor logs' } as const satisfies Record<LogTab, string>;
 
@@ -54,7 +63,12 @@ const CustomLogsView = ({
   batches,
   nowIso,
   canRunPrediction,
+  canRetrain,
+  modelStatus,
+  selfId,
 }: CustomLogsViewProps) => {
+  const { status: model, markTrainingStarted } = useForecastModelStream(modelStatus, selfId);
+  const isModelMissing = model?.state === 'missing';
   const { params, rawParams, setParams, isPending } = useLogsSearchParams();
   const [isExporting, setIsExporting] = useState(false);
   const isCrabTab = params.tab === 'crab';
@@ -139,7 +153,9 @@ const CustomLogsView = ({
                 </TabsTrigger>
               ))}
             </TabsList>
-            {isCrabTab && canRunPrediction && <CustomRunPredictionButton />}
+            {isCrabTab && canRunPrediction && (
+              <CustomRunPredictionButton disabledReasonId={isModelMissing ? MODEL_ALERT_ID : undefined} />
+            )}
             <Button
               type="button"
               className="h-11 px-5"
@@ -154,6 +170,14 @@ const CustomLogsView = ({
       />
 
       <div className="flex flex-col gap-5">
+        {isCrabTab && model && (
+          <CustomForecastModelAlert
+            id={MODEL_ALERT_ID}
+            status={model}
+            canRetrain={canRetrain}
+            onTrainingStarted={markTrainingStarted}
+          />
+        )}
         <CustomLogFilters params={params} batches={batches} dateRange={dateRange} now={now} onChange={setParams} />
 
         <TabsContent

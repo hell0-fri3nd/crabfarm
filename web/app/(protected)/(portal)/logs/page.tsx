@@ -5,6 +5,7 @@ import { CircleX } from 'lucide-react';
 import type { Metadata } from 'next';
 
 import { batchesApi } from '@/api/batches-api';
+import { forecastModelApi } from '@/api/forecast-model-api';
 import CustomEmptyState from '@/components/custom/custom-empty-state';
 import { Card } from '@/components/ui/card';
 import { getCurrentUser } from '@/lib/auth';
@@ -26,7 +27,12 @@ const LogsLoader = async ({ searchParams }: LogsPageProps) => {
   await connection();
   const params = logsSearchParamsSchema.parse(await searchParams);
   const now = new Date();
-  const [loaded, batches, self] = await Promise.all([loadLogContext(), batchesApi.list(), getCurrentUser()]);
+  const [loaded, batches, self, model] = await Promise.all([
+    loadLogContext(),
+    batchesApi.list(),
+    getCurrentUser(),
+    forecastModelApi.get(),
+  ]);
 
   const isChart = params.tab === 'crab' && params.view === 'chart';
   const [crab, chart] = loaded.ok
@@ -56,6 +62,9 @@ const LogsLoader = async ({ searchParams }: LogsPageProps) => {
       batches={batchOptions}
       nowIso={now.toISOString()}
       canRunPrediction={can(self.role, 'forecasts.run')}
+      canRetrain={can(self.role, 'forecasts.retrain')}
+      modelStatus={model.ok ? model.data : null}
+      selfId={self.id}
     />
   );
 };

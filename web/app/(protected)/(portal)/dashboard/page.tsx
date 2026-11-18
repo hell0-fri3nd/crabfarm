@@ -4,15 +4,19 @@ import { CircleX } from 'lucide-react';
 
 import type { Metadata } from 'next';
 
+import { forecastModelApi } from '@/api/forecast-model-api';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import CustomEmptyState from '@/components/custom/custom-empty-state';
+import { getCurrentUser } from '@/lib/auth';
 import { toFirstName } from '@/lib/format';
+import { can } from '@/lib/permissions';
 import { PREVIEW_USER } from '@/lib/preview';
 
 import CustomAlertList from './components/custom-alert-list';
 import CustomBriefing from './components/custom-briefing';
 import CustomGrowthCard from './components/custom-growth-card';
+import CustomGrowthModelAlert from './components/custom-growth-model-alert';
 import CustomSensorTrends from './components/custom-sensor-trends';
 import CustomSummaryStats from './components/custom-summary-stats';
 import CustomWaterNow from './components/custom-water-now';
@@ -28,17 +32,24 @@ export const metadata: Metadata = { title: 'Dashboard' };
 
 const GrowthLoader = async () => {
   await connection();
-  const result = await loadGrowth(new Date());
+  const [result, model, self] = await Promise.all([loadGrowth(new Date()), forecastModelApi.get(), getCurrentUser()]);
 
-  if (!result.ok) {
-    return (
-      <Card className="py-0">
-        <CustomEmptyState icon={CircleX} title="Couldn't load crab growth" hint={`${result.message} The rest of the dashboard still works.`} />
-      </Card>
-    );
-  }
-
-  return <CustomGrowthCard data={result.data} />;
+  return (
+    <section aria-label="Crab growth" className="flex flex-col gap-4">
+      <CustomGrowthModelAlert
+        initialStatus={model.ok ? model.data : null}
+        canRetrain={can(self.role, 'forecasts.retrain')}
+        selfId={self.id}
+      />
+      {result.ok ? (
+        <CustomGrowthCard data={result.data} />
+      ) : (
+        <Card className="py-0">
+          <CustomEmptyState icon={CircleX} title="Couldn't load crab growth" hint={`${result.message} The rest of the dashboard still works.`} />
+        </Card>
+      )}
+    </section>
+  );
 };
 
 const GrowthSkeleton = () => (
