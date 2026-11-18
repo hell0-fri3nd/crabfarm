@@ -1,7 +1,12 @@
 import logging
 
 from fastapi import Request, status
-from sqlmodel import Session, col, select
+from sqlmodel import (
+    Session,
+    col,
+    func,
+    select,
+)
 
 from app.core import Response
 from app.core.audit import Actor, AuditServices, Outcome
@@ -42,6 +47,9 @@ class CrabServices:
     def __fail(self, action: str, code: str, actor: Actor, request: Request | None) -> Response:
         self.audit.record_target(action, code, request, actor, target_type="crab")
         return Response(success=False, message=FAILURE_MESSAGES[code], code=code)
+
+    def count(self) -> int:
+        return self.db.exec(select(func.count()).select_from(Crabs)).one()
 
     def list(self, actor: Actor, request: Request | None = None) -> Response[list[Crabs]]:
         action = "crab.list"

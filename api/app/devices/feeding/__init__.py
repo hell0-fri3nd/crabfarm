@@ -7,11 +7,16 @@ from .models import (
 from .router import cages_router, schedules_router
 from .schemas import (
     CreateScheduleRequest,
+    NextFeedRead,
     ScheduleRead,
     UpdateCageRequest,
     UpdateScheduleRequest,
 )
-from .services import CageServices, ScheduleServices
+from .services import (
+    CageServices,
+    FeedingSummaryServices,
+    ScheduleServices,
+)
 
 __all__ = [
     "cages_router",
@@ -19,6 +24,8 @@ __all__ = [
     "Cages",
     "CageServices",
     "CreateScheduleRequest",
+    "FeedingSummaryServices",
+    "NextFeedRead",
     "ScheduleDays",
     "ScheduleGroups",
     "ScheduleRead",

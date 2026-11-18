@@ -191,6 +191,15 @@ class LogServices:
         ).all()
         return sorted(latest_per_day, key=lambda log: (log.crab_id, log.created_at))
 
+    def count_crabs_since(self, since: datetime) -> int:
+        """How many different crabs have an actual log at or after `since`."""
+        return self.db.exec(
+            select(func.count(func.distinct(Logs.crab_id))).where(
+                Logs.log_type == LogType.ACTUAL,
+                Logs.created_at >= since,
+            )
+        ).one()
+
     def last_predicted_days(self, crab_ids: Iterable[int]) -> dict[int, date]:
         """Each crab's latest prediction-log day, for crabs that have any. A forecast may not overlap one."""
         rows = self.db.exec(

@@ -91,6 +91,7 @@ class Settings(BaseSettings):
     # A lock older than this belongs to a training that died, so the next one may take it over
     forecast_training_timeout_minutes: int = Field(default=30, ge=1)
     forecast_status_poll_seconds: float = Field(default=5, gt=0)
+    dashboard_poll_seconds: float = Field(default=3, gt=0)
     forecast_status_refresh_seconds: float = Field(default=60, gt=0)
 
     water_threshold_temperature: SensorThresholdConfig = SensorThresholdConfig(

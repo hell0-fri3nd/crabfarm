@@ -77,6 +77,13 @@ class ListSchedulesQuery(PageQuery):
     pass
 
 
+class NextFeedRead(BaseModel):
+    schedule_name: str
+    feed_time: time
+    at: datetime
+    day_offset: int = Field(ge=0)
+
+
 class ScheduleRead(BaseModel):
     id: UUID
     name: str
