@@ -47,3 +47,11 @@
 /api/app/crab_management/logs/schemas/__pycache__
 /api/app/crab_management/logs/router/__pycache__
 /api/app/devices/water_sensors/__pycache__
+/api/app/devices/registry/__pycache__
+/api/app/devices/registry/services/__pycache__
+/api/app/devices/water_sensors/services/__pycache__
+/api/app/worker/__pycache__
+/api/app/worker/jobs/__pycache__
+/api/app/devices/feeding/__pycache__
+/api/app/devices/feeding/models/__pycache__
+/api/app/system/dashboard/__pycache__
