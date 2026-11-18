@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const activityTypeSchema = z.enum(['account', 'logs', 'batches', 'stickers', 'users', 'security']);
+export const activityTypeSchema = z.enum(['account', 'logs', 'batches', 'stickers', 'users', 'devices', 'security']);
 export type ActivityType = z.infer<typeof activityTypeSchema>;
 
 export const activityFilterSchema = z.enum(['all', ...activityTypeSchema.options]);

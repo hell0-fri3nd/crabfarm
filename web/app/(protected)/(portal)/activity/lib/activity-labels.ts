@@ -6,6 +6,7 @@ export const ACTIVITY_TYPE_LABELS = {
   batches: 'Batches',
   stickers: 'QR stickers',
   users: 'Users',
+  devices: 'Devices',
   security: 'Security',
 } as const satisfies Record<ActivityType, string>;
 

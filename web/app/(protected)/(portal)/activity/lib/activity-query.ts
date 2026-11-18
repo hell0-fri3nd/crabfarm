@@ -31,6 +31,7 @@ export const ACTIONS_BY_TYPE = {
   batches: ['batch.create'],
   stickers: ['crab.sticker_download'],
   users: ['user.create', 'user.update', 'user.deactivate', 'user.reactivate', 'user.reset_credentials'],
+  devices: ['scale.connected', 'scale.disconnected', 'water_sensor.connected', 'water_sensor.disconnected'],
   security: ['auth.role_denied', 'auth.access_token_rejected', 'auth.refresh_token_rejected'],
 } as const satisfies Record<ActivityType, readonly string[]>;
 
@@ -77,6 +78,10 @@ const SIMPLE_EVENTS: Record<string, string> = {
   'auth.update_me': 'Changed name',
   'auth.access_token_rejected': 'Session expired or invalid',
   'auth.refresh_token_rejected': 'Saved sign-in expired or invalid',
+  'scale.connected': 'Crab scale connected',
+  'scale.disconnected': 'Crab scale not connected',
+  'water_sensor.connected': 'Water sensors connected',
+  'water_sensor.disconnected': 'Water sensors not connected',
 };
 
 const TARGET_EVENTS: Record<string, string> = {
