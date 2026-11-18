@@ -66,6 +66,10 @@ const DETECTION_MESSAGES = {
 
 const LISTED_LABELS = 3;
 
+const PHONE_AIM_HINT = 'Hold the QR inside the frame';
+// 12 px is the smallest step in the type scale; the stronger text and bar keep it readable over live video
+const PHONE_BAR_DETAIL_CLASS = 'max-sm:max-w-none max-sm:text-xs max-sm:text-sidebar-foreground/90';
+
 const SELECT_CLASS = 'data-[size=default]:h-11 w-full bg-card px-4 sm:w-auto sm:min-w-40';
 
 type SteadyWidth = { widthMm: number | null; isSteady: boolean };
@@ -102,6 +106,7 @@ const CustomScanViewport = ({ batches, crabs, sticker, onScan, onMeasure }: Cust
   const isCameraOn = cameraState === 'on';
   const isWebcamMounted = cameraState === 'starting' || isCameraOn;
   const message = CAMERA_MESSAGES[cameraState];
+  const isAiming = isCameraOn && !sticker && canDetect;
 
   // Detection boxes show whenever the camera is on; QR reading runs alongside until a sticker is read
   const isDetecting = isCameraOn;
@@ -220,16 +225,21 @@ const CustomScanViewport = ({ batches, crabs, sticker, onScan, onMeasure }: Cust
             role="status"
             className={cn(
               'absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center',
-              isCameraOn && 'inset-auto inset-x-0 bottom-0 bg-sidebar/80 py-3 backdrop-blur',
+              isCameraOn &&
+                'inset-auto inset-x-0 bottom-0 bg-sidebar/80 py-3 backdrop-blur max-sm:gap-0.5 max-sm:bg-sidebar/90 max-sm:px-3 max-sm:py-1.5',
             )}
           >
             {sticker ? (
               <>
-                <p className="flex items-center gap-2 text-sm font-semibold">
-                  <CircleCheck className="size-4.5 text-sidebar-primary" aria-hidden />
+                <p className={cn('flex items-center gap-2 text-sm font-semibold', isCameraOn && 'max-sm:gap-1.5 max-sm:text-xs')}>
+                  <CircleCheck className={cn('size-4.5 text-sidebar-primary', isCameraOn && 'max-sm:size-3.5')} aria-hidden />
                   <span className="font-mono">{sticker.code}</span> read
                 </p>
-                {detectionSummary && <p className="max-w-xs text-sm text-sidebar-foreground/75">{detectionSummary}</p>}
+                {detectionSummary && (
+                  <p className={cn('max-w-xs text-sm text-sidebar-foreground/75', isCameraOn && PHONE_BAR_DETAIL_CLASS)}>
+                    {detectionSummary}
+                  </p>
+                )}
               </>
             ) : (
               <>
@@ -239,8 +249,23 @@ const CustomScanViewport = ({ batches, crabs, sticker, onScan, onMeasure }: Cust
                   ) : (
                     <Camera className="size-7 text-sidebar-foreground/70" aria-hidden />
                   ))}
-                <p className="text-sm font-semibold">{message.title}</p>
-                <p className="max-w-xs text-sm text-sidebar-foreground/75">
+                <p className={cn('text-sm font-semibold', isCameraOn && 'max-sm:text-xs')}>
+                  {isAiming ? (
+                    <>
+                      <span className="sm:hidden">{PHONE_AIM_HINT}</span>
+                      <span className="max-sm:hidden">{message.title}</span>
+                    </>
+                  ) : (
+                    message.title
+                  )}
+                </p>
+                <p
+                  className={cn(
+                    'max-w-xs text-sm text-sidebar-foreground/75',
+                    isCameraOn && PHONE_BAR_DETAIL_CLASS,
+                    isAiming && 'max-sm:hidden',
+                  )}
+                >
                   {isCameraOn && !canDetect
                     ? "The QR reader couldn't load. Check your connection, or type the code below."
                     : message.hint}
