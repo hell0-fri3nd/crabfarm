@@ -25,6 +25,7 @@ Browser ──wss /ws/detections (same origin)──▶ Next.js rewrite ──�
   - **No JWT reaches the browser.** The `startDetection` Server Action gets a 30 s single-use ticket from `POST /detections/tickets` through the BFF client, and the client sends it as the first socket message.
   - `next.config.ts` can't import the `server-only` `lib/env.ts`, so the root-`.env` parsing lives in `lib/root-env.ts`, which both import. `proxy.ts`'s matcher skips `ws/`.
   - No other WebSocket is allowed. Everything else live stays SSE.
+- **Docker:** `web/Dockerfile` builds Next.js `standalone` output. nginx (`nginx/`) is the only published service. It serves HTTPS with a self-signed certificate generated for `WEB_ORIGIN` and kept in the `nginx_certs` volume, because browsers only allow the camera on HTTPS or `localhost`, and redirects plain HTTP on the same port to HTTPS. It proxies everything to the web app, with buffering off for streaming and WebSocket upgrades on. It replaces `X-Forwarded-For` with the real client address, so the value the BFF forwards can't be forged. The detection rewrite is fixed at build time, so `API_URL` is a build argument as well as a runtime variable.
 
 ## 2. Stack
 

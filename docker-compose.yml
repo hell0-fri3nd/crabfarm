@@ -1,6 +1,95 @@
 name: crabfarm
 
+x-api-service: &api-service
+  image: crabfarm-api
+  build: ./api
+  env_file: .env
+  environment: &api-environment
+    DATABASE_URI: postgresql+psycopg://${DB_USER}:${DB_PASSWORD}@postgre_db:5432/${DB_NAME}
+    RABBITMQ_ENABLED: "true"
+    RABBITMQ_HOST: rabbitmq
+    RABBITMQ_PORT: "5672"
+    DETECTION_ALLOWED_ORIGINS: '["${WEB_ORIGIN:-https://localhost}"]'
+
 services:
+
+  migrate:
+    <<: *api-service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgre_db:
+        condition: service_healthy
+
+  api:
+    <<: *api-service
+    restart: unless-stopped
+    volumes:
+      - ml_models:/srv/api/ml/models
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      # The first start downloads the YOLO weights
+      start_period: 120s
+
+  worker:
+    <<: *api-service
+    command: ["python", "-m", "app.worker"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+  web:
+    image: crabfarm-web
+    build:
+      context: ./web
+      args:
+        API_URL: http://api:8000
+        API_PREFIX: ${API_PREFIX:-/api/v1}
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8000
+      API_PREFIX: ${API_PREFIX:-/api/v1}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COOKIE_PATH: ${COOKIE_PATH:-/}
+      ACCESS_COOKIE_SAMESITE: ${ACCESS_COOKIE_SAMESITE:-lax}
+      REFRESH_COOKIE_SAMESITE: ${REFRESH_COOKIE_SAMESITE:-strict}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-1}
+      JWT_REFRESH_TOKEN_REMEMBER_ME_DAYS: ${JWT_REFRESH_TOKEN_REMEMBER_ME_DAYS:-7}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/sign-in').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  nginx:
+    image: crabfarm-nginx
+    build: ./nginx
+    restart: unless-stopped
+    environment:
+      WEB_ORIGIN: ${WEB_ORIGIN:-https://localhost}
+    ports:
+      - "${WEB_PORT:-443}:443"
+    volumes:
+      - nginx_certs:/etc/nginx/certs
+    depends_on:
+      web:
+        condition: service_healthy
 
   postgre_db:
     image: postgres:16-alpine
@@ -62,4 +151,8 @@ volumes:
   db_data:
     driver: local
   rabbitmq_data:
+    driver: local
+  ml_models:
+    driver: local
+  nginx_certs:
     driver: local

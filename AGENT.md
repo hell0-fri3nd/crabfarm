@@ -43,7 +43,8 @@ crabfarm/
 ├── context/                 # project-wide context
 ├── docs/ui/components/      # UI design source (component library, plan, navigation)
 ├── docs/ui/{desktop,tablet,phone}/  # page mockups per screen size
-├── docker-compose.yml       # PostgreSQL 16 + RabbitMQ 4 (management :15672, MQTT :1883 for ESP32, Prometheus :15692)
+├── docker-compose.yml       # full stack: PostgreSQL 16, RabbitMQ 4 (management :15672, MQTT :1883 for ESP32, Prometheus :15692), migrate, api, worker, web, nginx
+├── nginx/                   # nginx config: the public entry point, proxies to web only
 ├── api/                     # FastAPI backend + worker (Python ≥ 3.12, Poetry)
 │   ├── app/                 # domains: authentication, crab_management, audit, system, artificial_intelligence (vision), devices (scales, water_sensors, registry), worker, (assistant planned)
 │   ├── migrations/          # Alembic
@@ -60,8 +61,11 @@ crabfarm/
 ## 2. Commands
 
 ```bash
-# infrastructure (repo root, needs .env with DB_* and RABBITMQ_*; the same .env feeds FastAPI and web/, which also needs API_URL)
-docker compose up -d
+# full stack in Docker (repo root, needs .env): applies pending migrations, then serves the web app over HTTPS through nginx on WEB_PORT (default 443), with a self-signed certificate for WEB_ORIGIN
+docker compose up -d --build
+
+# infrastructure only, for local development (needs .env with DB_* and RABBITMQ_*; the same .env feeds FastAPI and web/, which also needs API_URL)
+docker compose up -d postgre_db rabbitmq
 
 # backend (from api/)
 poetry install
