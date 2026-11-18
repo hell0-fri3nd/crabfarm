@@ -7,6 +7,8 @@ import type { Metadata } from 'next';
 import { batchesApi } from '@/api/batches-api';
 import CustomEmptyState from '@/components/custom/custom-empty-state';
 import { Card } from '@/components/ui/card';
+import { getCurrentUser } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 
 import CustomLogsSkeleton from './components/custom-logs-skeleton';
 import CustomLogsView from './components/custom-logs-view';
@@ -24,7 +26,7 @@ const LogsLoader = async ({ searchParams }: LogsPageProps) => {
   await connection();
   const params = logsSearchParamsSchema.parse(await searchParams);
   const now = new Date();
-  const [loaded, batches] = await Promise.all([loadLogContext(), batchesApi.list()]);
+  const [loaded, batches, self] = await Promise.all([loadLogContext(), batchesApi.list(), getCurrentUser()]);
 
   const isChart = params.tab === 'crab' && params.view === 'chart';
   const [crab, chart] = loaded.ok
@@ -53,6 +55,7 @@ const LogsLoader = async ({ searchParams }: LogsPageProps) => {
       crabChart={chart?.ok ? chart.chart : null}
       batches={batchOptions}
       nowIso={now.toISOString()}
+      canRunPrediction={can(self.role, 'forecasts.run')}
     />
   );
 };

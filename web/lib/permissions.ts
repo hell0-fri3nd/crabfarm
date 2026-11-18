@@ -6,6 +6,7 @@ export const PERMISSIONS = {
   'users.manage_developers': ['DEVELOPER'],
   'batches.create': ['DEVELOPER', 'ADMIN'],
   'activity.view_everyone': ['DEVELOPER', 'ADMIN'],
+  'forecasts.run': ['DEVELOPER', 'ADMIN'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;
