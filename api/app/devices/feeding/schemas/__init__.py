@@ -1,3 +1,4 @@
+from .cage_schemas import ListCagesQuery, UpdateCageRequest
 from .schedule_schemas import (
     CreateScheduleRequest,
     ListSchedulesQuery,
@@ -7,7 +8,9 @@ from .schedule_schemas import (
 
 __all__ = [
     "CreateScheduleRequest",
+    "ListCagesQuery",
     "ListSchedulesQuery",
     "ScheduleRead",
+    "UpdateCageRequest",
     "UpdateScheduleRequest",
 ]

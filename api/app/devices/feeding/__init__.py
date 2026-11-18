@@ -4,22 +4,26 @@ from .models import (
     ScheduleGroups,
     Schedules,
 )
-from .router import schedules_router
+from .router import cages_router, schedules_router
 from .schemas import (
     CreateScheduleRequest,
     ScheduleRead,
+    UpdateCageRequest,
     UpdateScheduleRequest,
 )
-from .services import ScheduleServices
+from .services import CageServices, ScheduleServices
 
 __all__ = [
+    "cages_router",
     "schedules_router",
     "Cages",
+    "CageServices",
     "CreateScheduleRequest",
     "ScheduleDays",
     "ScheduleGroups",
     "ScheduleRead",
     "ScheduleServices",
     "Schedules",
+    "UpdateCageRequest",
     "UpdateScheduleRequest",
 ]
