@@ -11,7 +11,7 @@ const READING_EVENTS = ['scale.reading'] as const;
 // The scale publishes every 2 s, so three missed readings mean it's off or out of Wi-Fi
 const STALE_AFTER_MS = 6000;
 
-// Live weight from the crab scale (ESP32 → MQTT crab/weight → API → SSE), in grams
+// Live weight from the crab scale (ESP32 → MQTT crab/scale → API → SSE), in grams
 export const useWeightStream = () => {
   const [weightG, setWeightG] = useState<number | null>(null);
   const [isFresh, setIsFresh] = useState(false);

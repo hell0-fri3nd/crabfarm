@@ -11,7 +11,13 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core import settings, register_exception_handlers
 
-from app.infrastructure.messaging import CRAB_WEIGHT, FORECAST_EVENTS, RabbitClient, SYSTEM_EVENTS
+from app.infrastructure.messaging import (
+    CRAB_SCALES,
+    CRAB_SENSORS,
+    FORECAST_EVENTS, 
+    RabbitClient, 
+    SYSTEM_EVENTS
+)
 from app.infrastructure.streaming import StreamHub
 from app.infrastructure.vision import YoloDetector
 
@@ -34,7 +40,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.rabbitmq_enabled:
         try:
             await broker.connect()
-            hub = StreamHub(broker, bindings=[SYSTEM_EVENTS, FORECAST_EVENTS], device_bindings=[CRAB_WEIGHT])
+            hub = StreamHub(
+                broker,
+                bindings=[SYSTEM_EVENTS, FORECAST_EVENTS],
+                device_bindings=[CRAB_SCALES, CRAB_SENSORS],
+            )
             await hub.start()
             app.state.broker, app.state.hub = broker, hub
             watcher = ModelStatusWatcher(broker)

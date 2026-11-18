@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import Request
 from pydantic import ValidationError
 
-from app.infrastructure.messaging import CRAB_WEIGHT
+from app.infrastructure.messaging import CRAB_SCALES
 from app.infrastructure.streaming import (
     HubMessage,
     StreamHub,
@@ -25,7 +25,7 @@ class ScaleStreamServices:
 
     @staticmethod
     def __to_reading(message: HubMessage) -> ScaleReadingEvent | None:
-        if message.routing_key != CRAB_WEIGHT:
+        if message.routing_key != CRAB_SCALES:
             return None
         try:
             weight = CrabWeightMessage.model_validate_json(message.body)
@@ -41,6 +41,6 @@ class ScaleStreamServices:
         return None if reading is None else format_event(SCALE_READING_EVENT, reading.model_dump_json())
 
     async def stream(self, request: Request, until: datetime | None) -> AsyncIterator[str]:
-        async with self.hub.subscribe(CRAB_WEIGHT) as queue:
+        async with self.hub.subscribe(CRAB_SCALES) as queue:
             async for frame in event_stream(queue, request, self.__to_frame, until=until):
                 yield frame

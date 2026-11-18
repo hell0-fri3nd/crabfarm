@@ -7,7 +7,7 @@ GRAMS_PER_UNIT = {"grams": 1.0, "g": 1.0, "kilograms": 1000.0, "kg": 1000.0}
 
 
 class CrabWeightMessage(BaseModel):
-    """What the crab scale publishes on MQTT topic crab/weight, e.g. {"weight": 554.00, "unit": "grams"}."""
+    """What the crab scale publishes on MQTT topic crab/scale, e.g. {"weight": 554.00, "unit": "grams"}."""
 
     model_config = ConfigDict(extra="ignore")
 
